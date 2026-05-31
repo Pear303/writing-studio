@@ -1,0 +1,915 @@
+@import "tailwindcss";
+
+@theme {
+  /* VS Code 风格颜色 */
+  --color-vscode-bg: #1e1e1e;
+  --color-vscode-sidebar: #252526;
+  --color-vscode-activitybar: #333333;
+  --color-vscode-border: #454545;
+  --color-vscode-text: #cccccc;
+  --color-vscode-active: #007acc;
+  
+  /* 自定义尺寸 */
+  --width-activitybar: 48px;
+  --width-sidebar: 280px;
+  --height-toolbar: 40px;
+  --height-statusbar: 24px;
+  
+  /* Auth 页面颜色（默认深色主题） */
+  --color-auth-bg-start: #1e1e1e;
+  --color-auth-bg-end: #1e1e1e;
+  --color-auth-card-bg: #252526;
+  --color-auth-card-border: #3d3d3d;
+  --color-auth-text-primary: #e2e2e2;
+  --color-auth-text-secondary: #9ca3af;
+  --color-auth-input-bg: #2d2d2d;
+  --color-auth-input-border: #3d3d3d;
+  --color-auth-input-focus: #0098ff;
+  --color-auth-button-bg: #0098ff;
+  --color-auth-button-hover: #0078d4;
+  --color-auth-link: #0098ff;
+  --color-auth-link-hover: #1177bb;
+  --color-auth-error-bg: rgba(239, 68, 68, 0.15);
+  --color-auth-error-text: #f87171;
+  --color-auth-checkbox: #0098ff;
+}
+
+:root {
+  color-scheme: light;
+  --editor-text-color: #000000;
+  --editor-heading-color: #000000;
+  --color-vscode-text: #000000;
+  --color-vscode-bg: #ffffff;
+  --color-vscode-sidebar: #f5f5f5;
+  --color-vscode-activitybar: #e8e8e8;
+  --color-vscode-border: #e0e0e0;
+  --color-vscode-active: #007acc;
+  --color-vscode-active-light: rgba(0, 122, 204, 0.1);
+  --color-vscode-active-medium: rgba(0, 122, 204, 0.3);
+  --color-success: #22c55e;
+  --color-success-light: rgba(34, 197, 94, 0.2);
+  --color-success-medium: rgba(34, 197, 94, 0.3);
+  --color-danger: #ef4444;
+  --color-danger-light: rgba(239, 68, 68, 0.2);
+  --color-danger-medium: rgba(239, 68, 68, 0.3);
+  --scrollbar-track: #ffffff;
+  --scrollbar-thumb: #c1c1c1;
+  --scrollbar-thumb-hover: #a8a8a8;
+  
+  /* Toast 组件颜色 */
+  --color-toast-success: #22c55e;
+  --color-toast-success-bg: rgba(34, 197, 94, 0.9);
+  --color-toast-success-border: #16a34a;
+  --color-toast-error: #ef4444;
+  --color-toast-error-bg: rgba(239, 68, 68, 0.9);
+  --color-toast-error-border: #dc2626;
+  --color-toast-warning: #eab308;
+  --color-toast-warning-bg: rgba(234, 179, 8, 0.9);
+  --color-toast-warning-border: #ca8a04;
+  --color-toast-info: #3b82f6;
+  --color-toast-info-bg: rgba(59, 130, 246, 0.9);
+  --color-toast-info-border: #2563eb;
+  
+  /* 状态颜色 */
+  --color-status-saved: #22c55e;
+  --color-status-saving: #eab308;
+  --color-status-unsaved: #ef4444;
+  
+  /* 状态栏颜色 */
+  --color-statusbar-bg: #e8f2fc;
+  --color-statusbar-text: #333333;
+  --color-statusbar-border: #dee8f0;
+  
+  /* 悬停背景色 */
+  --color-hover-bg: rgba(128, 128, 128, 0.2);
+  
+  /* 模态框遮罩 */
+  --color-modal-overlay: rgba(0, 0, 0, 0.5);
+  
+  /* 编辑器占位符颜色 */
+  --color-editor-placeholder: #6b7280;
+  --color-editor-code-bg: #9ca3af;
+  
+  /* 登录注册页面颜色 */
+  --color-auth-bg-start: #f8fafc;
+  --color-auth-bg-end: #f1f5f9;
+  --color-auth-card-bg: #ffffff;
+  --color-auth-card-border: #e2e8f0;
+  --color-auth-text-primary: #1e293b;
+  --color-auth-text-secondary: #64748b;
+  --color-auth-input-bg: #ffffff;
+  --color-auth-input-border: #e2e8f0;
+  --color-auth-input-focus: #3b82f6;
+  --color-auth-button-bg: #3b82f6;
+  --color-auth-button-hover: #2563eb;
+  --color-auth-link: #3b82f6;
+  --color-auth-link-hover: #2563eb;
+  --color-auth-error-bg: #fef2f2;
+  --color-auth-error-text: #dc2626;
+  --color-auth-checkbox: #3b82f6;
+}
+
+[data-theme="dark"] {
+  --editor-text-color: #ffffff;
+  --editor-heading-color: #ffffff;
+  --color-vscode-text: #cccccc;
+  --color-vscode-bg: #1e1e1e;
+  --color-vscode-sidebar: #252526;
+  --color-vscode-activitybar: #333333;
+  --color-vscode-border: #454545;
+  --color-vscode-active: #007acc;
+  --color-vscode-active-light: rgba(0, 122, 204, 0.1);
+  --color-vscode-active-medium: rgba(0, 122, 204, 0.3);
+  --color-success: #22c55e;
+  --color-success-light: rgba(34, 197, 94, 0.2);
+  --color-success-medium: rgba(34, 197, 94, 0.3);
+  --color-danger: #ef4444;
+  --color-danger-light: rgba(239, 68, 68, 0.2);
+  --color-danger-medium: rgba(239, 68, 68, 0.3);
+  
+  /* Toast 组件颜色 */
+  --color-toast-success: #22c55e;
+  --color-toast-success-bg: rgba(34, 197, 94, 0.9);
+  --color-toast-success-border: #16a34a;
+  --color-toast-error: #ef4444;
+  --color-toast-error-bg: rgba(239, 68, 68, 0.9);
+  --color-toast-error-border: #dc2626;
+  --color-toast-warning: #eab308;
+  --color-toast-warning-bg: rgba(234, 179, 8, 0.9);
+  --color-toast-warning-border: #ca8a04;
+  --color-toast-info: #3b82f6;
+  --color-toast-info-bg: rgba(59, 130, 246, 0.9);
+  --color-toast-info-border: #2563eb;
+  
+  /* 状态颜色 */
+  --color-status-saved: #22c55e;
+  --color-status-saving: #eab308;
+  --color-status-unsaved: #ef4444;
+  
+  /* 状态栏颜色 */
+  --color-statusbar-bg: #005a9e;
+  --color-statusbar-text: #ffffff;
+  --color-statusbar-border: #004578;
+  
+  /* 悬停背景色 */
+  --color-hover-bg: rgba(128, 128, 128, 0.2);
+  
+  /* 模态框遮罩 */
+  --color-modal-overlay: rgba(0, 0, 0, 0.5);
+  
+  /* 编辑器占位符颜色 */
+  --color-editor-placeholder: #cccccc;
+  --color-editor-code-bg: #cccccc;
+  
+  /* 登录注册页面颜色 */
+  --color-auth-bg-start: #1e1e1e;
+  --color-auth-bg-end: #1e1e1e;
+  --color-auth-card-bg: #252526;
+  --color-auth-card-border: #3d3d3d;
+  --color-auth-text-primary: #e2e2e2;
+  --color-auth-text-secondary: #9ca3af;
+  --color-auth-input-bg: #2d2d2d;
+  --color-auth-input-border: #3d3d3d;
+  --color-auth-input-focus: #0098ff;
+  --color-auth-button-bg: #0098ff;
+  --color-auth-button-hover: #0078d4;
+  --color-auth-link: #0098ff;
+  --color-auth-link-hover: #1177bb;
+  --color-auth-error-bg: rgba(239, 68, 68, 0.15);
+  --color-auth-error-text: #f87171;
+  --color-auth-checkbox: #0098ff;
+}
+
+[data-theme="eye-care"] {
+  --editor-text-color: #222222;
+  --editor-heading-color: #222222;
+  --color-vscode-text: #222222;
+  --color-vscode-bg: #f5f5dc;
+  --color-vscode-sidebar: #e8e8d0;
+  --color-vscode-activitybar: #d8d8c0;
+  --color-vscode-border: #d0d0b8;
+  --color-vscode-active: #8fbc8f;
+  --color-vscode-active-light: rgba(143, 188, 143, 0.1);
+  --color-vscode-active-medium: rgba(143, 188, 143, 0.3);
+  --color-success: #16a34a;
+  --color-success-light: rgba(22, 163, 74, 0.2);
+  --color-success-medium: rgba(22, 163, 74, 0.3);
+  --color-danger: #dc2626;
+  --color-danger-light: rgba(220, 38, 38, 0.2);
+  --color-danger-medium: rgba(220, 38, 38, 0.3);
+  
+  /* Toast 组件颜色 */
+  --color-toast-success: #16a34a;
+  --color-toast-success-bg: rgba(22, 163, 74, 0.9);
+  --color-toast-success-border: #15803d;
+  --color-toast-error: #dc2626;
+  --color-toast-error-bg: rgba(220, 38, 38, 0.9);
+  --color-toast-error-border: #b91c1c;
+  --color-toast-warning: #ca8a04;
+  --color-toast-warning-bg: rgba(202, 138, 4, 0.9);
+  --color-toast-warning-border: #a16207;
+  --color-toast-info: #2563eb;
+  --color-toast-info-bg: rgba(37, 99, 235, 0.9);
+  --color-toast-info-border: #1d4ed8;
+  
+  /* 状态颜色 */
+  --color-status-saved: #16a34a;
+  --color-status-saving: #ca8a04;
+  --color-status-unsaved: #dc2626;
+  
+  /* 状态栏颜色 */
+  --color-statusbar-bg: #c8e6c8;
+  --color-statusbar-text: #2e4a2e;
+  --color-statusbar-border: #a5d6a5;
+  
+  /* 悬停背景色 */
+  --color-hover-bg: rgba(128, 128, 128, 0.15);
+  
+  /* 模态框遮罩 */
+  --color-modal-overlay: rgba(0, 0, 0, 0.3);
+  
+  /* 编辑器占位符颜色 */
+  --color-editor-placeholder: #666666;
+  --color-editor-code-bg: #666666;
+  
+  /* 登录注册页面颜色 */
+  --color-auth-bg-start: #f5f5dc;
+  --color-auth-bg-end: #f5f5dc;
+  --color-auth-card-bg: #fafad2;
+  --color-auth-card-border: #d0d0b8;
+  --color-auth-text-primary: #222222;
+  --color-auth-text-secondary: #555555;
+  --color-auth-input-bg: #fafad2;
+  --color-auth-input-border: #d0d0b8;
+  --color-auth-input-focus: #8fbc8f;
+  --color-auth-button-bg: #6b8e6b;
+  --color-auth-button-hover: #5a7a5a;
+  --color-auth-link: #6b8e6b;
+  --color-auth-link-hover: #5a7a5a;
+  --color-auth-error-bg: rgba(220, 38, 38, 0.15);
+  --color-auth-error-text: #b91c1c;
+  --color-auth-checkbox: #8fbc8f;
+}
+
+/* 全局样式重置 */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: var(--app-font-family, -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow: hidden;
+}
+
+#root {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+/* 滚动条样式（VS Code 风格） */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--scrollbar-track);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border-radius: 5px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--scrollbar-thumb-hover);
+}
+
+/* TipTap 编辑器样式 */
+.ProseMirror {
+  color: var(--editor-text-color) !important;
+  font-family: var(--editor-font-family, inherit);
+}
+
+.ProseMirror p,
+.ProseMirror span,
+.ProseMirror li,
+.ProseMirror h1,
+.ProseMirror h2,
+.ProseMirror h3 {
+  color: var(--editor-text-color) !important;
+}
+
+/* 动态排版样式 - 通过 CSS 变量控制 */
+.ProseMirror p {
+  margin-top: 0 !important;
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+  padding: 0 !important;
+  margin-bottom: var(--paragraph-spacing, 0px) !important;
+  text-indent: var(--paragraph-indent, 0px) !important;
+  line-height: var(--line-height, 1.8) !important;
+}
+
+.ProseMirror p.is-editor-empty:first-child::before {
+  color: var(--color-editor-placeholder, var(--editor-text-color, #6b7280));
+  opacity: 0.5;
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
+
+.ProseMirror h1 {
+  font-size: 2em;
+  font-weight: bold;
+  margin: 0.67em 0;
+  color: var(--editor-heading-color) !important;
+}
+
+.ProseMirror h2 {
+  font-size: 1.5em;
+  font-weight: bold;
+  margin: 0.75em 0;
+  color: var(--editor-heading-color) !important;
+}
+
+.ProseMirror h3 {
+  font-size: 1.17em;
+  font-weight: bold;
+  margin: 0.83em 0;
+  color: var(--editor-heading-color, var(--color-vscode-text));
+}
+
+.ProseMirror blockquote {
+  border-left: 3px solid var(--color-vscode-active);
+  padding-left: 1em;
+  margin: 1em 0;
+  color: var(--editor-text-color);
+  font-style: italic;
+}
+
+.ProseMirror code {
+  background-color: var(--color-vscode-sidebar);
+  padding: 0.2em 0.4em;
+  border-radius: 3px;
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+  font-size: 0.9em;
+  color: var(--editor-text-color);
+}
+
+.ProseMirror pre {
+  background-color: var(--color-vscode-bg);
+  border: 1px solid var(--color-vscode-border);
+  border-radius: 5px;
+  padding: 1em;
+  margin: 1em 0;
+  overflow-x: auto;
+  color: var(--editor-text-color);
+}
+
+.ProseMirror pre code {
+  background: none;
+  padding: 0;
+  border-radius: 0;
+}
+
+.ProseMirror ul,
+.ProseMirror ol {
+  padding-left: 2em;
+  margin: 1em 0;
+}
+
+.ProseMirror li {
+  margin: 0.5em 0;
+}
+
+.ProseMirror em {
+  font-style: italic;
+  font-synthesis: style;
+}
+
+.ProseMirror strong {
+  font-weight: bold;
+  color: var(--editor-text-color, var(--color-vscode-text));
+}
+
+.ProseMirror u {
+  text-decoration: underline;
+}
+
+.ProseMirror s {
+  text-decoration: line-through;
+}
+
+<<<<<<< HEAD
+=======
+/* 查找替换高亮样式 */
+.ProseMirror .search-match {
+  background-color: rgba(255, 213, 0, 0.35);
+  outline: 1px solid rgba(255, 213, 0, 0.5);
+}
+
+.ProseMirror .search-match-current {
+  background-color: rgba(255, 140, 0, 0.5);
+  outline: 1px solid rgba(255, 140, 0, 0.75);
+}
+
+>>>>>>> a3c3812c35f7ea215c38605f0651c42cca74529c
+/* 写作设置面板样式 */
+.writing-settings-panel {
+  background-color: var(--color-vscode-sidebar);
+  border-bottom: 1px solid var(--color-vscode-border);
+}
+
+/* ==================== 按钮 ==================== */
+/* 基础按钮样式 - 透明背景，仅图标颜色随主题变化 */
+.btn-primary {
+  @apply px-3 py-1.5 text-sm transition-colors duration-150;
+  background: transparent !important;
+  color: var(--color-vscode-text, #cccccc) !important;
+  border-radius: 0 !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+.btn-primary:hover {
+  background: var(--color-hover-bg) !important;
+}
+
+.btn-secondary {
+  @apply px-3 py-1.5 text-sm transition-colors duration-150;
+  background: transparent !important;
+  color: var(--color-vscode-text, #cccccc) !important;
+  border-radius: 0 !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+.btn-secondary:hover {
+  background: var(--color-hover-bg) !important;
+}
+
+.btn-danger {
+  @apply px-3 py-1.5 text-sm transition-colors duration-150;
+  background: transparent !important;
+  color: var(--color-danger) !important;
+  border-radius: 0 !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+.btn-danger:hover {
+  background: var(--color-danger-light) !important;
+}
+
+.btn-icon {
+  @apply p-1.5 transition-colors duration-150;
+  background: transparent !important;
+  color: var(--color-vscode-text, #cccccc) !important;
+  border-radius: 0 !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+.btn-icon:hover {
+  background: var(--color-hover-bg) !important;
+}
+
+/* 工具栏按钮 - 透明背景 */
+.toolbar-btn {
+  @apply px-2.5 py-1 text-sm transition-colors duration-150 flex items-center space-x-1.5;
+  background: transparent !important;
+  color: var(--color-vscode-text, #cccccc) !important;
+  border-radius: 0 !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+.toolbar-btn:hover {
+  background: var(--color-hover-bg) !important;
+}
+
+/* 窄屏时隐藏工具栏按钮文字 */
+@media (max-width: 1000px) {
+  .toolbar-btn-text {
+    display: none;
+  }
+}
+
+/* 图标按钮 - 完全透明 */
+.icon-btn {
+  @apply p-1.5 transition-colors duration-150;
+  background: transparent !important;
+  color: var(--color-vscode-text, #cccccc) !important;
+  border-radius: 0 !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+.icon-btn:hover {
+  background: var(--color-hover-bg) !important;
+}
+
+/* 激活状态的图标按钮 */
+.icon-btn.bg-vscode-active {
+  background: var(--color-vscode-active, #007acc) !important;
+  color: white !important;
+}
+
+/* 全局圆角覆盖 - 完全移除圆角 */
+.rounded, .rounded-sm, .rounded-md, .rounded-lg, .rounded-xl, .rounded-full {
+  border-radius: 0 !important;
+}
+
+/* 移除所有按钮的默认边框、圆角和阴影 */
+button {
+  border-radius: 0 !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+/* 移除所有元素的阴影 */
+.shadow, .shadow-sm, .shadow-md, .shadow-lg, .shadow-xl, .shadow-2xl {
+  box-shadow: none !important;
+}
+
+input[type="password"]::-webkit-caps-lock-indicator,
+input[type="password"]::-webkit-credentials-auto-fill-button,
+input[type="password"]::-webkit-credentials-auto-fill-button:hover,
+input[type="password"]::-webkit-identity-icon,
+input[type="password"]::-webkit-strong-password-button,
+input[type="password"]::-webkit-show-password-button {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+  position: absolute !important;
+  width: 0 !important;
+  height: 0 !important;
+  overflow: hidden !important;
+}
+
+div[role="presentation"],
+div[aria-hidden="true"],
+div[data-lastpass] {
+  display: none !important;
+}
+
+input[type="password"] ~ div[style*="position"],
+input[type="password"] ~ div[style*="z-index"] {
+  display: none !important;
+}
+
+.input-field[type="password"],
+input[type="password"].input-field {
+  position: relative;
+}
+
+/* 密码输入遮盖：替代 type="password"，避免浏览器原生密码揭示按钮 */
+.password-mask {
+  -webkit-text-security: disc;
+}
+
+/* Edge/IE 浏览器原生密码揭示按钮禁用 */
+input[type="password"]::-ms-reveal,
+input[type="password"]::-ms-clear {
+  display: none !important;
+}
+
+/* ==================== 输入框样式 ==================== */
+.input-field {
+  @apply w-full px-3 py-2 border text-vscode-text focus:outline-none focus:border-blue-500 transition-colors duration-150;
+  background-color: var(--color-vscode-bg);
+  border-color: var(--color-vscode-border);
+  border-radius: 2px;
+}
+
+.select-field {
+  @apply w-full px-3 py-2 border text-vscode-text focus:outline-none focus:border-blue-500 transition-colors duration-150;
+  background-color: var(--color-vscode-bg);
+  border-color: var(--color-vscode-border);
+  border-radius: 2px;
+}
+
+/* ==================== 卡片样式 ==================== */
+.card {
+  @apply bg-vscode-sidebar border border-vscode-border transition-all duration-150;
+  border-radius: 2px;
+}
+
+.card-hover:hover {
+  @apply border-blue-500;
+}
+
+/* ==================== 对话框样式 ==================== */
+.modal-overlay {
+  @apply fixed inset-0 flex items-center justify-center z-50;
+  background-color: var(--color-modal-overlay);
+}
+
+.modal-content {
+  border: 1px solid var(--color-vscode-border);
+  background-color: var(--color-vscode-sidebar);
+  color: var(--color-vscode-text);
+  border-radius: 2px;
+  padding-inline: 10px;
+}
+
+/* ==================== 列表项样式 ==================== */
+.list-item {
+  @apply px-3 py-2 cursor-pointer transition-colors duration-150;
+  border-radius: 2px;
+}
+
+.list-item-active {
+  background-color: var(--color-vscode-active);
+  color: white;
+}
+
+.list-item-hover:hover {
+  background-color: var(--color-hover-bg);
+}
+
+/* ==================== Toast动画 ==================== */
+@keyframes slide-in {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.animate-slide-in {
+  animation: slide-in 0.3s ease-out;
+}
+
+.App {
+  text-align: center;
+  padding: 2rem;
+}
+
+h1 {
+  color: var(--color-vscode-text);
+  margin-bottom: 1rem;
+}
+
+p {
+  color: var(--color-vscode-text);
+  opacity: 0.8;
+}
+
+.logo.vite:hover {
+  filter: drop-shadow(0 0 2em #747bff);
+}
+
+.logo.react:hover {
+  filter: drop-shadow(0 0 2em #61dafb);
+}
+
+:root {
+  font-family: Inter, Avenir, Helvetica, Arial, sans-serif;
+  font-size: 16px;
+  line-height: 24px;
+  font-weight: 400;
+
+  color: var(--color-vscode-text);
+  background-color: var(--color-vscode-bg);
+
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  -webkit-text-size-adjust: 100%;
+}
+
+.container {
+  margin: 0;
+  padding: 20px;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.subtitle {
+  text-align: center;
+  color: var(--color-vscode-text);
+  opacity: 0.7;
+  margin-bottom: 30px;
+  font-size: 14px;
+}
+
+.editor-section {
+  margin: 30px 0;
+  border-radius: 8px;
+}
+
+.info-section {
+  margin-top: 30px;
+  padding: 20px;
+  background: var(--color-vscode-bg);
+}
+
+.info-section h2 {
+  margin-top: 0;
+  color: var(--color-vscode-active);
+  font-size: 18px;
+}
+
+.info-section ul {
+  list-style: none;
+  padding: 0;
+}
+
+.info-section li {
+  padding: 8px 0;
+  color: var(--color-vscode-text);
+  opacity: 0.8;
+  line-height: 1.6;
+}
+
+.info-section code {
+  background: var(--color-vscode-sidebar);
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-family: 'Consolas', 'Monaco', monospace;
+  font-size: 0.9em;
+  color: var(--color-vscode-active);
+}
+
+.logo {
+  height: 6em;
+  padding: 1.5em;
+  will-change: filter;
+  transition: 0.75s;
+}
+
+.logo.tauri:hover {
+  filter: drop-shadow(0 0 2em #24c8db);
+}
+
+.row {
+  display: flex;
+  justify-content: center;
+}
+
+a {
+  font-weight: 500;
+  color: var(--color-vscode-active);
+  text-decoration: inherit;
+}
+
+a:hover {
+  color: var(--color-vscode-active);
+  opacity: 0.8;
+}
+
+h1 {
+  text-align: center;
+  color: var(--color-vscode-text);
+  margin-bottom: 10px;
+}
+
+input,
+button {
+  border-radius: 0;
+  border: 1px solid var(--color-vscode-border);
+  padding: 0.6em 1.2em;
+  font-size: 1em;
+  font-weight: 500;
+  font-family: inherit;
+  color: var(--color-vscode-text);
+  background-color: var(--color-vscode-bg);
+  transition: border-color 0.25s;
+}
+
+button {
+  cursor: pointer;
+}
+
+button:hover {
+  border-color: var(--color-vscode-active);
+}
+
+button:active {
+  border-color: var(--color-vscode-active);
+  background-color: var(--color-hover-bg);
+}
+
+input,
+button {
+  outline: none;
+}
+
+#greet-input {
+  margin-right: 5px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not(.force-light) {
+    color-scheme: dark;
+  }
+}
+
+/* 侧边栏拖拽手柄 */
+.resize-handle {
+  flex-shrink: 0;
+  transition: background-color 0.15s ease;
+}
+
+.resize-handle:hover {
+  background-color: var(--color-vscode-active);
+}
+
+.resize-handle:active {
+  background-color: var(--color-vscode-active);
+}
+
+/* 纯CSS响应式网格 - 固定2列布局 */
+.responsive-grid-container {
+  display: grid;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+  grid-template-columns: repeat(2, 1fr); /* 固定2列 */
+}
+
+/* 字体选择器按钮 - 固定尺寸，与面板按钮高度一致 */
+button.font-selector-btn {
+  height: 30px !important;
+  padding: 0 8px !important;
+  width: 120px !important;
+  min-width: 120px !important;
+  white-space: nowrap !important;
+  box-sizing: border-box !important;
+}
+
+/* 字号选择器按钮 - 与字体选择器同高，宽度更窄 */
+button.font-size-btn {
+  height: 30px !important;
+  padding: 0 6px !important;
+  white-space: nowrap !important;
+  box-sizing: border-box !important;
+}
+
+.font-selector-btn-text {
+  max-width: 85px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: block;
+}
+
+/* 字体下拉项 - 固定高度 */
+button.font-dropdown-item,
+div.font-dropdown-item {
+  height: 28px !important;
+  padding: 0 12px !important;
+  white-space: nowrap !important;
+  box-sizing: border-box !important;
+}
+
+button.font-dropdown-item > span,
+div.font-dropdown-item > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.grid-item-button {
+  padding: 0.375rem 0.5rem;
+  border-radius: 0.25rem;
+  border: 1px solid var(--color-vscode-border);
+  font-size: 0.75rem;
+  text-align: center;
+  text-overflow: ellipsis;
+  overflow: hidden;
+  white-space: nowrap;
+  background-color: var(--color-vscode-bg);
+  color: var(--color-vscode-text);
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+
+.grid-item-button:hover {
+  background-color: var(--color-vscode-active-light);
+}
+
+/* 超小屏幕优化（降级方案）*/
+@media (max-width: 400px) {
+  .responsive-grid-container {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.375rem;
+  }
+  .grid-item-button {
+    padding: 0.25rem 0.375rem;
+    font-size: 0.6875rem;
+  }
+}

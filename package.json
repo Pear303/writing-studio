@@ -1,0 +1,50 @@
+{
+  "name": "writing-studio",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "tauri": "tauri"
+  },
+  "dependencies": {
+    "@tauri-apps/api": "^2",
+    "@tauri-apps/plugin-dialog": "^2.7.0",
+    "@tauri-apps/plugin-fs": "^2.5.0",
+    "@tauri-apps/plugin-opener": "^2",
+    "@tiptap/extension-bold": "^3.22.3",
+    "@tiptap/extension-color": "^3.22.3",
+    "@tiptap/extension-italic": "^3.22.3",
+    "@tiptap/extension-strike": "^3.22.3",
+    "@tiptap/extension-text-style": "^3.22.4",
+    "@tiptap/extension-underline": "^3.22.3",
+    "@tiptap/react": "^3.22.3",
+    "@tiptap/starter-kit": "^3.22.3",
+    "autoprefixer": "^10.4.27",
+    "bcryptjs": "^3.0.3",
+    "dexie": "^4.4.2",
+    "lucide-react": "^1.8.0",
+    "postcss": "^8.5.9",
+    "react": "^19.1.0",
+    "react-complex-tree": "^2.6.1",
+    "react-dom": "^19.1.0",
+    "react-virtualized-auto-sizer": "^2.0.3",
+    "react-window": "^2.2.7",
+    "tailwindcss": "^4.2.2",
+    "uuid": "^13.0.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.2.2",
+    "@tauri-apps/cli": "^2",
+    "@types/bcryptjs": "^2.4.6",
+    "@types/node": "^25.6.0",
+    "@types/react": "^19.1.8",
+    "@types/react-dom": "^19.1.6",
+    "@types/uuid": "^10.0.0",
+    "@vitejs/plugin-react": "^4.6.0",
+    "typescript": "~5.8.3",
+    "vite": "^7.0.4"
+  }
+}
