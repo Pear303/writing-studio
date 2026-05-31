@@ -89,7 +89,7 @@ export interface AIConversation {
 }
 
 // 活动栏类型
-export type ActivityId = 'books' | 'materials' | 'ai' | 'pipeline' | 'settings';
+export type ActivityId = 'books' | 'materials' | 'agent' | 'pipeline' | 'settings';
 
 export interface ActivityItem {
   id: ActivityId;
@@ -467,6 +467,91 @@ export interface FullExportData {
     lastExportPath: string | null;
     lastImportPath: string | null;
   };
+}
+
+// Agent 相关类型
+export interface AgentMessage {
+  id: string;
+  role: 'user' | 'assistant' | 'system';
+  content: string;
+  timestamp: number;
+  toolCalls?: AgentToolCall[];
+  isStreaming?: boolean;
+}
+
+export interface AgentToolCall {
+  tool: string;
+  input: string;
+  output?: string;
+  status: 'running' | 'completed' | 'error';
+  error?: string;
+}
+
+export interface AgentConfig {
+  apiUrl: string;
+  sessionId?: string;
+}
+
+export interface AgentTokenUsage {
+  input: number;
+  output: number;
+  total: number;
+}
+
+export interface AgentState {
+  connected: boolean;
+  running: boolean;
+  messages: AgentMessage[];
+  currentStreamContent: string;
+  currentStreamGen: number;
+  activityLog: AgentActivityItem[];
+  tokenUsage: AgentTokenUsage;
+  error: string | null;
+}
+
+export interface AgentActivityItem {
+  type: string;
+  icon: string;
+  text: string;
+  level: 'info' | 'running' | 'success' | 'error';
+}
+
+// 流水线自动化相关类型
+export type PipelineAutoStepStatus = 'pending' | 'running' | 'completed' | 'failed' | 'skipped' | 'checking';
+
+export interface PipelineAutoStep {
+  id: string;
+  name: string;
+  description: string;
+  status: PipelineAutoStepStatus;
+  subagent?: string;
+  result?: string;
+  checkResult?: string;
+  retryCount: number;
+  startedAt?: number;
+  completedAt?: number;
+}
+
+export interface PipelineAutoState {
+  id: string;
+  bookId: string;
+  volumeId: string;
+  userRequest: string;
+  steps: PipelineAutoStep[];
+  currentStepIndex: number;
+  status: 'planning' | 'running' | 'paused' | 'completed' | 'failed' | 'cancelled';
+  intervention?: PipelineIntervention;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export type InterventionType = 'pause' | 'resume' | 'cancel' | 'redirect' | 'skip';
+
+export interface PipelineIntervention {
+  type: InterventionType;
+  message?: string;
+  targetStepIndex?: number;
+  createdAt: number;
 }
 
 // 123
