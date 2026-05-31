@@ -5,7 +5,10 @@ import { MaterialPanel } from '../MaterialPanel';
 import { SettingsPanel } from '../SettingsPanel';
 import { LlmConfigPanel } from '../LlmConfigPanel';
 import { PipelineWriting } from '../PipelineWriting';
-import type { ActivityId, Book, Chapter, Material, FormattingSettings, WordCountSettings, PipelineStep1Config, PipelineStep2State, PipelineStep4State, PipelineStep5State, OutlineRound, DetailedOutlineRound, ChapterDraftRound, Volume } from '../../types';
+import { AgentPanel } from '../AgentPanel';
+import { VibeWritingPanel } from '../VibeWritingPanel';
+import { PipelineTabView } from '../PipelineTabView';
+import type { ActivityId, Book, Chapter, Material, FormattingSettings, WordCountSettings, PipelineStep1Config, PipelineStep2State, PipelineStep4State, PipelineStep5State, OutlineRound, DetailedOutlineRound, ChapterDraftRound, Volume, AgentState, PipelineAutoState } from '../../types';
 import { db } from '../../db';
 import { useUser } from '../../auth/UserContext';
 
@@ -43,6 +46,19 @@ interface SidebarProps {
   onPipelineRefineChapter?: (step5State: PipelineStep5State, chapterIndex: number, round: ChapterDraftRound) => Promise<string>;
   onPipelineAddChapterToVolume?: (title: string, content: string, detailedOutline?: string) => void;
   showToast?: (message: string, type: 'info' | 'success' | 'error' | 'warning') => void;
+  agentState?: AgentState;
+  onAgentSendMessage?: (message: string) => void;
+  onAgentStopGeneration?: () => void;
+  onAgentClearMessages?: () => void;
+  onAgentCheckConnection?: () => void;
+  onAgentUpdateApiUrl?: (url: string) => void;
+  agentApiUrl?: string;
+  vibePipelineState?: PipelineAutoState | null;
+  vibeLoading?: boolean;
+  vibeError?: string | null;
+  onVibeStartPipeline?: (bookId: string, volumeId: string, userRequest: string) => void;
+  onVibeIntervene?: (type: 'pause' | 'resume' | 'cancel' | 'redirect' | 'skip', message?: string, targetStepIndex?: number) => void;
+  onVibeClearPipeline?: () => void;
 }
 
 export const Sidebar = ({
@@ -77,6 +93,19 @@ export const Sidebar = ({
   onPipelineRefineChapter,
   onPipelineAddChapterToVolume,
   showToast,
+  agentState,
+  onAgentSendMessage,
+  onAgentStopGeneration,
+  onAgentClearMessages,
+  onAgentCheckConnection,
+  onAgentUpdateApiUrl,
+  agentApiUrl,
+  vibePipelineState,
+  vibeLoading,
+  vibeError,
+  onVibeStartPipeline,
+  onVibeIntervene,
+  onVibeClearPipeline,
 }: SidebarProps) => {
   // 使用 useUser hook 获取用户信息
   const { user } = useUser();
@@ -163,30 +192,45 @@ export const Sidebar = ({
                 onThemeChange={onThemeChange}
               />
             ) : null
-          ) : activeActivity === 'ai' ? (
-            <div className="p-4 text-vscode-text">
-              <h2 className="text-lg font-semibold mb-4">AI 助手</h2>
-              <LlmConfigPanel />
-            </div>
-          ) : activeActivity === 'pipeline' ? (
-            onPipelineGenerateOutline && onPipelineRefineOutline && onPipelineOverwriteOutline && onPipelineGenerateDetailedOutline && onPipelineRefineDetailedOutline && onPipelineRefineDetailedOutlineChapter && onPipelineGenerateChapter && onPipelineRefineChapter && onPipelineAddChapterToVolume && showToast ? (
-              <PipelineWriting
-                currentBook={currentBook}
-                currentOutlineVolume={currentOutlineVolume ?? null}
-                onVolumeSelect={onVolumeOutlineSelect ?? (() => {})}
-                onGenerateOutline={onPipelineGenerateOutline}
-                onRefineOutline={onPipelineRefineOutline}
-                onOverwriteOutline={onPipelineOverwriteOutline}
-                onGenerateDetailedOutline={onPipelineGenerateDetailedOutline}
-                onRefineDetailedOutline={onPipelineRefineDetailedOutline}
-                onRefineDetailedOutlineChapter={onPipelineRefineDetailedOutlineChapter}
-                onGenerateChapter={onPipelineGenerateChapter}
-                onRefineChapter={onPipelineRefineChapter}
-                onAddChapterToVolume={onPipelineAddChapterToVolume}
-                onPreviewInEditor={onPipelinePreviewInEditor}
-                showToast={showToast}
+          ) : activeActivity === 'agent' ? (
+            agentState && onAgentSendMessage ? (
+              <AgentPanel
+                state={agentState}
+                onSendMessage={onAgentSendMessage}
+                onStopGeneration={onAgentStopGeneration || (() => {})}
+                onClearMessages={onAgentClearMessages || (() => {})}
+                onCheckConnection={onAgentCheckConnection || (() => {})}
+                onUpdateApiUrl={onAgentUpdateApiUrl || (() => {})}
+                apiUrl={agentApiUrl || 'http://localhost:8765'}
               />
-            ) : null
+            ) : (
+              <div className="p-4 text-vscode-text">
+                <h2 className="text-lg font-semibold mb-4">Agent</h2>
+                <p className="text-sm text-vscode-text opacity-70">Agent 未初始化</p>
+              </div>
+            )
+          ) : activeActivity === 'pipeline' ? (
+            <PipelineTabView
+              currentBook={currentBook}
+              currentOutlineVolume={currentOutlineVolume ?? null}
+              vibePipelineState={vibePipelineState ?? null}
+              vibeLoading={vibeLoading ?? false}
+              vibeError={vibeError ?? null}
+              onVibeStartPipeline={onVibeStartPipeline}
+              onVibeIntervene={onVibeIntervene}
+              onVibeClearPipeline={onVibeClearPipeline}
+              onPipelineGenerateOutline={onPipelineGenerateOutline}
+              onPipelineRefineOutline={onPipelineRefineOutline}
+              onPipelineOverwriteOutline={onPipelineOverwriteOutline}
+              onPipelineGenerateDetailedOutline={onPipelineGenerateDetailedOutline}
+              onPipelineRefineDetailedOutline={onPipelineRefineDetailedOutline}
+              onPipelineRefineDetailedOutlineChapter={onPipelineRefineDetailedOutlineChapter}
+              onPipelineGenerateChapter={onPipelineGenerateChapter}
+              onPipelineRefineChapter={onPipelineRefineChapter}
+              onPipelineAddChapterToVolume={onPipelineAddChapterToVolume}
+              onPipelinePreviewInEditor={onPipelinePreviewInEditor}
+              showToast={showToast}
+            />
           ) : (
             <div className="p-4 text-vscode-text">
               <h2 className="text-lg font-semibold mb-4">AI对话</h2>

@@ -23,6 +23,8 @@ import { findMatches, replaceFirst, replaceAll } from './utils/searchUtils';
 
 import { useUser } from './auth/UserContext';
 import { novelLLMService } from './llm/NovelLLMService';
+import { useAgent } from './hooks/useAgent';
+import { usePipeline } from './hooks/usePipeline';
 import './App.css';
 import { LogOut, FileText, BookOpen, CheckCircle } from 'lucide-react';
 
@@ -72,6 +74,15 @@ function App() {
   
   // 使用 useUser hook 获取用户认证状态
   const { user } = useUser();
+
+  const agent = useAgent();
+  const pipeline = usePipeline();
+
+  useEffect(() => {
+    if (activeActivity === 'agent' && !agent.state.connected) {
+      agent.checkConnection();
+    }
+  }, [activeActivity]);
 
   const [formattingSettings, setFormattingSettings] = useState<FormattingSettings>({
     paragraphSpacing: '1em',
@@ -1767,6 +1778,19 @@ ${chapterContents}
                     onPipelineRefineChapter={handlePipelineRefineChapter}
                     onPipelineAddChapterToVolume={handlePipelineAddChapterToVolume}
                     showToast={showToast}
+                    agentState={agent.state}
+                    onAgentSendMessage={agent.sendMessage}
+                    onAgentStopGeneration={agent.stopGeneration}
+                    onAgentClearMessages={agent.clearMessages}
+                    onAgentCheckConnection={agent.checkConnection}
+                    onAgentUpdateApiUrl={agent.updateApiUrl}
+                    agentApiUrl={agent.apiUrl}
+                    vibePipelineState={pipeline.state.pipeline}
+                    vibeLoading={pipeline.state.loading}
+                    vibeError={pipeline.state.error}
+                    onVibeStartPipeline={pipeline.startPipeline}
+                    onVibeIntervene={pipeline.intervene}
+                    onVibeClearPipeline={pipeline.clearPipeline}
                   />
               )}
               {isSidebarVisible && (

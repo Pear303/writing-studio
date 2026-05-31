@@ -10,7 +10,7 @@ interface ActivityBarProps {
 const activities: Array<{ id: ActivityId; label: string }> = [
   { id: 'books', label: '书籍' },
   { id: 'materials', label: '素材箱' },
-  { id: 'ai', label: 'AI 助手' },
+  { id: 'agent', label: 'Agent' },
   { id: 'pipeline', label: '流水线写作' },
   { id: 'settings', label: '设置' },
 ];
@@ -21,7 +21,7 @@ const getActivityIcon = (id: ActivityId) => {
       return <BookOpen size={24} />;
     case 'materials':
       return <Package size={24} />;
-    case 'ai':
+    case 'agent':
       return <Bot size={24} />;
     case 'pipeline':
       return <Workflow size={24} />;
