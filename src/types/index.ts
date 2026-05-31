@@ -96,7 +96,27 @@ export interface ActivityItem {
   label: string;
 }
 
-export type PipelineStep = 'step1' | 'step2' | 'step3';
+export type PipelineStep = 'step1' | 'step2' | 'step3' | 'step4' | 'step5';
+
+export interface ChapterDraft {
+  index: number;
+  title: string;
+  content: string;
+  rounds: ChapterDraftRound[];
+}
+
+export interface ChapterDraftRound {
+  additions: string;
+  deletions: string;
+  modifications: string;
+}
+
+export interface PipelineStep5State {
+  chapters: ChapterDraft[];
+  currentChapterIndex: number;
+  autoMode: boolean;
+  completed: boolean;
+}
 
 export interface PipelineStep1Config {
   genres: string[];
@@ -124,6 +144,25 @@ export interface PipelineStep2State {
   rounds: OutlineRound[];
 }
 
+export interface DetailedOutlineChapter {
+  index: number;
+  title: string;
+  content: string;
+}
+
+export interface DetailedOutlineRound {
+  additions: string;
+  deletions: string;
+  modifications: string;
+  selectedChapterIndices: number[];
+}
+
+export interface PipelineStep4State {
+  chapterCount: number;
+  chapters: DetailedOutlineChapter[];
+  rounds: DetailedOutlineRound[];
+}
+
 export interface PipelineSession {
   id: string;
   bookId: string;
@@ -132,6 +171,8 @@ export interface PipelineSession {
   step1Config: PipelineStep1Config;
   step3Config: PipelineStep3Config;
   step2State: PipelineStep2State | null;
+  step4State: PipelineStep4State | null;
+  step5State: PipelineStep5State | null;
   updatedAt: number;
 }
 

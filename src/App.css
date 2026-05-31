@@ -44,6 +44,7 @@
   --color-vscode-activitybar: #e8e8e8;
   --color-vscode-border: #e0e0e0;
   --color-vscode-active: #007acc;
+  --color-vscode-active-text: #007acc;
   --color-vscode-active-light: rgba(0, 122, 204, 0.1);
   --color-vscode-active-medium: rgba(0, 122, 204, 0.3);
   --color-success: #22c55e;
@@ -118,6 +119,7 @@
   --color-vscode-activitybar: #333333;
   --color-vscode-border: #454545;
   --color-vscode-active: #007acc;
+  --color-vscode-active-text: #007acc;
   --color-vscode-active-light: rgba(0, 122, 204, 0.1);
   --color-vscode-active-medium: rgba(0, 122, 204, 0.3);
   --color-success: #22c55e;
@@ -189,6 +191,7 @@
   --color-vscode-activitybar: #d8d8c0;
   --color-vscode-border: #d0d0b8;
   --color-vscode-active: #8fbc8f;
+  --color-vscode-active-text: #000000;
   --color-vscode-active-light: rgba(143, 188, 143, 0.1);
   --color-vscode-active-medium: rgba(143, 188, 143, 0.3);
   --color-success: #16a34a;
@@ -405,12 +408,6 @@ body {
   text-decoration: underline;
 }
 
-.ProseMirror s {
-  text-decoration: line-through;
-}
-
-<<<<<<< HEAD
-=======
 /* 查找替换高亮样式 */
 .ProseMirror .search-match {
   background-color: rgba(255, 213, 0, 0.35);
@@ -422,7 +419,6 @@ body {
   outline: 1px solid rgba(255, 140, 0, 0.75);
 }
 
->>>>>>> a3c3812c35f7ea215c38605f0651c42cca74529c
 /* 写作设置面板样式 */
 .writing-settings-panel {
   background-color: var(--color-vscode-sidebar);

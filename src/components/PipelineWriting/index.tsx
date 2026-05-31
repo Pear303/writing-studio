@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { FolderPlus, ChevronRight, ChevronLeft } from 'lucide-react';
-import type { Book, Volume, PipelineStep, PipelineStep1Config, PipelineStep3Config, PipelineStep2State, OutlineRound, PipelineSession } from '../../types';
+import type { Book, Volume, PipelineStep, PipelineStep1Config, PipelineStep3Config, PipelineStep2State, PipelineStep4State, PipelineStep5State, OutlineRound, DetailedOutlineRound, ChapterDraftRound, PipelineSession } from '../../types';
 import { db } from '../../db';
 import { Step1Config } from './Step1Config';
 import { Step2Outline } from './Step2Outline';
 import { Step3Style } from './Step3Style';
+import { Step4DetailedOutline } from './Step4DetailedOutline';
+import { Step5WriteText } from './Step5WriteText';
 
 interface PipelineWritingProps {
   currentBook: Book | null;
@@ -13,6 +15,13 @@ interface PipelineWritingProps {
   onGenerateOutline: (config: PipelineStep1Config) => Promise<string>;
   onRefineOutline: (step2State: PipelineStep2State, round: OutlineRound) => Promise<string>;
   onOverwriteOutline: (markdown: string) => void;
+  onGenerateDetailedOutline: (outline: string, chapterCount: number) => Promise<string>;
+  onRefineDetailedOutline: (step4State: PipelineStep4State, round: DetailedOutlineRound, outline: string) => Promise<string>;
+  onRefineDetailedOutlineChapter: (step4State: PipelineStep4State, chapterIndices: number[], round: DetailedOutlineRound, outline: string) => Promise<string>;
+  onGenerateChapter: (chapterIndex: number) => Promise<string>;
+  onRefineChapter: (step5State: PipelineStep5State, chapterIndex: number, round: ChapterDraftRound) => Promise<string>;
+  onAddChapterToVolume: (title: string, content: string) => void;
+  onPreviewInEditor?: (title: string, content: string, onChange: (content: string) => void) => void;
   showToast: (message: string, type: 'info' | 'success' | 'error' | 'warning') => void;
 }
 
@@ -34,9 +43,11 @@ const STEP_LABELS: Record<PipelineStep, string> = {
   step1: '选择题材',
   step2: '生成大纲',
   step3: '风格设置',
+  step4: '生成细纲',
+  step5: '生成正文',
 };
 
-const STEP_ORDER: PipelineStep[] = ['step1', 'step2', 'step3'];
+const STEP_ORDER: PipelineStep[] = ['step1', 'step2', 'step3', 'step4', 'step5'];
 
 export const PipelineWriting: React.FC<PipelineWritingProps> = ({
   currentBook,
@@ -45,12 +56,21 @@ export const PipelineWriting: React.FC<PipelineWritingProps> = ({
   onGenerateOutline,
   onRefineOutline,
   onOverwriteOutline,
+  onGenerateDetailedOutline,
+  onRefineDetailedOutline,
+  onRefineDetailedOutlineChapter,
+  onGenerateChapter,
+  onRefineChapter,
+  onAddChapterToVolume,
+  onPreviewInEditor,
   showToast,
 }) => {
   const [step, setStep] = useState<PipelineStep>('step1');
   const [step1Config, setStep1Config] = useState<PipelineStep1Config>(defaultStep1Config);
   const [step3Config, setStep3Config] = useState<PipelineStep3Config>(defaultStep3Config);
   const [step2State, setStep2State] = useState<PipelineStep2State | null>(null);
+  const [step4State, setStep4State] = useState<PipelineStep4State | null>(null);
+  const [step5State, setStep5State] = useState<PipelineStep5State | null>(null);
   const [volumes, setVolumes] = useState<Volume[]>([]);
   const [selectedVolumeId, setSelectedVolumeId] = useState<string | null>(
     currentOutlineVolume?.id || null,
@@ -77,6 +97,8 @@ export const PipelineWriting: React.FC<PipelineWritingProps> = ({
       step1Config,
       step3Config,
       step2State,
+      step4State,
+      step5State,
       updatedAt: Date.now(),
     };
     try {
@@ -84,7 +106,7 @@ export const PipelineWriting: React.FC<PipelineWritingProps> = ({
     } catch (err) {
       console.error('保存流水线会话失败:', err);
     }
-  }, [getSessionId, currentBook?.id, selectedVolumeId, step, step1Config, step3Config, step2State]);
+  }, [getSessionId, currentBook?.id, selectedVolumeId, step, step1Config, step3Config, step2State, step4State, step5State]);
 
   const debouncedSave = useCallback(() => {
     if (saveTimerRef.current) {
@@ -108,11 +130,15 @@ export const PipelineWriting: React.FC<PipelineWritingProps> = ({
         setStep1Config(session.step1Config);
         setStep3Config(session.step3Config);
         setStep2State(session.step2State);
+        setStep4State(session.step4State ?? null);
+        setStep5State(session.step5State ?? null);
       } else {
         setStep('step1');
         setStep1Config(defaultStep1Config);
         setStep3Config(defaultStep3Config);
         setStep2State(null);
+        setStep4State(null);
+        setStep5State(null);
       }
     } catch (err) {
       console.error('加载流水线会话失败:', err);
@@ -147,7 +173,7 @@ export const PipelineWriting: React.FC<PipelineWritingProps> = ({
         clearTimeout(saveTimerRef.current);
       }
     };
-  }, [step, step1Config, step3Config, step2State, sessionLoaded, selectedVolumeId, currentBook?.id, debouncedSave]);
+  }, [step, step1Config, step3Config, step2State, step4State, step5State, sessionLoaded, selectedVolumeId, currentBook?.id, debouncedSave]);
 
   const loadVolumes = async () => {
     if (!currentBook) return;
@@ -194,6 +220,12 @@ export const PipelineWriting: React.FC<PipelineWritingProps> = ({
     if (step === 'step2') {
       return true;
     }
+    if (step === 'step3') {
+      return true;
+    }
+    if (step === 'step4') {
+      return true;
+    }
     return false;
   };
 
@@ -220,6 +252,14 @@ export const PipelineWriting: React.FC<PipelineWritingProps> = ({
     setStep2State(newState);
   };
 
+  const handleStep4StateChange = (newState: PipelineStep4State) => {
+    setStep4State(newState);
+  };
+
+  const handleStep5StateChange = (newState: PipelineStep5State) => {
+    setStep5State(newState);
+  };
+
   const stepIndicatorStyle = (s: PipelineStep): React.CSSProperties => {
     const idx = STEP_ORDER.indexOf(s);
     const currentIdx = STEP_ORDER.indexOf(step);
@@ -231,9 +271,9 @@ export const PipelineWriting: React.FC<PipelineWritingProps> = ({
       gap: '4px',
       fontSize: '11px',
       color: isActive
-        ? 'var(--color-vscode-active)'
+        ? 'var(--color-vscode-active-text, var(--color-vscode-active))'
         : isCompleted
-          ? 'var(--color-vscode-active)'
+          ? 'var(--color-vscode-active-text, var(--color-vscode-active))'
           : 'var(--color-vscode-text)',
       opacity: isActive ? 1 : isCompleted ? 0.7 : 0.4,
       fontWeight: isActive ? 600 : 400,
@@ -402,7 +442,7 @@ export const PipelineWriting: React.FC<PipelineWritingProps> = ({
             切换
           </button>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
           {STEP_ORDER.map((s, idx) => (
             <React.Fragment key={s}>
               <button
@@ -418,7 +458,7 @@ export const PipelineWriting: React.FC<PipelineWritingProps> = ({
               </button>
               {idx < STEP_ORDER.length - 1 && (
                 <div style={{
-                  flex: '0 0 16px',
+                  flex: '0 0 8px',
                   height: '1px',
                   backgroundColor: 'var(--color-vscode-border)',
                 }} />
@@ -428,7 +468,7 @@ export const PipelineWriting: React.FC<PipelineWritingProps> = ({
         </div>
       </div>
 
-      <div style={{ flex: 1, overflow: 'auto', padding: step === 'step2' ? '0' : '12px' }}>
+      <div style={{ flex: 1, overflow: 'auto', padding: (step === 'step2' || step === 'step4' || step === 'step5') ? '0' : '12px' }}>
         {step === 'step1' && (
           <Step1Config config={step1Config} onChange={setStep1Config} />
         )}
@@ -441,10 +481,36 @@ export const PipelineWriting: React.FC<PipelineWritingProps> = ({
             onGenerateOutline={onGenerateOutline}
             onRefineOutline={onRefineOutline}
             onOverwriteOutline={onOverwriteOutline}
+            onPreviewInEditor={onPreviewInEditor}
           />
         )}
         {step === 'step3' && (
           <Step3Style config={step3Config} onChange={setStep3Config} showToast={showToast} />
+        )}
+        {step === 'step4' && (
+          <Step4DetailedOutline
+            step2State={step2State}
+            step4State={step4State}
+            onStep4StateChange={handleStep4StateChange}
+            onGenerateDetailedOutline={onGenerateDetailedOutline}
+            onRefineDetailedOutline={onRefineDetailedOutline}
+            onRefineDetailedOutlineChapter={onRefineDetailedOutlineChapter}
+            onOverwriteOutline={onOverwriteOutline}
+            onPreviewInEditor={onPreviewInEditor}
+          />
+        )}
+        {step === 'step5' && (
+          <Step5WriteText
+            step2State={step2State}
+            step4State={step4State}
+            step3Config={step3Config}
+            step5State={step5State}
+            onStep5StateChange={handleStep5StateChange}
+            onGenerateChapter={onGenerateChapter}
+            onRefineChapter={onRefineChapter}
+            onAddChapterToVolume={onAddChapterToVolume}
+            onPreviewInEditor={onPreviewInEditor}
+          />
         )}
       </div>
 
@@ -464,7 +530,7 @@ export const PipelineWriting: React.FC<PipelineWritingProps> = ({
           <ChevronLeft size={14} />
           上一步
         </button>
-        {step !== 'step3' ? (
+        {step !== 'step5' ? (
           <button
             type="button"
             style={canGoNext() ? navBtnStyle('primary') : navBtnStyle('disabled')}
@@ -476,7 +542,7 @@ export const PipelineWriting: React.FC<PipelineWritingProps> = ({
           </button>
         ) : (
           <span style={{ fontSize: '11px', color: 'var(--color-vscode-text)', opacity: 0.5, alignSelf: 'center' }}>
-            配置已保存，后续步骤开发中...
+            逐章生成正文
           </span>
         )}
       </div>

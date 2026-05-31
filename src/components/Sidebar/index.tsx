@@ -5,7 +5,7 @@ import { MaterialPanel } from '../MaterialPanel';
 import { SettingsPanel } from '../SettingsPanel';
 import { LlmConfigPanel } from '../LlmConfigPanel';
 import { PipelineWriting } from '../PipelineWriting';
-import type { ActivityId, Book, Chapter, Material, FormattingSettings, WordCountSettings, PipelineStep1Config, PipelineStep2State, OutlineRound, Volume } from '../../types';
+import type { ActivityId, Book, Chapter, Material, FormattingSettings, WordCountSettings, PipelineStep1Config, PipelineStep2State, PipelineStep4State, PipelineStep5State, OutlineRound, DetailedOutlineRound, ChapterDraftRound, Volume } from '../../types';
 import { db } from '../../db';
 import { useUser } from '../../auth/UserContext';
 
@@ -35,6 +35,13 @@ interface SidebarProps {
   onPipelineGenerateOutline?: (config: PipelineStep1Config) => Promise<string>;
   onPipelineRefineOutline?: (step2State: PipelineStep2State, round: OutlineRound) => Promise<string>;
   onPipelineOverwriteOutline?: (markdown: string) => void;
+  onPipelineGenerateDetailedOutline?: (outline: string, chapterCount: number) => Promise<string>;
+  onPipelineRefineDetailedOutline?: (step4State: PipelineStep4State, round: DetailedOutlineRound, outline: string) => Promise<string>;
+  onPipelineRefineDetailedOutlineChapter?: (step4State: PipelineStep4State, chapterIndices: number[], round: DetailedOutlineRound, outline: string) => Promise<string>;
+  onPipelinePreviewInEditor?: (title: string, content: string, onChange: (content: string) => void) => void;
+  onPipelineGenerateChapter?: (chapterIndex: number) => Promise<string>;
+  onPipelineRefineChapter?: (step5State: PipelineStep5State, chapterIndex: number, round: ChapterDraftRound) => Promise<string>;
+  onPipelineAddChapterToVolume?: (title: string, content: string) => void;
   showToast?: (message: string, type: 'info' | 'success' | 'error' | 'warning') => void;
 }
 
@@ -62,6 +69,13 @@ export const Sidebar = ({
   onPipelineGenerateOutline,
   onPipelineRefineOutline,
   onPipelineOverwriteOutline,
+  onPipelineGenerateDetailedOutline,
+  onPipelineRefineDetailedOutline,
+  onPipelineRefineDetailedOutlineChapter,
+  onPipelinePreviewInEditor,
+  onPipelineGenerateChapter,
+  onPipelineRefineChapter,
+  onPipelineAddChapterToVolume,
   showToast,
 }: SidebarProps) => {
   // 使用 useUser hook 获取用户信息
@@ -155,7 +169,7 @@ export const Sidebar = ({
               <LlmConfigPanel />
             </div>
           ) : activeActivity === 'pipeline' ? (
-            onPipelineGenerateOutline && onPipelineRefineOutline && onPipelineOverwriteOutline && showToast ? (
+            onPipelineGenerateOutline && onPipelineRefineOutline && onPipelineOverwriteOutline && onPipelineGenerateDetailedOutline && onPipelineRefineDetailedOutline && onPipelineRefineDetailedOutlineChapter && onPipelineGenerateChapter && onPipelineRefineChapter && onPipelineAddChapterToVolume && showToast ? (
               <PipelineWriting
                 currentBook={currentBook}
                 currentOutlineVolume={currentOutlineVolume ?? null}
@@ -163,6 +177,13 @@ export const Sidebar = ({
                 onGenerateOutline={onPipelineGenerateOutline}
                 onRefineOutline={onPipelineRefineOutline}
                 onOverwriteOutline={onPipelineOverwriteOutline}
+                onGenerateDetailedOutline={onPipelineGenerateDetailedOutline}
+                onRefineDetailedOutline={onPipelineRefineDetailedOutline}
+                onRefineDetailedOutlineChapter={onPipelineRefineDetailedOutlineChapter}
+                onGenerateChapter={onPipelineGenerateChapter}
+                onRefineChapter={onPipelineRefineChapter}
+                onAddChapterToVolume={onPipelineAddChapterToVolume}
+                onPreviewInEditor={onPipelinePreviewInEditor}
                 showToast={showToast}
               />
             ) : null

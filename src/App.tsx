@@ -15,7 +15,7 @@ import { OutlineEditor, type OutlineEditorRef } from './components/OutlineEditor
 import { MaterialEditor } from './components/MaterialEditor';
 import { QAPanel } from './components/QAPanel';
 import type { RichTextEditorRef } from './components/RichTextEditor';
-import type { ActivityId, Book, Chapter, Volume, FormattingSettings, Material, OutlineItemData, WordCountSettings, PipelineStep1Config, PipelineStep2State, OutlineRound } from './types';
+import type { ActivityId, Book, Chapter, Volume, FormattingSettings, Material, OutlineItemData, WordCountSettings, PipelineStep1Config, PipelineStep2State, PipelineStep4State, PipelineStep5State, OutlineRound, DetailedOutlineRound, ChapterDraftRound } from './types';
 import { db, saveChapterVersion, cleanupOldVersions, exportAllData, importAllData, getDefaultLLMConfig, decodeApiKey } from './db';
 import { countWords, clearExtraBlankLines, clearExtraSpaces, convertFullWidthToHalfWidth, markdownToOutline } from './utils/helpers';
 import { findMatches, replaceFirst, replaceAll } from './utils/searchUtils';
@@ -61,6 +61,7 @@ function App() {
   const [currentChapter, setCurrentChapter] = useState<Chapter | null>(null);
   const [currentOutlineVolume, setCurrentOutlineVolume] = useState<Volume | null>(null);
   const [currentMaterial, setCurrentMaterial] = useState<Material | null>(null);
+  const [pipelinePreview, setPipelinePreview] = useState<{ title: string; content: string; onChange: (content: string) => void } | null>(null);
   const [showFindReplace, setShowFindReplace] = useState(false);
   const [showFormattingSettings, setShowFormattingSettings] = useState(false);
   const [showPromptPreview, setShowPromptPreview] = useState(false);
@@ -547,6 +548,7 @@ function App() {
   const handleChapterSelect = async (chapter: Chapter) => {
     await autoSave();
     setCurrentOutlineVolume(null);
+    setPipelinePreview(null);
     console.log('[章节选择] 选择章节:', chapter.id);
     
     // 从数据库重新读取最新内容，确保数据是最新的
@@ -573,6 +575,7 @@ function App() {
     setEditorContent('');
     setWordCount(0);
     setSaveStatus('saved');
+    setPipelinePreview(null);
     setCurrentOutlineVolume(volume);
   };
 
@@ -779,6 +782,255 @@ ${chapterContents}
     } catch (error) {
       console.error('流水线大纲回炉重造失败:', error);
       throw error;
+    }
+  };
+
+  const handlePipelineGenerateDetailedOutline = async (outline: string, chapterCount: number): Promise<string> => {
+    try {
+      const defaultConfig = await getDefaultLLMConfig();
+      if (!defaultConfig) {
+        throw new Error('请先配置 LLM（在 AI 助手中设置）');
+      }
+      const apiKey = decodeApiKey(defaultConfig.apiKey);
+      const prompts = new Map<string, string>();
+      const modules = import.meta.glob('./references/*.md', { query: '?raw', eager: true, import: 'default' }) as Record<string, string>;
+      for (const [path, content] of Object.entries(modules)) {
+        if (typeof content === 'string') {
+          const fileName = path.split('/').pop() || '';
+          prompts.set(fileName, content);
+        }
+      }
+      novelLLMService.init(prompts, {
+        apiKey,
+        baseUrl: defaultConfig.apiUrl.replace(/\/chat\/completions\/?$/, '').replace(/\/$/, ''),
+        model: defaultConfig.model,
+      });
+      const result = await novelLLMService.generatePipelineDetailedOutline(outline, chapterCount);
+      return result;
+    } catch (error) {
+      console.error('流水线细纲生成失败:', error);
+      throw error;
+    }
+  };
+
+  const handlePipelineRefineDetailedOutline = async (step4State: PipelineStep4State, round: DetailedOutlineRound, outline: string): Promise<string> => {
+    try {
+      const defaultConfig = await getDefaultLLMConfig();
+      if (!defaultConfig) {
+        throw new Error('请先配置 LLM（在 AI 助手中设置）');
+      }
+      const apiKey = decodeApiKey(defaultConfig.apiKey);
+      const prompts = new Map<string, string>();
+      const modules = import.meta.glob('./references/*.md', { query: '?raw', eager: true, import: 'default' }) as Record<string, string>;
+      for (const [path, content] of Object.entries(modules)) {
+        if (typeof content === 'string') {
+          const fileName = path.split('/').pop() || '';
+          prompts.set(fileName, content);
+        }
+      }
+      novelLLMService.init(prompts, {
+        apiKey,
+        baseUrl: defaultConfig.apiUrl.replace(/\/chat\/completions\/?$/, '').replace(/\/$/, ''),
+        model: defaultConfig.model,
+      });
+      const result = await novelLLMService.refinePipelineDetailedOutline(step4State, round, outline);
+      return result;
+    } catch (error) {
+      console.error('流水线细纲回炉重造失败:', error);
+      throw error;
+    }
+  };
+
+  const handlePipelineRefineDetailedOutlineChapter = async (step4State: PipelineStep4State, chapterIndices: number[], round: DetailedOutlineRound, outline: string): Promise<string> => {
+    try {
+      const defaultConfig = await getDefaultLLMConfig();
+      if (!defaultConfig) {
+        throw new Error('请先配置 LLM（在 AI 助手中设置）');
+      }
+      const apiKey = decodeApiKey(defaultConfig.apiKey);
+      const prompts = new Map<string, string>();
+      const modules = import.meta.glob('./references/*.md', { query: '?raw', eager: true, import: 'default' }) as Record<string, string>;
+      for (const [path, content] of Object.entries(modules)) {
+        if (typeof content === 'string') {
+          const fileName = path.split('/').pop() || '';
+          prompts.set(fileName, content);
+        }
+      }
+      novelLLMService.init(prompts, {
+        apiKey,
+        baseUrl: defaultConfig.apiUrl.replace(/\/chat\/completions\/?$/, '').replace(/\/$/, ''),
+        model: defaultConfig.model,
+      });
+      const result = await novelLLMService.refinePipelineDetailedOutlineChapter(step4State, chapterIndices, round, outline);
+      return result;
+    } catch (error) {
+      console.error('流水线细纲章节回炉重造失败:', error);
+      throw error;
+    }
+  };
+
+  const handlePipelinePreviewInEditor = (title: string, content: string, onChange: (content: string) => void) => {
+    if (currentMaterial) {
+      setCurrentMaterial(null);
+    }
+    if (currentOutlineVolume) {
+      setCurrentOutlineVolume(null);
+    }
+    if (currentChapter) {
+      if (saveStatus === 'unsaved') {
+        autoSave();
+      }
+      setCurrentChapter(null);
+      setEditorContent('');
+    }
+    setPipelinePreview({ title, content, onChange });
+  };
+
+  const handlePipelinePreviewContentChange = (newContent: string) => {
+    if (pipelinePreview) {
+      pipelinePreview.onChange(newContent);
+      setPipelinePreview({ ...pipelinePreview, content: newContent });
+    }
+  };
+
+  const handlePipelinePreviewClose = () => {
+    setPipelinePreview(null);
+  };
+
+  const handlePipelineGenerateChapter = async (chapterIndex: number): Promise<string> => {
+    try {
+      const defaultConfig = await getDefaultLLMConfig();
+      if (!defaultConfig) {
+        throw new Error('请先配置 LLM（在 AI 助手中设置）');
+      }
+      const apiKey = decodeApiKey(defaultConfig.apiKey);
+      const prompts = new Map<string, string>();
+      const modules = import.meta.glob('./references/*.md', { query: '?raw', eager: true, import: 'default' }) as Record<string, string>;
+      for (const [path, content] of Object.entries(modules)) {
+        if (typeof content === 'string') {
+          const fileName = path.split('/').pop() || '';
+          prompts.set(fileName, content);
+        }
+      }
+      novelLLMService.init(prompts, {
+        apiKey,
+        baseUrl: defaultConfig.apiUrl.replace(/\/chat\/completions\/?$/, '').replace(/\/$/, ''),
+        model: defaultConfig.model,
+      });
+
+      const pipelineSessionId = `${currentBook?.id}_${currentOutlineVolume?.id}`;
+      const session = await db.pipelineSessions.get(pipelineSessionId);
+      const step4State = session?.step4State;
+      const step2State = session?.step2State;
+      const step3Config = session?.step3Config;
+
+      if (!step4State || !step4State.chapters[chapterIndex]) {
+        throw new Error('未找到章节细纲，请先完成第4步');
+      }
+
+      const chapter = step4State.chapters[chapterIndex];
+      const previousChapterContent = chapterIndex > 0 && step4State.chapters[chapterIndex - 1]
+        ? null
+        : null;
+
+      const step5State = session?.step5State;
+      if (step5State && chapterIndex > 0) {
+        const prevDraft = step5State.chapters.find(ch => ch.index === chapterIndex - 1);
+        if (prevDraft?.content) {
+          const result = await novelLLMService.generatePipelineChapter(
+            chapterIndex,
+            chapter.title,
+            chapter.content,
+            prevDraft.content,
+            step2State?.currentOutline || '',
+            step3Config || { writingStyle: '', storyLength: '', customRules: '' },
+          );
+          return result;
+        }
+      }
+
+      const result = await novelLLMService.generatePipelineChapter(
+        chapterIndex,
+        chapter.title,
+        chapter.content,
+        null,
+        step2State?.currentOutline || '',
+        step3Config || { writingStyle: '', storyLength: '', customRules: '' },
+      );
+      return result;
+    } catch (error) {
+      console.error('流水线生成章节失败:', error);
+      throw error;
+    }
+  };
+
+  const handlePipelineRefineChapter = async (step5State: PipelineStep5State, chapterIndex: number, round: ChapterDraftRound): Promise<string> => {
+    try {
+      const defaultConfig = await getDefaultLLMConfig();
+      if (!defaultConfig) {
+        throw new Error('请先配置 LLM（在 AI 助手中设置）');
+      }
+      const apiKey = decodeApiKey(defaultConfig.apiKey);
+      const prompts = new Map<string, string>();
+      const modules = import.meta.glob('./references/*.md', { query: '?raw', eager: true, import: 'default' }) as Record<string, string>;
+      for (const [path, content] of Object.entries(modules)) {
+        if (typeof content === 'string') {
+          const fileName = path.split('/').pop() || '';
+          prompts.set(fileName, content);
+        }
+      }
+      novelLLMService.init(prompts, {
+        apiKey,
+        baseUrl: defaultConfig.apiUrl.replace(/\/chat\/completions\/?$/, '').replace(/\/$/, ''),
+        model: defaultConfig.model,
+      });
+
+      const pipelineSessionId = `${currentBook?.id}_${currentOutlineVolume?.id}`;
+      const session = await db.pipelineSessions.get(pipelineSessionId);
+      const step2State = session?.step2State;
+      const step3Config = session?.step3Config;
+
+      const result = await novelLLMService.refinePipelineChapter(
+        step5State,
+        chapterIndex,
+        round,
+        step2State?.currentOutline || '',
+        step3Config || { writingStyle: '', storyLength: '', customRules: '' },
+      );
+      return result;
+    } catch (error) {
+      console.error('流水线章节回炉重造失败:', error);
+      throw error;
+    }
+  };
+
+  const handlePipelineAddChapterToVolume = async (title: string, content: string) => {
+    if (!currentBook || !currentOutlineVolume) {
+      showToast('请先选择书籍和卷', 'warning');
+      return;
+    }
+    try {
+      const { v4: uuidv4 } = await import('uuid');
+      const existingChapters = await db.chapters
+        .where('volumeId')
+        .equals(currentOutlineVolume.id)
+        .count();
+      const chapterId = uuidv4();
+      const wordCount = countWords(content, wordCountSettings);
+      await db.chapters.add({
+        id: chapterId,
+        volumeId: currentOutlineVolume.id,
+        bookId: currentBook.id,
+        title,
+        content,
+        wordCount,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      });
+      showToast(`章节「${title}」已录入本卷`, 'success');
+    } catch (error) {
+      console.error('录入章节失败:', error);
+      showToast('录入章节失败', 'error');
     }
   };
 
@@ -1347,13 +1599,13 @@ ${chapterContents}
       setCurrentOutlineVolume(null);
     }
     if (currentChapter) {
-      // 先自动保存当前章节
       if (saveStatus === 'unsaved') {
         autoSave();
       }
       setCurrentChapter(null);
       setEditorContent('');
     }
+    setPipelinePreview(null);
     setCurrentMaterial(material);
   };
 
@@ -1483,6 +1735,13 @@ ${chapterContents}
                     onPipelineGenerateOutline={handlePipelineGenerateOutline}
                     onPipelineRefineOutline={handlePipelineRefineOutline}
                     onPipelineOverwriteOutline={handlePipelineOverwriteOutline}
+                    onPipelineGenerateDetailedOutline={handlePipelineGenerateDetailedOutline}
+                    onPipelineRefineDetailedOutline={handlePipelineRefineDetailedOutline}
+                    onPipelineRefineDetailedOutlineChapter={handlePipelineRefineDetailedOutlineChapter}
+                    onPipelinePreviewInEditor={handlePipelinePreviewInEditor}
+                    onPipelineGenerateChapter={handlePipelineGenerateChapter}
+                    onPipelineRefineChapter={handlePipelineRefineChapter}
+                    onPipelineAddChapterToVolume={handlePipelineAddChapterToVolume}
                     showToast={showToast}
                   />
               )}
@@ -1520,6 +1779,55 @@ ${chapterContents}
                   onSave={handleOutlineSave}
                   onBack={() => setCurrentOutlineVolume(null)}
                 />
+              ) : pipelinePreview ? (
+                <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+                  <div style={{
+                    padding: '6px 16px',
+                    borderBottom: '1px solid var(--color-vscode-border)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    flexShrink: 0,
+                  }}>
+                    <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--color-vscode-text)' }}>
+                      {pipelinePreview.title}
+                    </span>
+                    <button
+                      type="button"
+                      style={{
+                        padding: '2px 10px',
+                        fontSize: '11px',
+                        border: '1px solid var(--color-vscode-border)',
+                        borderRadius: '3px',
+                        cursor: 'pointer',
+                        backgroundColor: 'transparent',
+                        color: 'var(--color-vscode-text)',
+                      }}
+                      onClick={handlePipelinePreviewClose}
+                    >
+                      关闭
+                    </button>
+                  </div>
+                  <textarea
+                    value={pipelinePreview.content}
+                    onChange={e => handlePipelinePreviewContentChange(e.target.value)}
+                    style={{
+                      flex: 1,
+                      width: '100%',
+                      resize: 'none',
+                      backgroundColor: 'transparent',
+                      color: 'var(--color-vscode-text)',
+                      border: 'none',
+                      outline: 'none',
+                      padding: '16px',
+                      fontSize: '14px',
+                      fontFamily: 'var(--editor-font-family, Consolas, Monaco, "Courier New", monospace)',
+                      lineHeight: '1.6',
+                      boxSizing: 'border-box' as const,
+                    }}
+                    spellCheck={false}
+                  />
+                </div>
               ) : (
                 <EditorArea
                   content={editorContent}
