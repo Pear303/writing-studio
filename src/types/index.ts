@@ -49,8 +49,9 @@ export interface Chapter {
   volumeId: string | null; // null 表示未归入任何卷（草稿箱）
   bookId: string;
   title: string;
-  content: string; // 富文本HTML或Markdown源码
+  content: string; // 纯文本或HTML或Markdown源码
   wordCount: number;
+  detailedOutline?: string; // 细纲内容（纯文本）
   autoNumberExcluded?: boolean;  // 是否排除自动章节序号
   createdAt: number;
   updatedAt: number;

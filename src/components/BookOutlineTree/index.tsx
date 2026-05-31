@@ -1325,7 +1325,7 @@ export const BookOutlineTree = ({ book, onChapterSelect, onBookDeselect, onVolum
                       <span className="text-sm text-vscode-text font-medium">{book.name}</span>
                     </div>
                     <button
-                      className="text-xs px-2 py-1 text-blue-400 hover:bg-blue-400/10 rounded transition-colors"
+                      className="text-xs px-2 py-1 text-vscode-text hover:bg-vscode-active/20 rounded transition-colors"
                       onClick={(e) => {
                         e.stopPropagation();
                         handleVolumeMoveSelectBook(book.id);

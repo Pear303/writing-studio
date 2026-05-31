@@ -41,7 +41,7 @@ interface SidebarProps {
   onPipelinePreviewInEditor?: (title: string, content: string, onChange: (content: string) => void) => void;
   onPipelineGenerateChapter?: (chapterIndex: number) => Promise<string>;
   onPipelineRefineChapter?: (step5State: PipelineStep5State, chapterIndex: number, round: ChapterDraftRound) => Promise<string>;
-  onPipelineAddChapterToVolume?: (title: string, content: string) => void;
+  onPipelineAddChapterToVolume?: (title: string, content: string, detailedOutline?: string) => void;
   showToast?: (message: string, type: 'info' | 'success' | 'error' | 'warning') => void;
 }
 

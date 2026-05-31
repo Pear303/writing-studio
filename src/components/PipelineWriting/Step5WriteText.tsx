@@ -10,7 +10,7 @@ interface Step5WriteTextProps {
   onStep5StateChange: (state: PipelineStep5State) => void;
   onGenerateChapter: (chapterIndex: number) => Promise<string>;
   onRefineChapter: (step5State: PipelineStep5State, chapterIndex: number, round: ChapterDraftRound) => Promise<string>;
-  onAddChapterToVolume: (title: string, content: string) => void;
+  onAddChapterToVolume: (title: string, content: string, detailedOutline?: string) => void;
   onPreviewInEditor?: (title: string, content: string, onChange: (content: string) => void) => void;
 }
 
@@ -254,8 +254,8 @@ export const Step5WriteText: React.FC<Step5WriteTextProps> = ({
     }
   };
 
-  const handleAddToVolume = (title: string, content: string) => {
-    onAddChapterToVolume(title, content);
+  const handleAddToVolume = (title: string, content: string, detailedOutline?: string) => {
+    onAddChapterToVolume(title, content, detailedOutline);
   };
 
   const handlePreviewInEditor = () => {
@@ -364,7 +364,7 @@ export const Step5WriteText: React.FC<Step5WriteTextProps> = ({
                       ? 'rgba(22, 163, 74, 0.08)'
                       : 'transparent',
                   color: isCurrent
-                    ? 'var(--color-vscode-active)'
+                    ? 'white'
                     : isGenerated
                       ? '#16a34a'
                       : 'var(--color-vscode-text)',
@@ -408,7 +408,7 @@ export const Step5WriteText: React.FC<Step5WriteTextProps> = ({
               <button
                 type="button"
                 style={{ ...btnStyle('success'), padding: '3px 8px' }}
-                onClick={() => handleAddToVolume(`第${currentIdx + 1}章：${currentDraft.title}`, currentDraft.content)}
+                onClick={() => handleAddToVolume(chapters[currentIdx].title, currentDraft.content, chapters[currentIdx].content)}
               >
                 <BookOpen size={12} />
                 录入本卷

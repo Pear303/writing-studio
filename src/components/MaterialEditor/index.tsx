@@ -145,7 +145,7 @@ export const MaterialEditor = ({ material, onBack, onSaved }: MaterialEditorProp
                 </button>
               ))}
             </div>
-            <div className="text-xs mb-1" style={{ color: 'var(--color-vscode-text)', opacity: 0.4 }}>账号级（跨书共享）</div>
+            <div className="text-xs mb-1" style={{ color: 'var(--color-vscode-text)', opacity: 0.4 }}>账号级</div>
             <div className="flex flex-wrap gap-1.5">
               {ACCOUNT_LEVEL_TYPES.map((t) => (
                 <button

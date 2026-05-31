@@ -88,7 +88,7 @@ export const UserSettingsPage = ({ onLogout }: { onLogout: () => void }) => {
       <h2 className="text-2xl font-bold text-slate-800 mb-6">账号设置</h2>
 
       {message && (
-        <div className="mb-4 p-3 bg-blue-50 text-blue-600 rounded-lg">
+        <div className="mb-4 p-3 rounded-lg" style={{ backgroundColor: 'var(--color-vscode-active-light)', color: 'var(--color-vscode-text)' }}>
           {message}
         </div>
       )}

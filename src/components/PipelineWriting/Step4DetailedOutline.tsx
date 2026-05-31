@@ -527,7 +527,7 @@ export const Step4DetailedOutline: React.FC<Step4DetailedOutlineProps> = ({
                   borderRadius: '3px',
                   cursor: 'pointer',
                   backgroundColor: reworkMode === 'all' ? 'rgba(0, 122, 204, 0.15)' : 'transparent',
-                  color: reworkMode === 'all' ? 'var(--color-vscode-active)' : 'var(--color-vscode-text)',
+                  color: reworkMode === 'all' ? 'white' : 'var(--color-vscode-text)',
                 }}
                 onClick={() => { setReworkMode('all'); setSelectedChapterIndices([]); }}
               >
@@ -542,7 +542,7 @@ export const Step4DetailedOutline: React.FC<Step4DetailedOutlineProps> = ({
                   borderRadius: '3px',
                   cursor: 'pointer',
                   backgroundColor: reworkMode === 'selected' ? 'rgba(0, 122, 204, 0.15)' : 'transparent',
-                  color: reworkMode === 'selected' ? 'var(--color-vscode-active)' : 'var(--color-vscode-text)',
+                  color: reworkMode === 'selected' ? 'white' : 'var(--color-vscode-text)',
                 }}
                 onClick={() => setReworkMode('selected')}
               >

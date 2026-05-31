@@ -89,31 +89,21 @@ async generateOutline(project: {
   }
 
   async generatePipelineOutline(config: PipelineStep1Config): Promise<string> {
-    const parts: string[] = [];
-    if (config.genres.length > 0) {
-      parts.push(`主题题材：${config.genres.join('、')}`);
-    }
-    if (config.plotType) {
-      parts.push(`剧情类型：${config.plotType}`);
-    }
-    if (config.protagonistIdentity) {
-      parts.push(`主角身份：${config.protagonistIdentity}`);
-    }
-    if (config.tone) {
-      parts.push(`基调：${config.tone}`);
-    }
-    if (config.customPrompt.trim()) {
-      parts.push(`额外要求：${config.customPrompt.trim()}`);
-    }
-    const userMessage = parts.length > 0
-      ? `请根据以下设定生成小说大纲：\n${parts.join('\n')}`
-      : '请帮我生成小说大纲';
+    const userMessage = await this.composer!.renderTemplate('outline-generate', {
+      genres: config.genres.join('、'),
+      plotType: config.plotType,
+      protagonistIdentity: config.protagonistIdentity,
+      tone: config.tone,
+      customPrompt: config.customPrompt.trim(),
+    });
+
     const result = await this.generate('PLANNING', userMessage, {
       novelType: config.genres.join(','),
       protagonistTypes: config.protagonistIdentity ? [config.protagonistIdentity] : [],
       plotTypes: config.plotType ? [config.plotType] : [],
       coreIdea: config.customPrompt.trim(),
     });
+
     return result.content;
   }
 
@@ -129,31 +119,26 @@ async generateOutline(project: {
       return `第${i + 1}轮：${parts.join(' / ')}`;
     });
 
-    const currentParts: string[] = [];
-    if (currentRound.additions.trim()) currentParts.push(`新增：${currentRound.additions.trim()}`);
-    if (currentRound.deletions.trim()) currentParts.push(`删除：${currentRound.deletions.trim()}`);
-    if (currentRound.modifications.trim()) currentParts.push(`修改：${currentRound.modifications.trim()}`);
-
-    const userMessage = `你是一个小说大纲编辑助手。以下是用户的大纲迭代过程：
-
-【原始大纲】
-${step2State.originalOutline}
-
-【当前大纲】
-${step2State.currentOutline}
-${historyLines.length > 0 ? `\n【历史修改记录】\n${historyLines.join('\n')}` : ''}
-
-【本轮修改要求】
-${currentParts.join('\n')}
-
-请根据以上信息，在当前大纲基础上生成改进版大纲。只输出改进后的大纲内容，不要额外解释。`;
+    const userMessage = await this.composer!.renderTemplate('outline-refine', {
+      originalOutline: step2State.originalOutline,
+      currentOutline: step2State.currentOutline,
+      historyLines: historyLines.length > 0 ? historyLines.join('\n') : '',
+      additions: currentRound.additions.trim(),
+      deletions: currentRound.deletions.trim(),
+      modifications: currentRound.modifications.trim(),
+    });
 
     const result = await this.generate('PLANNING', userMessage, {
       novelType: '',
       protagonistTypes: [],
       plotTypes: [],
-      coreIdea: currentParts.join('; '),
+      coreIdea: [
+        currentRound.additions,
+        currentRound.deletions,
+        currentRound.modifications
+      ].filter(Boolean).join('; '),
     });
+
     return result.content;
   }
 
@@ -161,34 +146,10 @@ ${currentParts.join('\n')}
     outline: string,
     chapterCount: number,
   ): Promise<string> {
-    const userMessage = `你是一个小说细纲生成助手。以下是大纲内容：
-
-【大纲】
-${outline}
-
-请根据以上大纲，生成 ${chapterCount} 个章节的细纲。每个章节细纲需包含：
-1. 章节标题
-2. 核心情节点（3-5个）
-3. 人物行动与动机
-4. 悬念钩子（章末）
-5. 与前后章节的关联
-
-请按以下格式输出，每个章节用 "---" 分隔：
-
-## 第1章：[章节标题]
-核心情节点：
-- ...
-人物行动与动机：
-- ...
-悬念钩子：
-- ...
-与前后章节关联：
-- ...
----
-## 第2章：[章节标题]
-...
-
-只输出细纲内容，不要额外解释。`;
+    const userMessage = await this.composer!.renderTemplate('detailed-generate', {
+      outline,
+      chapterCount,
+    });
 
     const result = await this.generate('DETAILED_OUTLINE', userMessage, {
       novelType: '',
@@ -196,6 +157,7 @@ ${outline}
       plotTypes: [],
       coreIdea: `根据大纲生成${chapterCount}章细纲`,
     });
+
     return result.content;
   }
 
@@ -212,35 +174,30 @@ ${outline}
       return `第${i + 1}轮：${parts.join(' / ')}`;
     });
 
-    const currentParts: string[] = [];
-    if (currentRound.additions.trim()) currentParts.push(`新增：${currentRound.additions.trim()}`);
-    if (currentRound.deletions.trim()) currentParts.push(`删除：${currentRound.deletions.trim()}`);
-    if (currentRound.modifications.trim()) currentParts.push(`修改：${currentRound.modifications.trim()}`);
-
     const chaptersText = step4State.chapters.map(ch =>
       `## 第${ch.index + 1}章：${ch.title}\n${ch.content}`
     ).join('\n---\n');
 
-    const userMessage = `你是一个小说细纲编辑助手。以下是用户的细纲迭代过程：
-
-【原始大纲】
-${outline}
-
-【当前细纲】
-${chaptersText}
-${historyLines.length > 0 ? `\n【历史修改记录】\n${historyLines.join('\n')}` : ''}
-
-【本轮修改要求】
-${currentParts.join('\n')}
-
-请根据以上信息，在当前细纲基础上生成改进版细纲。保持原有的格式和章节数量不变。只输出改进后的细纲内容，不要额外解释。`;
+    const userMessage = await this.composer!.renderTemplate('detailed-refine', {
+      outline,
+      chaptersText,
+      historyLines: historyLines.length > 0 ? historyLines.join('\n') : '',
+      additions: currentRound.additions.trim(),
+      deletions: currentRound.deletions.trim(),
+      modifications: currentRound.modifications.trim(),
+    });
 
     const result = await this.generate('DETAILED_OUTLINE', userMessage, {
       novelType: '',
       protagonistTypes: [],
       plotTypes: [],
-      coreIdea: currentParts.join('; '),
+      coreIdea: [
+        currentRound.additions,
+        currentRound.deletions,
+        currentRound.modifications
+      ].filter(Boolean).join('; '),
     });
+
     return result.content;
   }
 
@@ -258,30 +215,25 @@ ${currentParts.join('\n')}
       `## 第${ch.index + 1}章：${ch.title}\n${ch.content}`
     ).join('\n---\n');
 
-    const currentParts: string[] = [];
-    if (currentRound.additions.trim()) currentParts.push(`新增：${currentRound.additions.trim()}`);
-    if (currentRound.deletions.trim()) currentParts.push(`删除：${currentRound.deletions.trim()}`);
-    if (currentRound.modifications.trim()) currentParts.push(`修改：${currentRound.modifications.trim()}`);
-
-    const userMessage = `你是一个小说细纲编辑助手。用户只想对选中的章节细纲进行修改，其他章节保持不变。
-
-【原始大纲】
-${outline}
-
-【选中的章节细纲（仅对这些章节进行修改）】
-${selectedChaptersText}
-
-【修改要求】
-${currentParts.join('\n')}
-
-请只输出修改后的选中章节细纲内容，保持原有格式。不要输出未选中的章节。只输出细纲内容，不要额外解释。`;
+    const userMessage = await this.composer!.renderTemplate('detailed-refine-chapter', {
+      outline,
+      selectedChaptersText,
+      additions: currentRound.additions.trim(),
+      deletions: currentRound.deletions.trim(),
+      modifications: currentRound.modifications.trim(),
+    });
 
     const result = await this.generate('DETAILED_OUTLINE', userMessage, {
       novelType: '',
       protagonistTypes: [],
       plotTypes: [],
-      coreIdea: currentParts.join('; '),
+      coreIdea: [
+        currentRound.additions,
+        currentRound.deletions,
+        currentRound.modifications
+      ].filter(Boolean).join('; '),
     });
+
     return result.content;
   }
   
@@ -356,27 +308,16 @@ ${currentParts.join('\n')}
     outline: string,
     step3Config: { writingStyle: string; storyLength: string; customRules: string },
   ): Promise<string> {
-    const styleParts: string[] = [];
-    if (step3Config.writingStyle) styleParts.push(`写作风格：${step3Config.writingStyle}`);
-    if (step3Config.storyLength) styleParts.push(`篇幅要求：${step3Config.storyLength}`);
-    if (step3Config.customRules) styleParts.push(`自定义规则：${step3Config.customRules}`);
-
-    const userMessage = `你是一个小说写作助手。请根据以下信息撰写章节正文。
-
-【全书大纲概览】
-${outline}
-
-【当前章节细纲】
-第${chapterIndex + 1}章：${chapterTitle}
-${chapterOutline}
-${previousChapterContent ? `\n【上一章正文（用于衔接）】\n${previousChapterContent.slice(-2000)}` : ''}
-${styleParts.length > 0 ? `\n【风格与要求】\n${styleParts.join('\n')}` : ''}
-
-请撰写第${chapterIndex + 1}章「${chapterTitle}」的完整正文。要求：
-1. 紧扣细纲内容展开，不遗漏关键情节点
-2. 与上一章自然衔接（如有）
-3. 章末设置悬念钩子
-4. 只输出正文内容，不要输出章节标题和额外说明`;
+    const userMessage = await this.composer!.renderTemplate('chapter-generate', {
+      outline,
+      chapterIndex: chapterIndex + 1,
+      chapterTitle,
+      chapterOutline,
+      previousChapterContent: previousChapterContent ? previousChapterContent.slice(-2000) : '',
+      writingStyle: step3Config.writingStyle,
+      storyLength: step3Config.storyLength,
+      customRules: step3Config.customRules,
+    });
 
     const result = await this.generate('CHAPTER_WRITING', userMessage, {
       novelType: '',
@@ -386,6 +327,7 @@ ${styleParts.length > 0 ? `\n【风格与要求】\n${styleParts.join('\n')}` : 
       chapterNumber: chapterIndex + 1,
       chapterTitle,
     });
+
     return result.content;
   }
 
@@ -407,39 +349,31 @@ ${styleParts.length > 0 ? `\n【风格与要求】\n${styleParts.join('\n')}` : 
       return `第${i + 1}轮：${parts.join(' / ')}`;
     });
 
-    const currentParts: string[] = [];
-    if (currentRound.additions.trim()) currentParts.push(`新增：${currentRound.additions.trim()}`);
-    if (currentRound.deletions.trim()) currentParts.push(`删除：${currentRound.deletions.trim()}`);
-    if (currentRound.modifications.trim()) currentParts.push(`修改：${currentRound.modifications.trim()}`);
-
-    const styleParts: string[] = [];
-    if (step3Config.writingStyle) styleParts.push(`写作风格：${step3Config.writingStyle}`);
-    if (step3Config.storyLength) styleParts.push(`篇幅要求：${step3Config.storyLength}`);
-    if (step3Config.customRules) styleParts.push(`自定义规则：${step3Config.customRules}`);
-
-    const userMessage = `你是一个小说编辑助手。请对以下章节正文进行修改。
-
-【全书大纲概览】
-${outline}
-
-【当前章节正文】
-${chapter.content}
-${historyLines.length > 0 ? `\n【历史修改记录】\n${historyLines.join('\n')}` : ''}
-
-【本轮修改要求】
-${currentParts.join('\n')}
-${styleParts.length > 0 ? `\n【风格与要求】\n${styleParts.join('\n')}` : ''}
-
-请在当前正文基础上生成修改后的版本。只输出修改后的正文内容，不要额外解释。`;
+    const userMessage = await this.composer!.renderTemplate('chapter-refine', {
+      outline,
+      chapterContent: chapter.content,
+      historyLines: historyLines.length > 0 ? historyLines.join('\n') : '',
+      additions: currentRound.additions.trim(),
+      deletions: currentRound.deletions.trim(),
+      modifications: currentRound.modifications.trim(),
+      writingStyle: step3Config.writingStyle,
+      storyLength: step3Config.storyLength,
+      customRules: step3Config.customRules,
+    });
 
     const result = await this.generate('CHAPTER_WRITING', userMessage, {
       novelType: '',
       protagonistTypes: [],
       plotTypes: [],
-      coreIdea: currentParts.join('; '),
+      coreIdea: [
+        currentRound.additions,
+        currentRound.deletions,
+        currentRound.modifications
+      ].filter(Boolean).join('; '),
       chapterNumber: chapterIndex + 1,
       chapterTitle: chapter.title,
     });
+
     return result.content;
   }
 }

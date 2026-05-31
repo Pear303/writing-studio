@@ -922,14 +922,14 @@ ${rawContent}
 
               {aiResult.suggestions.length > 0 && (
                 <div>
-                  <h3 className="text-sm font-semibold text-blue-500 mb-2 flex items-center gap-1.5">
-                    <Lightbulb size={14} className="text-blue-500" />
+                  <h3 className="text-sm font-semibold text-vscode-text mb-2 flex items-center gap-1.5">
+                    <Lightbulb size={14} className="text-vscode-text" />
                     修改建议
                   </h3>
                   <ul className="space-y-1.5">
                     {aiResult.suggestions.map((sg, i) => (
                       <li key={i} className="flex items-start gap-2 text-xs text-vscode-text leading-relaxed">
-                        <span className="text-blue-500 mt-0.5 flex-shrink-0">→</span>
+                        <span className="text-vscode-text mt-0.5 flex-shrink-0">→</span>
                         <span>{sg}</span>
                       </li>
                     ))}

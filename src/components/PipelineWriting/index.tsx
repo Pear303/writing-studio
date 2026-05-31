@@ -20,7 +20,7 @@ interface PipelineWritingProps {
   onRefineDetailedOutlineChapter: (step4State: PipelineStep4State, chapterIndices: number[], round: DetailedOutlineRound, outline: string) => Promise<string>;
   onGenerateChapter: (chapterIndex: number) => Promise<string>;
   onRefineChapter: (step5State: PipelineStep5State, chapterIndex: number, round: ChapterDraftRound) => Promise<string>;
-  onAddChapterToVolume: (title: string, content: string) => void;
+  onAddChapterToVolume: (title: string, content: string, detailedOutline?: string) => void;
   onPreviewInEditor?: (title: string, content: string, onChange: (content: string) => void) => void;
   showToast: (message: string, type: 'info' | 'success' | 'error' | 'warning') => void;
 }
@@ -270,11 +270,7 @@ export const PipelineWriting: React.FC<PipelineWritingProps> = ({
       alignItems: 'center',
       gap: '4px',
       fontSize: '11px',
-      color: isActive
-        ? 'var(--color-vscode-active-text, var(--color-vscode-active))'
-        : isCompleted
-          ? 'var(--color-vscode-active-text, var(--color-vscode-active))'
-          : 'var(--color-vscode-text)',
+      color: 'var(--color-vscode-text)',
       opacity: isActive ? 1 : isCompleted ? 0.7 : 0.4,
       fontWeight: isActive ? 600 : 400,
       cursor: 'pointer',

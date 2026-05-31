@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Search, User, MapPin, Package, Brain, Edit, Trash2, FilePlus, X, BookOpen, Palette } from 'lucide-react';
 import { MaterialCard } from '../MaterialCard';
 import { ContextMenu, type MenuItem } from '../ContextMenu';
@@ -18,7 +18,7 @@ interface MaterialPanelProps {
 
 export const MaterialPanel = ({ onInsertMaterial, onMaterialSelect, currentBook }: MaterialPanelProps) => {
   const [materials, setMaterials] = useState<Material[]>([]);
-  const [filterType, setFilterType] = useState<MaterialType | 'all'>('all');
+  const [filterType, setFilterType] = useState<MaterialType | 'all_book' | 'all_global'>('all_book');
   const [searchText, setSearchText] = useState('');
   const [contextMenu, setContextMenu] = useState<{
     x: number;
@@ -64,10 +64,32 @@ export const MaterialPanel = ({ onInsertMaterial, onMaterialSelect, currentBook 
   };
 
   const filteredMaterials = materials.filter((m) => {
-    const matchType = filterType === 'all' || m.type === filterType;
+    const matchType = filterType === 'all_book'
+      ? BOOK_LEVEL_TYPES.includes(m.type)
+      : filterType === 'all_global'
+        ? ACCOUNT_LEVEL_TYPES.includes(m.type)
+        : m.type === filterType;
     const matchSearch = !searchText || m.name.toLowerCase().includes(searchText.toLowerCase());
     return matchType && matchSearch;
   });
+
+  const typeCounts = useMemo(() => {
+    const counts: Record<string, number> = {
+      all_book: 0,
+      all_global: 0,
+    };
+    for (const type of BOOK_LEVEL_TYPES) {
+      const c = materials.filter(m => m.type === type).length;
+      counts[type] = c;
+      counts.all_book += c;
+    }
+    for (const type of ACCOUNT_LEVEL_TYPES) {
+      const c = materials.filter(m => m.type === type).length;
+      counts[type] = c;
+      counts.all_global += c;
+    }
+    return counts;
+  }, [materials]);
 
   const handleContextMenu = (e: React.MouseEvent, material: Material) => {
     e.preventDefault();
@@ -202,18 +224,18 @@ export const MaterialPanel = ({ onInsertMaterial, onMaterialSelect, currentBook 
           />
         </div>
 
-        <div className="text-xs mb-1" style={{ color: 'var(--color-vscode-text)', opacity: 0.4 }}>书籍级</div>
+        <div className="text-xs mb-1" style={{ color: 'var(--color-vscode-text)', opacity: 0.4 }}>本书</div>
         <div className="grid grid-cols-3 gap-1 mb-2">
           <button
-            onClick={() => setFilterType('all')}
+            onClick={() => setFilterType('all_book')}
             className={`px-2 py-1 text-xs transition-colors`}
             style={{
-              backgroundColor: filterType === 'all' ? 'var(--color-vscode-active, #007acc)' : 'transparent',
-              color: filterType === 'all' ? 'white' : 'var(--color-vscode-text, #cccccc)',
+              backgroundColor: filterType === 'all_book' ? 'var(--color-vscode-active, #007acc)' : 'transparent',
+              color: filterType === 'all_book' ? 'white' : 'var(--color-vscode-text, #cccccc)',
               border: '1px solid var(--color-vscode-border)',
             }}
           >
-            全部
+            本书全部 <span style={{ opacity: 0.7, fontSize: '10px' }}>({typeCounts.all_book})</span>
           </button>
           <button
             onClick={() => setFilterType('character')}
@@ -224,7 +246,7 @@ export const MaterialPanel = ({ onInsertMaterial, onMaterialSelect, currentBook 
               border: '1px solid var(--color-vscode-border)',
             }}
           >
-            人物
+            人物 <span style={{ opacity: 0.7, fontSize: '10px' }}>({typeCounts.character})</span>
           </button>
           <button
             onClick={() => setFilterType('location')}
@@ -235,7 +257,7 @@ export const MaterialPanel = ({ onInsertMaterial, onMaterialSelect, currentBook 
               border: '1px solid var(--color-vscode-border)',
             }}
           >
-            地点
+            地点 <span style={{ opacity: 0.7, fontSize: '10px' }}>({typeCounts.location})</span>
           </button>
           <button
             onClick={() => setFilterType('item')}
@@ -246,7 +268,7 @@ export const MaterialPanel = ({ onInsertMaterial, onMaterialSelect, currentBook 
               border: '1px solid var(--color-vscode-border)',
             }}
           >
-            物品
+            物品 <span style={{ opacity: 0.7, fontSize: '10px' }}>({typeCounts.item})</span>
           </button>
           <button
             onClick={() => setFilterType('plot')}
@@ -257,7 +279,7 @@ export const MaterialPanel = ({ onInsertMaterial, onMaterialSelect, currentBook 
               border: '1px solid var(--color-vscode-border)',
             }}
           >
-            情节
+            情节 <span style={{ opacity: 0.7, fontSize: '10px' }}>({typeCounts.plot})</span>
           </button>
           <button
             onClick={() => setFilterType('other')}
@@ -268,12 +290,23 @@ export const MaterialPanel = ({ onInsertMaterial, onMaterialSelect, currentBook 
               border: '1px solid var(--color-vscode-border)',
             }}
           >
-            其他
+            其他 <span style={{ opacity: 0.7, fontSize: '10px' }}>({typeCounts.other})</span>
           </button>
         </div>
 
-        <div className="text-xs mb-1" style={{ color: 'var(--color-vscode-text)', opacity: 0.4 }}>账号级（跨书共享）</div>
-        <div className="grid grid-cols-2 gap-1">
+        <div className="text-xs mb-1" style={{ color: 'var(--color-vscode-text)', opacity: 0.4 }}>全局</div>
+        <div className="grid grid-cols-3 gap-1">
+          <button
+            onClick={() => setFilterType('all_global')}
+            className={`px-2 py-1 text-xs transition-colors`}
+            style={{
+              backgroundColor: filterType === 'all_global' ? 'var(--color-vscode-active, #007acc)' : 'transparent',
+              color: filterType === 'all_global' ? 'white' : 'var(--color-vscode-text, #cccccc)',
+              border: '1px solid var(--color-vscode-border)',
+            }}
+          >
+            全局全部 <span style={{ opacity: 0.7, fontSize: '10px' }}>({typeCounts.all_global})</span>
+          </button>
           <button
             onClick={() => setFilterType('writing_rule')}
             className={`px-2 py-1 text-xs transition-colors`}
@@ -283,7 +316,7 @@ export const MaterialPanel = ({ onInsertMaterial, onMaterialSelect, currentBook 
               border: '1px solid var(--color-vscode-border)',
             }}
           >
-            写作规则
+            写作规则 <span style={{ opacity: 0.7, fontSize: '10px' }}>({typeCounts.writing_rule})</span>
           </button>
           <button
             onClick={() => setFilterType('style_rule')}
@@ -294,7 +327,7 @@ export const MaterialPanel = ({ onInsertMaterial, onMaterialSelect, currentBook 
               border: '1px solid var(--color-vscode-border)',
             }}
           >
-            文风规则
+            文风规则 <span style={{ opacity: 0.7, fontSize: '10px' }}>({typeCounts.style_rule})</span>
           </button>
         </div>
       </div>
@@ -302,12 +335,18 @@ export const MaterialPanel = ({ onInsertMaterial, onMaterialSelect, currentBook 
       <div className="flex-1 overflow-auto p-2">
         <div className="flex items-center justify-between mb-2 px-1">
           <span className="text-xs font-medium text-vscode-text opacity-70">
-            {filterType === 'all' ? '全部素材' : `${getTypeText(filterType as MaterialType)}素材`}
+            {filterType === 'all_book' ? '本书素材' : filterType === 'all_global' ? '全局素材' : `${getTypeText(filterType as MaterialType)}素材`}
           </span>
           <button
-            onClick={() => handleCreateMaterial(filterType === 'all' ? 'other' : filterType as MaterialType)}
+            onClick={() => handleCreateMaterial(
+              filterType === 'all_book' ? 'other' : filterType === 'all_global' ? 'writing_rule' : filterType as MaterialType
+            )}
             className="icon-btn"
-            title={filterType === 'all' ? '新建其他素材' : `新建${getTypeText(filterType as MaterialType)}素材`}
+            title={
+              filterType === 'all_book' ? '新建其他素材' :
+              filterType === 'all_global' ? '新建写作规则' :
+              `新建${getTypeText(filterType as MaterialType)}素材`
+            }
           >
             <FilePlus size={16} />
           </button>
@@ -317,9 +356,11 @@ export const MaterialPanel = ({ onInsertMaterial, onMaterialSelect, currentBook 
           <div className="flex flex-col items-center justify-center h-56 text-gray-500 px-4 text-center">
             <p className="text-sm mb-2">暂无素材</p>
             <p className="text-xs">
-              {filterType === 'all'
+              {filterType === 'all_book'
                 ? '点击右上角 + 创建新素材'
-                : `点击右上角 + 创建${getTypeText(filterType as MaterialType)}素材`}
+                : filterType === 'all_global'
+                  ? '点击右上角 + 创建全局规则'
+                  : `点击右上角 + 创建${getTypeText(filterType as MaterialType)}素材`}
             </p>
           </div>
         ) : (
@@ -405,7 +446,7 @@ export const MaterialPanel = ({ onInsertMaterial, onMaterialSelect, currentBook 
 
             <div className="mb-3">
               <label className="block text-xs mb-1" style={{ color: 'var(--color-vscode-text)', opacity: 0.6 }}>分类</label>
-              <div className="text-xs mb-1" style={{ color: 'var(--color-vscode-text)', opacity: 0.4 }}>书籍级</div>
+              <div className="text-xs mb-1" style={{ color: 'var(--color-vscode-text)', opacity: 0.4 }}>本书</div>
               <div className="flex flex-wrap gap-1.5 mb-2">
                 {BOOK_LEVEL_TYPES.map((t) => (
                   <button
@@ -422,7 +463,7 @@ export const MaterialPanel = ({ onInsertMaterial, onMaterialSelect, currentBook 
                   </button>
                 ))}
               </div>
-              <div className="text-xs mb-1" style={{ color: 'var(--color-vscode-text)', opacity: 0.4 }}>账号级（跨书共享）</div>
+              <div className="text-xs mb-1" style={{ color: 'var(--color-vscode-text)', opacity: 0.4 }}>全局</div>
               <div className="flex flex-wrap gap-1.5">
                 {ACCOUNT_LEVEL_TYPES.map((t) => (
                   <button

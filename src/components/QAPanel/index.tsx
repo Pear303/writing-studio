@@ -101,7 +101,7 @@ const QAHistoryPanel: React.FC<{
     switch (type) {
       case 'error': return 'text-red-500';
       case 'warning': return 'text-yellow-500';
-      default: return 'text-blue-500';
+      default: return 'text-vscode-text';
     }
   };
 
@@ -170,7 +170,7 @@ const QAHistoryPanel: React.FC<{
                 <div className="flex items-center gap-2 text-xs text-vscode-text opacity-60">
                   <span>{record.issues.length} 个问题</span>
                   {record.score !== undefined && (
-                    <span className="text-vscode-active">评分: {record.score}/80</span>
+                    <span className="text-vscode-text">评分: {record.score}/80</span>
                   )}
                 </div>
                 <div className="flex items-center gap-1 mt-2">
@@ -224,7 +224,7 @@ const QAHistoryPanel: React.FC<{
                   <p className="text-vscode-text opacity-60 ml-1">位置: {issue.location}</p>
                 )}
                 {issue.suggestion && (
-                  <p className="text-vscode-active ml-1">建议: {issue.suggestion}</p>
+                  <p className="text-vscode-text ml-1">建议: {issue.suggestion}</p>
                 )}
               </div>
             ))}

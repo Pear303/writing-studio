@@ -403,7 +403,7 @@ export const LlmConfigPanel = ({ onClose, onConfigChange }: LlmConfigPanelProps)
                   }`}
                 >
                   <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center space-x-2">
+                    <div className="flex items-center gap-2">
                       <span className="text-sm font-medium text-vscode-text">{config.name}</span>
                       {config.isDefault && (
                         <span className="text-xs px-1.5 py-0.5 rounded bg-vscode-active text-white">

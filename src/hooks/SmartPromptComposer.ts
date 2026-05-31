@@ -1,6 +1,7 @@
 import type { WritingStage, WritingContext } from './usePrompt';
 import { PROMPTS_INDEX, STAGE_TO_PROMPTS, STAGE_NAMES, type PromptCategory } from './prompts-index';
 import { buildPromptForStage, getStageName } from './promptBuilders';
+import { PROMPT_TEMPLATES } from '../prompts';
 
 export interface ComposerOptions {
   enableCache?: boolean;
@@ -128,6 +129,72 @@ export class SmartPromptComposer {
   addCustomPrompt(fileName: string, content: string): void {
     this.prompts.set(fileName, content);
     this.clearCache();
+  }
+
+  async loadTemplate(templateId: string): Promise<string> {
+    const templateConfig = PROMPT_TEMPLATES[templateId];
+    if (!templateConfig) {
+      throw new Error(`未找到模板配置: ${templateId}`);
+    }
+
+    const userTemplate = await this.loadUserTemplate(templateConfig.file);
+    if (userTemplate) {
+      return userTemplate;
+    }
+
+    return await this.loadBuiltInTemplate(templateConfig.file);
+  }
+
+  async renderTemplate(templateId: string, variables: Record<string, any>): Promise<string> {
+    const template = await this.loadTemplate(templateId);
+    return this.replaceVariables(template, variables);
+  }
+
+  private replaceVariables(template: string, variables: Record<string, any>): string {
+    template = template.replace(/\{\{#if (\w+)\}\}([\s\S]*?)\{\{\/if\}\}/g, (match, varName, content) => {
+      return variables[varName] ? content.trim() : '';
+    });
+
+    template = template.replace(/\{\{(\w+)\}\}/g, (match, key) => {
+      return variables[key] !== undefined ? String(variables[key]) : match;
+    });
+
+    return template;
+  }
+
+  private async loadUserTemplate(filePath: string): Promise<string | null> {
+    return null;
+  }
+
+  private async loadBuiltInTemplate(filePath: string): Promise<string> {
+    const modules = import.meta.glob('../prompts/templates/**/*.md', {
+      query: '?raw',
+      eager: true,
+      import: 'default',
+    });
+
+    const normalizedPath = filePath.replace('./templates/', '../prompts/templates/');
+    const content = modules[normalizedPath];
+
+    if (typeof content === 'string') {
+      return content;
+    }
+
+    throw new Error(`未找到模板文件: ${filePath}`);
+  }
+
+  clearTemplateCache(templateId?: string): void {
+    if (import.meta.hot) {
+      if (templateId) {
+        const config = PROMPT_TEMPLATES[templateId];
+        if (config) {
+          const path = config.file.replace('./templates/', '../prompts/templates/');
+          import.meta.hot.invalidate(`模板已更新: ${path}`);
+        }
+      } else {
+        import.meta.hot.invalidate('所有模板缓存已清除');
+      }
+    }
   }
 }
 
