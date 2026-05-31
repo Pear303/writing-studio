@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { FileText, Clock, Target, Timer, Save, Undo2, Redo2, Search, Type } from 'lucide-react';
+import { FileText, Clock, Target, Timer, Save, Undo2, Redo2, Search, Type, Bot } from 'lucide-react';
 
 interface WritingGoal {
   dailyTarget: number;
@@ -46,6 +46,8 @@ interface StatusBarProps {
   onRedo?: () => void;
   onFindReplace?: () => void;
   onFormat?: () => void;
+  onSyncToAgent?: () => void;
+  agentSyncing?: boolean;
 }
 
 export const StatusBar = ({
@@ -78,6 +80,8 @@ export const StatusBar = ({
   onRedo,
   onFindReplace,
   onFormat,
+  onSyncToAgent,
+  agentSyncing,
 }: StatusBarProps) => {
   const [showDetails, setShowDetails] = useState(false);
 
@@ -183,6 +187,20 @@ export const StatusBar = ({
         <span style={{ color: getSaveStatusColor() }}>
           {getSaveStatusText()}
         </span>
+
+        {/* 同步到 Agent */}
+        {onSyncToAgent && (
+          <button
+            onClick={onSyncToAgent}
+            disabled={agentSyncing}
+            className="flex items-center space-x-1 transition-colors hover:opacity-100"
+            style={{ color: 'inherit', opacity: agentSyncing ? 0.4 : 0.75 }}
+            title={agentSyncing ? '正在同步...' : '同步当前书籍数据到 Agent'}
+          >
+            <Bot size={12} />
+            <span>{agentSyncing ? '同步中' : 'Agent'}</span>
+          </button>
+        )}
       </div>
 
       {/* 详细统计弹窗 */}

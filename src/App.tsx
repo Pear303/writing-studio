@@ -97,6 +97,7 @@ function App() {
   
   // 新增状态
   const [isFullScreen, setIsFullScreen] = useState(false); // 专注模式
+  const [agentSyncing, setAgentSyncing] = useState(false);
   const [writingGoal, setWritingGoal] = useState<WritingGoal>({
     dailyTarget: 3000,
     chapterTarget: 5000,
@@ -509,6 +510,59 @@ function App() {
       }
     };
   }, [currentChapter, saveStatus, editorContent]);
+
+  // Agent 数据桥接：当前书籍变更时自动导出 + 启动 pending 轮询
+  useEffect(() => {
+    let mounted = true;
+
+    const initBridge = async () => {
+      try {
+        const { exportCurrentBookForAgent } = await import('./bridge/exporter');
+        const { startWatcher, stopWatcher, checkNow } = await import('./bridge/watcher');
+
+        stopWatcher();
+
+        if (currentBook?.id) {
+          await exportCurrentBookForAgent(currentBook.id);
+        }
+
+        if (mounted) {
+          startWatcher(3000);
+        }
+      } catch (err) {
+        console.warn('[AgentBridge] 初始化失败（Tauri 环境可能未就绪）:', err);
+      }
+    };
+
+    initBridge();
+
+    return () => {
+      mounted = false;
+      import('./bridge/watcher').then(({ stopWatcher }) => stopWatcher()).catch(() => {});
+    };
+  }, [currentBook?.id]);
+
+  // 手动同步当前书籍数据到 Agent
+  const handleSyncToAgent = async () => {
+    if (!currentBook?.id) {
+      showToast('请先选择一本书', 'warning');
+      return;
+    }
+    if (agentSyncing) return;
+    setAgentSyncing(true);
+    try {
+      const { exportCurrentBookForAgent } = await import('./bridge/exporter');
+      const { checkNow } = await import('./bridge/watcher');
+      await exportCurrentBookForAgent(currentBook.id);
+      await checkNow();
+      showToast('已同步到 Agent', 'success');
+    } catch (err) {
+      console.error('[AgentBridge] 同步失败:', err);
+      showToast('同步失败: ' + (err instanceof Error ? err.message : String(err)), 'error');
+    } finally {
+      setAgentSyncing(false);
+    }
+  };
 
   // 快速自动保存（跳过版本快照、验证、清理等冗余操作）
   const autoSave = async () => {
@@ -1936,6 +1990,8 @@ ${chapterContents}
         onRedo={handleRedo}
         onFindReplace={handleFindReplace}
         onFormat={() => setShowFormattingSettings(true)}
+        onSyncToAgent={handleSyncToAgent}
+        agentSyncing={agentSyncing}
       />
 
       {/* 查找替换面板 */}
