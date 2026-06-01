@@ -875,9 +875,10 @@ def update_todos(todos: str) -> str:
 @tool
 def dispatch_subagent(agent_type: str, task: str) -> str:
     """派遣子代理独立处理任务。子代理有自己独立的上下文，办完只回传文字总结。
-    agent_type 可用: quick_helper, web_researcher, doc_analyzer, engine_executor, validator, skill_manager, document_processor, system_maintainer
+    agent_type 可用: quick_helper, web_researcher, doc_analyzer, engine_executor, validator, skill_manager, document_processor, system_maintainer, research_writer, writing_coach, consistency_checker, pipeline_orchestrator
+    **重要**：此工具是阻塞调用，会等待子代理执行完毕才返回。不要在同一轮发出多个 dispatch_subagent 调用。
     Args:
-        agent_type: 子代理类型（quick_helper/web_researcher/doc_analyzer/engine_executor/validator/skill_manager/document_processor/system_maintainer）
+        agent_type: 子代理类型（quick_helper/web_researcher/doc_analyzer/engine_executor/validator/skill_manager/document_processor/system_maintainer/research_writer/writing_coach/consistency_checker/pipeline_orchestrator）
         task: 要委派给子代理的具体任务描述
     """
     if _subagent_registry is None:

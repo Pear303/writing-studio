@@ -6,6 +6,14 @@ import { generateId } from '../utils/helpers';
 import { countWords } from '../utils/helpers';
 import type { Chapter, Material } from '../types';
 
+function plainTextToHtml(text: string): string {
+  if (/<[a-z][\s\S]*>/i.test(text)) return text;
+  return text
+    .split(/\n{2,}/)
+    .map(para => `<p>${para.trim().replace(/\n/g, '<br>')}</p>`)
+    .join('');
+}
+
 export interface PendingNewChapter {
   action: 'new_chapter';
   bookId: string;
@@ -113,6 +121,7 @@ async function executeNewChapter(action: PendingNewChapter): Promise<void> {
     }
   }
 
+  const contentHtml = plainTextToHtml(action.content);
   const wordCount = countWords(action.content);
 
   const chapter: Chapter = {
@@ -120,7 +129,7 @@ async function executeNewChapter(action: PendingNewChapter): Promise<void> {
     volumeId,
     bookId: action.bookId,
     title: action.title,
-    content: action.content,
+    content: contentHtml,
     wordCount,
     detailedOutline: action.detailedOutline,
     createdAt: Date.now(),
@@ -161,7 +170,7 @@ async function executeUpdateChapter(action: PendingUpdateChapter): Promise<void>
   const updates: Partial<Chapter> = { updatedAt: Date.now() };
 
   if (action.content !== undefined) {
-    updates.content = action.content;
+    updates.content = plainTextToHtml(action.content);
     updates.wordCount = countWords(action.content);
   }
   if (action.title !== undefined) {

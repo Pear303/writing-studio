@@ -88,6 +88,9 @@ def start_pipeline(book_id: str, volume_id: str, user_request: str, step_names: 
 def update_pipeline_progress(step_index: int, status: str, result: Optional[str] = None) -> str:
     """更新流水线中某个步骤的进度状态。
 
+    **重要**：步骤必须严格按顺序执行！只有当前置步骤全部完成（completed/skipped）后，
+    才能将当前步骤标记为 running。只有处于 running/checking 状态的步骤才能标记为 completed/failed。
+
     Args:
         step_index: 步骤索引（从0开始）
         status: 步骤状态，可选值：running / completed / failed / skipped / checking
@@ -95,9 +98,34 @@ def update_pipeline_progress(step_index: int, status: str, result: Optional[str]
     """
     try:
         mgr = _get_manager()
-        state = mgr.update_step(step_index, status, result)
+        state = mgr.load()
         if state is None:
             return "流水线状态不存在，请先调用 start_pipeline"
+
+        if step_index < 0 or step_index >= len(state.steps):
+            return f"步骤索引{step_index}超出范围（0-{len(state.steps) - 1}）"
+
+        step = state.steps[step_index]
+        step_info = f"步骤{step_index}" + (f"「{step.name}」" if step else "")
+
+        if status == "running":
+            for i in range(step_index):
+                prev = state.steps[i]
+                if prev.status not in ("completed", "skipped"):
+                    prev_info = f"步骤{i}「{prev.name}」(状态:{prev.status})"
+                    return (
+                        f"❌ 无法启动{step_info}：前置{prev_info}尚未完成。"
+                        f"请严格按顺序执行：先完成前置步骤，再启动当前步骤。"
+                    )
+
+        if status in ("completed", "failed"):
+            if step.status not in ("running", "checking"):
+                return (
+                    f"❌ 无法将{step_info}标记为{status}：当前状态为{step.status}，"
+                    f"只有 running/checking 状态的步骤才能标记为{status}。"
+                )
+
+        state = mgr.update_step(step_index, status, result)
 
         step = state.steps[step_index] if step_index < len(state.steps) else None
         step_info = f"步骤{step_index}" + (f"「{step.name}」" if step else "")

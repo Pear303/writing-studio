@@ -1,0 +1,61 @@
+{
+  "id": "pipeline_1780298201_b3cbda",
+  "book_id": "1780151800887-dznq8dn2b",
+  "volume_id": "1780271041149-pg758gmad",
+  "user_request": "随笔，2000字左右，注重文学性，使用更具文学性的语言，适当运用修辞手法，增强文字表现力。不要出现太多破折号。",
+  "steps": [
+    {
+      "id": "step_0",
+      "name": "需求分析",
+      "description": "",
+      "status": "completed",
+      "subagent": null,
+      "result": "需求分析完成。书籍《2》是AI模型化高考题材的科幻讽刺小说，主角林一只有0.5B低配模型。用户需求：一篇2000字左右的随笔，注重文学性，使用修辞手法，避免过多破折号。",
+      "check_result": null,
+      "retry_count": 0,
+      "started_at": 1780298213.4728162,
+      "completed_at": 1780298215.187653
+    },
+    {
+      "id": "step_1",
+      "name": "生成大纲",
+      "description": "",
+      "status": "completed",
+      "subagent": null,
+      "result": "大纲《0.5B的尊严》已生成：4段结构——数字的人、技术的重量、裸奔者的尊严、不可量化的那部分。主题围绕技术社会中人的价值不被参数定义，注重文学性和思想深度。",
+      "check_result": null,
+      "retry_count": 0,
+      "started_at": 1780298219.513641,
+      "completed_at": 1780298261.3650608
+    },
+    {
+      "id": "step_2",
+      "name": "撰写正文",
+      "description": "",
+      "status": "completed",
+      "subagent": null,
+      "result": "随笔《0.5B的尊严》已撰写完成并提交，约2200字，纯文本格式，覆盖4段结构，注重文学性，未使用过多破折号。",
+      "check_result": null,
+      "retry_count": 0,
+      "started_at": 1780298263.201807,
+      "completed_at": 1780298321.0919354
+    },
+    {
+      "id": "step_3",
+      "name": "一致性检查",
+      "description": "",
+      "status": "skipped",
+      "subagent": null,
+      "result": "一致性检查因工具迭代上限未完成，根据用户\"不需要重试\"的偏好，跳过此步骤。",
+      "check_result": null,
+      "retry_count": 0,
+      "started_at": 1780298322.4684103,
+      "completed_at": 1780298390.0883272
+    }
+  ],
+  "current_step_index": 3,
+  "status": "completed",
+  "intervention": null,
+  "created_at": 1780298201.7157433,
+  "updated_at": 1780298390.0895572
+}
