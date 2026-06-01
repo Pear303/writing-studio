@@ -1,14 +1,14 @@
 {
-  "exportedAt": 1780287874370,
+  "exportedAt": 1780316815652,
   "userId": "f996dbc8-701b-4027-ab7d-4aa7e992d2b6",
   "books": [
     {
       "id": "1780151800887-dznq8dn2b",
       "name": "2",
       "status": "ongoing",
-      "totalWords": 109361,
-      "volumeCount": 2,
-      "chapterCount": 26
+      "totalWords": 124374,
+      "volumeCount": 3,
+      "chapterCount": 30
     }
   ]
 }

@@ -27,12 +27,19 @@ export function usePipeline() {
   const eventSourceRef = useRef<EventSource | null>(null);
   const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  const PIPELINE_START_TIMEOUT_MS = 5 * 60 * 1000;
+
   const startPipeline = useCallback(async (
     bookId: string,
     volumeId: string,
     userRequest: string,
   ) => {
     setState(prev => ({ ...prev, loading: true, error: null }));
+
+    const abortController = new AbortController();
+    const timeoutId = setTimeout(() => {
+      abortController.abort();
+    }, PIPELINE_START_TIMEOUT_MS);
 
     try {
       const apiUrl = getApiUrl();
@@ -45,6 +52,7 @@ export function usePipeline() {
           message: agentMessage,
           subagent: 'pipeline_orchestrator',
         }),
+        signal: abortController.signal,
       });
 
       if (!res.ok) {
@@ -89,6 +97,7 @@ export function usePipeline() {
                 handlePipelineEvent(evt);
                 if (eventType === 'pipeline_started') {
                   pipelineCreated = true;
+                  clearTimeout(timeoutId);
                 }
               }
             } catch {
@@ -112,6 +121,14 @@ export function usePipeline() {
         return { ...prev, loading: false };
       });
     } catch (err: unknown) {
+      if (abortController.signal.aborted) {
+        setState(prev => ({
+          ...prev,
+          loading: false,
+          error: `启动流水线超时（${PIPELINE_START_TIMEOUT_MS / 1000}秒内未收到 pipeline_started 事件），请检查后端日志确认 Agent 是否正常运行。`,
+        }));
+        return;
+      }
       const message = err instanceof Error ? err.message : String(err);
       if (message.includes('Failed to fetch') || message.includes('NetworkError') || message.includes('ERR_CONNECTION_REFUSED')) {
         setState(prev => ({
@@ -122,6 +139,8 @@ export function usePipeline() {
       } else {
         setState(prev => ({ ...prev, loading: false, error: message }));
       }
+    } finally {
+      clearTimeout(timeoutId);
     }
   }, []);
 

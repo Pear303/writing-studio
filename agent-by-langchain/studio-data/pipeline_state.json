@@ -1,0 +1,61 @@
+{
+  "id": "pipeline_1780316679_7015f1",
+  "book_id": "1780151800887-dznq8dn2b",
+  "volume_id": "1780271041149-pg758gmad",
+  "user_request": "除夕夜，雪山深处，山中仙人楼阁，不死的红衣少女，误入的少年，六道轮回。2000字即可",
+  "steps": [
+    {
+      "id": "step_0",
+      "name": "需求分析",
+      "description": "",
+      "status": "completed",
+      "subagent": null,
+      "result": "需求已解析：除夕雪山楼阁+红衣少女+误入少年+六道轮回，2000字，文学性与可读性并重，精简风格，少用破折号。需与三个前作版本差异化。",
+      "check_result": null,
+      "retry_count": 0,
+      "started_at": 1780316680.868389,
+      "completed_at": 1780316688.4630477
+    },
+    {
+      "id": "step_1",
+      "name": "生成大纲",
+      "description": "",
+      "status": "completed",
+      "subagent": null,
+      "result": "《除夕·轮回客》大纲已生成：白度九十九世轮回，濒死入楼阁，亲历六道幻境记起前尘，与守关千年红衣少女阿蘅约定最后一世。差异化明显，故事弧完整。",
+      "check_result": null,
+      "retry_count": 0,
+      "started_at": 1780316689.638678,
+      "completed_at": 1780316754.38682
+    },
+    {
+      "id": "step_2",
+      "name": "撰写正文",
+      "description": "",
+      "status": "completed",
+      "subagent": null,
+      "result": "《除夕·轮回客》正文已撰写并提交（draft_49dd73b3），约2400字，五小节完整覆盖大纲，风格符合精简+文学性+可读性要求。",
+      "check_result": null,
+      "retry_count": 0,
+      "started_at": 1780316756.2324874,
+      "completed_at": 1780316826.235362
+    },
+    {
+      "id": "step_3",
+      "name": "质量审阅",
+      "description": "",
+      "status": "completed",
+      "subagent": null,
+      "result": "质量审阅完成，评分9.0/10。核心亮点：六道亲历融入范例级、宿命重逢差异显著、情感内核深厚。建议项：精简开头、阿蘅情感铺垫、结尾细节微调。",
+      "check_result": null,
+      "retry_count": 0,
+      "started_at": 1780316827.3232563,
+      "completed_at": 1780316875.7890787
+    }
+  ],
+  "current_step_index": 3,
+  "status": "completed",
+  "intervention": null,
+  "created_at": 1780316679.0530908,
+  "updated_at": 1780316875.792612
+}

@@ -136,6 +136,7 @@ def create_deepseek_llm(model: str = "deepseek-v4-flash") -> DeepSeekChatOpenAI:
         api_key=os.environ["DEEPSEEK_API_KEY"],
         base_url=os.environ.get("DEEPSEEK_BASE_URL", "https://api.deepseek.com"),
         streaming=True,
+        request_timeout=120,
     )
 
 
