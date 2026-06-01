@@ -1,7 +1,8 @@
 import Dexie, { Table } from 'dexie';
 import bcrypt from 'bcryptjs';
 import { v4 as uuidv4 } from 'uuid';
-import type { Book, Volume, Chapter, Material, AIConversation, ChapterVersion, LLMConfig, QARecord, FullExportData, ImportResult, FormattingSettings, WritingGoal, PomodoroState, Theme, PipelineSession } from '../types';
+import type { Book, Volume, Chapter, Material, AIConversation, ChapterVersion, LLMConfig, QARecord, FullExportData, ImportResult, FormattingSettings, WritingGoal, PomodoroState, Theme, PipelineSession, VibePreset } from '../types';
+import { DEFAULT_VIBE_PRESETS } from '../types';
 export type { LLMConfig };
 
 // bcrypt 盐值轮数（cost factor）
@@ -76,6 +77,7 @@ export class NovelIDEDatabase extends Dexie {
   emailVerifications!: Table<EmailVerification>;
   qaRecords!: Table<QARecord>;
   pipelineSessions!: Table<PipelineSession>;
+  vibePresets!: Table<VibePreset>;
 
   constructor() {
     super('NovelIDE');
@@ -112,6 +114,10 @@ export class NovelIDEDatabase extends Dexie {
 
     this.version(10).stores({
       materials: 'id, userId, bookId, type, createdAt, updatedAt',
+    });
+
+    this.version(11).stores({
+      vibePresets: 'id, userId, enabled, order',
     });
 
     /*
@@ -712,4 +718,91 @@ export const updateVolumeName = async (volumeId: string, name: string): Promise<
   await db.volumes.update(volumeId, {
     name,
   });
+};
+
+// ===== VibePreset 辅助函数 =====
+
+const VIBE_PRESET_PREFIX = 'vibePresets_';
+
+// 获取指定用户的所有 Vibe 预设
+export const getVibePresets = async (userId: string): Promise<VibePreset[]> => {
+  return await db.vibePresets
+    .where('userId')
+    .equals(userId)
+    .sortBy('order');
+};
+
+// 确保默认预设存在（首次使用时初始化）
+export const ensureDefaultVibePresets = async (userId: string): Promise<void> => {
+  // 检查是否存在本地缓存标记（避免重复检查 DB）
+  const cacheKey = VIBE_PRESET_PREFIX + userId;
+  if (localStorage.getItem(cacheKey)) return;
+
+  const existing = await db.vibePresets.where('userId').equals(userId).count();
+  if (existing > 0) {
+    localStorage.setItem(cacheKey, '1');
+    return;
+  }
+
+  const now = Date.now();
+  const defaults: VibePreset[] = DEFAULT_VIBE_PRESETS.map((p, i) => ({
+    id: `vibe_default_${i}_${userId}`,
+    userId,
+    name: p.name,
+    content: p.content,
+    enabled: false,
+    builtIn: true,
+    order: p.order,
+    createdAt: now,
+    updatedAt: now,
+  }));
+
+  await db.vibePresets.bulkAdd(defaults);
+  localStorage.setItem(cacheKey, '1');
+};
+
+// 切换预设的启用/禁用状态
+export const toggleVibePreset = async (presetId: string, enabled: boolean): Promise<void> => {
+  await db.vibePresets.update(presetId, { enabled, updatedAt: Date.now() });
+};
+
+// 添加自定义预设
+export const addCustomVibePreset = async (
+  userId: string,
+  name: string,
+  content: string,
+): Promise<string> => {
+  const allPresets = await db.vibePresets.where('userId').equals(userId).sortBy('order');
+  const maxOrder = allPresets.length > 0 ? allPresets[allPresets.length - 1].order : 0;
+  const now = Date.now();
+  const preset: VibePreset = {
+    id: `vibe_custom_${now}_${userId}`,
+    userId,
+    name,
+    content,
+    enabled: true,
+    builtIn: false,
+    order: maxOrder + 1,
+    createdAt: now,
+    updatedAt: now,
+  };
+  await db.vibePresets.add(preset);
+  return preset.id;
+};
+
+// 删除自定义预设（内置预设不可删除）
+export const deleteVibePreset = async (presetId: string): Promise<void> => {
+  const preset = await db.vibePresets.get(presetId);
+  if (preset?.builtIn) {
+    throw new Error('内置预设不可删除');
+  }
+  await db.vibePresets.delete(presetId);
+};
+
+// 更新自定义预设
+export const updateVibePreset = async (
+  presetId: string,
+  updates: { name?: string; content?: string },
+): Promise<void> => {
+  await db.vibePresets.update(presetId, { ...updates, updatedAt: Date.now() });
 };

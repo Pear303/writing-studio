@@ -95,7 +95,7 @@ export const AgentPanel: React.FC<AgentPanelProps> = ({
                 color: 'var(--color-vscode-text)',
                 outline: 'none',
               }}
-              placeholder="http://localhost:8765"
+              placeholder="http://localhost:8000"
             />
             <button
               onClick={handleSaveSettings}

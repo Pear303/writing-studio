@@ -1,4 +1,6 @@
 import { processPendingActions } from './importer';
+import { exportCurrentBookForAgent } from './exporter';
+import { db } from '../db';
 
 export interface WatcherStatus {
   running: boolean;
@@ -31,6 +33,15 @@ let watcherStatus: WatcherStatus = {
 type WatcherCallback = (status: WatcherStatus) => void;
 let statusCallback: WatcherCallback | null = null;
 
+async function getAffectedBookIds(): Promise<string[]> {
+  try {
+    const books = await db.books.toArray();
+    return books.map(b => b.id);
+  } catch {
+    return [];
+  }
+}
+
 export function startWatcher(intervalMs: number = DEFAULT_INTERVAL_MS): void {
   if (watcherTimer) return;
 
@@ -45,6 +56,17 @@ export function startWatcher(intervalMs: number = DEFAULT_INTERVAL_MS): void {
       watcherStatus.totalProcessed += result.processed;
       watcherStatus.totalSucceeded += result.succeeded;
       watcherStatus.totalFailed += result.failed;
+
+      if (result.succeeded > 0) {
+        try {
+          const affectedBookIds = await getAffectedBookIds();
+          for (const bookId of affectedBookIds) {
+            await exportCurrentBookForAgent(bookId);
+          }
+        } catch (exportErr) {
+          console.error('[AgentWatcher] 重新导出数据失败:', exportErr);
+        }
+      }
 
       if (result.processed > 0 && statusCallback) {
         statusCallback({ ...watcherStatus });

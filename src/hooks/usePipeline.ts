@@ -1,11 +1,11 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import type { PipelineAutoState, PipelineAutoStep, PipelineIntervention } from '../types';
 
-const DEFAULT_API_URL = 'http://localhost:8765';
+const DEFAULT_API_URL = 'http://localhost:8000';
 
 function getApiUrl(): string {
   try {
-    return localStorage.getItem('agent_api_url') || DEFAULT_API_URL;
+    return localStorage.getItem('agentApiUrl') || DEFAULT_API_URL;
   } catch {
     return DEFAULT_API_URL;
   }
@@ -48,7 +48,8 @@ export function usePipeline() {
       });
 
       if (!res.ok) {
-        throw new Error(`启动流水线失败: ${res.status}`);
+        const errorText = await res.text().catch(() => '');
+        throw new Error(`启动流水线失败: ${res.status} ${errorText}`);
       }
 
       const reader = res.body?.getReader();
@@ -58,6 +59,8 @@ export function usePipeline() {
 
       const decoder = new TextDecoder();
       let buffer = '';
+      let pipelineCreated = false;
+      let lastError: string | null = null;
 
       while (true) {
         const { done, value } = await reader.read();
@@ -71,7 +74,23 @@ export function usePipeline() {
           if (line.startsWith('data: ')) {
             try {
               const evt = JSON.parse(line.slice(6));
-              handlePipelineEvent(evt);
+              const eventType = evt.type as string;
+
+              if (eventType === 'error') {
+                lastError = (evt.message as string) || '后端返回错误';
+              } else if (eventType === 'done') {
+                if (!pipelineCreated) {
+                  const reply = (evt.reply as string) || '';
+                  if (reply.startsWith('Error:')) {
+                    lastError = reply;
+                  }
+                }
+              } else if (eventType.startsWith('pipeline_')) {
+                handlePipelineEvent(evt);
+                if (eventType === 'pipeline_started') {
+                  pipelineCreated = true;
+                }
+              }
             } catch {
               // ignore parse errors
             }
@@ -79,10 +98,30 @@ export function usePipeline() {
         }
       }
 
-      setState(prev => ({ ...prev, loading: false }));
+      setState(prev => {
+        if (!pipelineCreated && lastError) {
+          return { ...prev, loading: false, error: lastError };
+        }
+        if (!pipelineCreated) {
+          return {
+            ...prev,
+            loading: false,
+            error: '流水线未能启动：后端未返回 pipeline_started 事件，请确认 Agent 后端服务正常运行且 LLM 配置正确。',
+          };
+        }
+        return { ...prev, loading: false };
+      });
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
-      setState(prev => ({ ...prev, loading: false, error: message }));
+      if (message.includes('Failed to fetch') || message.includes('NetworkError') || message.includes('ERR_CONNECTION_REFUSED')) {
+        setState(prev => ({
+          ...prev,
+          loading: false,
+          error: `无法连接到 Agent 后端 (${getApiUrl()})，请确认后端服务已启动。错误：${message}`,
+        }));
+      } else {
+        setState(prev => ({ ...prev, loading: false, error: message }));
+      }
     }
   }, []);
 
@@ -242,6 +281,10 @@ export function usePipeline() {
       // ignore
     }
   }, []);
+
+  useEffect(() => {
+    fetchStatus();
+  }, [fetchStatus]);
 
   useEffect(() => {
     if (state.pipeline?.status === 'running') {

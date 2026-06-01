@@ -79,7 +79,7 @@ def start_pipeline(book_id: str, volume_id: str, user_request: str, step_names: 
             "message": f"流水线已启动：{len(steps)} 个步骤",
         })
 
-        return f"流水线已创建，ID={pipeline_id}，共 {len(steps)} 个步骤：{', '.join(step_names)}"
+        return f"流水线已创建(ID={pipeline_id})，{len(steps)}步：{', '.join(step_names)}"
     except Exception as e:
         return f"启动流水线失败: {e}"
 
@@ -100,7 +100,7 @@ def update_pipeline_progress(step_index: int, status: str, result: Optional[str]
             return "流水线状态不存在，请先调用 start_pipeline"
 
         step = state.steps[step_index] if step_index < len(state.steps) else None
-        step_info = f"步骤 {step_index}" + (f"「{step.name}」" if step else "")
+        step_info = f"步骤{step_index}" + (f"「{step.name}」" if step else "")
 
         _push_sse_event("pipeline_step_" + ("start" if status == "running" else "complete"), {
             "step_index": step_index,
@@ -110,7 +110,7 @@ def update_pipeline_progress(step_index: int, status: str, result: Optional[str]
             "message": f"{step_info} → {status}" + (f"：{result}" if result else ""),
         })
 
-        if status == "completed" and step_index + 1 < len(state.steps):
+        if status in ("completed", "failed", "skipped"):
             all_done = all(s.status in ("completed", "skipped") for s in state.steps)
             if all_done:
                 state.status = "completed"
@@ -120,7 +120,7 @@ def update_pipeline_progress(step_index: int, status: str, result: Optional[str]
                     "message": "流水线全部步骤已完成",
                 })
 
-        return f"{step_info} 状态已更新为 {status}"
+        return f"{step_info}→{status}"
     except Exception as e:
         return f"更新进度失败: {e}"
 
@@ -129,56 +129,50 @@ def update_pipeline_progress(step_index: int, status: str, result: Optional[str]
 def pipeline_self_check(step_name: str, content: str, criteria: str) -> str:
     """对当前步骤的产出进行自检，同时检查是否有干预信号。
 
-    返回检查结果和干预信号（如果有）。
+    **性能提示**：content 参数只传摘要（500字以内），不要传完整正文。
+    本工具主要功能是检查干预信号，基本质量检查只判断内容是否为空。
 
     Args:
         step_name: 当前步骤名称
-        content: 待检查的内容
+        content: 待检查的内容摘要（控制在 500 字以内，不要传完整正文）
         criteria: 检查标准（简短描述）
     """
     try:
         mgr = _get_manager()
         state = mgr.load()
 
-        intervention_msg = ""
         if state and state.intervention:
             iv = state.intervention
-            intervention_msg = f"\n\n⚠️ 检测到干预信号：类型={iv.type}"
-            if iv.message:
-                intervention_msg += f"，消息={iv.message}"
-            if iv.type == "pause":
-                intervention_msg += "\n请立即暂停当前步骤，等待恢复信号。"
-            elif iv.type == "cancel":
-                intervention_msg += "\n请立即停止所有步骤。"
-            elif iv.type == "redirect":
-                intervention_msg += f"\n请调整方向：{iv.message}"
-            elif iv.type == "skip":
-                intervention_msg += f"\n请跳过当前步骤。"
-
             if iv.type in ("pause", "cancel"):
-                return f"自检中断：检测到 {iv.type} 干预信号。{intervention_msg}"
+                msg = f"⚠️ 干预信号: {iv.type}"
+                if iv.message:
+                    msg += f" — {iv.message}"
+                if iv.type == "pause":
+                    msg += " 请暂停。"
+                else:
+                    msg += " 请停止。"
+                return msg
 
-        has_content = len(content.strip()) > 0
-        basic_pass = has_content
+            if iv.type == "redirect":
+                msg = f"⚠️ 修改方向: {iv.message}" if iv.message else "⚠️ 修改方向"
+                state.intervention = None
+                mgr.save(state)
+                return msg
 
-        result_parts = [
-            f"步骤：{step_name}",
-            f"检查标准：{criteria}",
-            f"内容长度：{len(content)} 字符",
-            f"基本检查：{'通过' if basic_pass else '未通过（内容为空）'}",
-        ]
+            if iv.type == "skip":
+                msg = "⚠️ 跳过当前步骤"
+                state.intervention = None
+                mgr.save(state)
+                return msg
 
-        if intervention_msg and state and state.intervention and state.intervention.type == "redirect":
-            state.intervention = None
-            mgr.save(state)
-
+        passed = len(content.strip()) > 0
         _push_sse_event("pipeline_check_result", {
             "step_name": step_name,
-            "passed": basic_pass,
-            "message": f"自检{'通过' if basic_pass else '未通过'}：{criteria}",
+            "passed": passed,
+            "message": f"自检{'通过' if passed else '未通过'}：{criteria}",
         })
 
-        return "\n".join(result_parts) + intervention_msg
+        return f"✅ {step_name}: {'通过' if passed else '未通过(内容为空)'}" if passed else f"❌ {step_name}: 未通过(内容为空)"
     except Exception as e:
         return f"自检失败: {e}"
 
@@ -190,30 +184,19 @@ def get_pipeline_status() -> str:
         mgr = _get_manager()
         state = mgr.load()
         if state is None:
-            return "当前没有活跃的流水线"
+            return "无活跃流水线"
 
-        lines = [
-            f"流水线 ID: {state.id}",
-            f"状态: {state.status}",
-            f"用户需求: {state.user_request}",
-            f"当前步骤: {state.current_step_index}",
-            "",
-            "步骤列表：",
-        ]
+        lines = [f"流水线{state.id} 状态={state.status} 当前步骤={state.current_step_index}"]
         for i, step in enumerate(state.steps):
             marker = "→" if i == state.current_step_index and state.status == "running" else " "
-            status_icon = {"pending": "⏳", "running": "🔄", "completed": "✅", "failed": "❌", "skipped": "⏭️", "checking": "🔍"}.get(step.status, "?")
-            lines.append(f"  {marker} {status_icon} [{i}] {step.name} - {step.status}")
+            icon = {"pending": "⏳", "running": "🔄", "completed": "✅", "failed": "❌", "skipped": "⏭️", "checking": "🔍"}.get(step.status, "?")
+            line = f" {marker}{icon}[{i}]{step.name}-{step.status}"
             if step.result:
-                lines.append(f"      结果: {step.result[:100]}")
-            if step.retry_count > 0:
-                lines.append(f"      重试: {step.retry_count} 次")
+                line += f" ({step.result[:60]})"
+            lines.append(line)
 
         if state.intervention:
-            lines.append("")
-            lines.append(f"⚠️ 干预信号: {state.intervention.type}")
-            if state.intervention.message:
-                lines.append(f"   消息: {state.intervention.message}")
+            lines.append(f"⚠️干预:{state.intervention.type}" + (f" {state.intervention.message}" if state.intervention.message else ""))
 
         return "\n".join(lines)
     except Exception as e:

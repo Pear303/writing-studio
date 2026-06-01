@@ -49,7 +49,7 @@ interface PomodoroState {
 
 // 侧边栏宽度配置
 const SIDEBAR_MIN_WIDTH = 80;  // 拖动隐藏阈值
-const SIDEBAR_DEFAULT_WIDTH = 280;  // 默认宽度
+const SIDEBAR_DEFAULT_WIDTH = 330;  // 默认宽度
 const EDITOR_MIN_WIDTH = 400;    // 编辑器最小宽度
 
 function App() {
@@ -83,6 +83,28 @@ function App() {
       agent.checkConnection();
     }
   }, [activeActivity]);
+
+  useEffect(() => {
+    const applyStartupWindowMode = async () => {
+      try {
+        const isTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
+        if (!isTauri) return;
+
+        const { getCurrentWindow } = await import('@tauri-apps/api/window');
+        const appWindow = getCurrentWindow();
+        const mode = localStorage.getItem('startupWindowMode') || 'maximized';
+
+        if (mode === 'fullscreen') {
+          await appWindow.setFullscreen(true);
+        } else {
+          await appWindow.maximize();
+        }
+      } catch (err) {
+        console.warn('[App] 应用启动窗口模式失败:', err);
+      }
+    };
+    applyStartupWindowMode();
+  }, []);
 
   const [formattingSettings, setFormattingSettings] = useState<FormattingSettings>({
     paragraphSpacing: '1em',

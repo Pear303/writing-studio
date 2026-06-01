@@ -201,7 +201,7 @@ export const Sidebar = ({
                 onClearMessages={onAgentClearMessages || (() => {})}
                 onCheckConnection={onAgentCheckConnection || (() => {})}
                 onUpdateApiUrl={onAgentUpdateApiUrl || (() => {})}
-                apiUrl={agentApiUrl || 'http://localhost:8765'}
+                apiUrl={agentApiUrl || 'http://localhost:8000'}
               />
             ) : (
               <div className="p-4 text-vscode-text">

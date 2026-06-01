@@ -110,19 +110,20 @@ _BUILTIN_SPECS: dict[str, dict] = {
             "read_books", "read_chapters", "read_outline",
             "read_materials", "search_knowledge",
         ),
-        "max_turns": 15,
+        "max_turns": 10,
     },
     "research_writer": {
         "description": (
             "研究型写手。根据大纲和素材撰写章节草稿，"
             "注重细节和逻辑一致性，通过 write_chapter_draft 提交。"
+            "支持批量写作模式：一次派遣中逐章撰写所有章节。"
         ),
         "tool_names": (
             "read_books", "read_chapters", "read_outline",
             "read_materials", "search_knowledge",
-            "write_chapter_draft",
+            "write_chapter_draft", "update_pipeline_progress",
         ),
-        "max_turns": 25,
+        "max_turns": 40,
     },
     "consistency_checker": {
         "description": (
@@ -133,7 +134,7 @@ _BUILTIN_SPECS: dict[str, dict] = {
             "read_books", "read_chapters", "read_outline",
             "read_materials", "search_knowledge",
         ),
-        "max_turns": 20,
+        "max_turns": 12,
     },
     "pipeline_orchestrator": {
         "description": (
@@ -145,9 +146,9 @@ _BUILTIN_SPECS: dict[str, dict] = {
             "read_books", "read_chapters", "read_outline",
             "read_materials", "search_knowledge",
             "dispatch_subagent",
-            "update_pipeline_progress", "pipeline_self_check",
+            "start_pipeline", "update_pipeline_progress", "pipeline_self_check",
         ),
-        "max_turns": 50,
+        "max_turns": 30,
     },
 }
 
@@ -214,7 +215,8 @@ class SubagentRegistry:
         1. 尝试从模板文件读取系统提示词
         2. 如果模板不存在，使用默认提示词
         3. 如果子代理支持 load_skill，注入相关技能摘要（基于 _SKILL_AGENT_MAP 筛选）
-        4. 创建 SubagentSpec 并存储
+        4. 对 pipeline_orchestrator，注入用户配置的 vibe writing 偏好
+        5. 创建 SubagentSpec 并存储
         """
         for agent_name, cfg in _BUILTIN_SPECS.items():
             # 读取模板文件中的系统提示词
@@ -226,7 +228,6 @@ class SubagentRegistry:
 
             # 如果子代理支持 load_skill，注入相关技能摘要
             if self._skills_loader and "load_skill" in cfg["tool_names"]:
-                # 使用 _SKILL_AGENT_MAP 筛选该子代理相关的技能
                 relevant_skills = self._build_relevant_skills_summary(agent_name)
                 if relevant_skills:
                     system_prompt += (
@@ -234,6 +235,19 @@ class SubagentRegistry:
                         f"{relevant_skills}\n\n"
                         "以上是与当前工作相关的技能。遇到对应专题时，先调 load_skill 把技能内容拉进上下文。"
                     )
+
+            if agent_name == "pipeline_orchestrator":
+                try:
+                    from api.routes.vibe_settings import build_vibe_instruction_block
+                    vibe_block = build_vibe_instruction_block()
+                    if vibe_block:
+                        system_prompt += (
+                            "\n\n---\n\n"
+                            "# 用户对写作流水线的偏好设置\n\n"
+                            f"{vibe_block}"
+                        )
+                except Exception:
+                    pass
 
             # 创建并存储子代理规格
             self._specs[agent_name] = SubagentSpec(

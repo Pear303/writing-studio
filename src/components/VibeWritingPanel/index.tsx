@@ -1,6 +1,14 @@
-import React, { useState } from 'react';
-import { Play, Pause, X, SkipForward, RotateCcw, MessageSquare, CheckCircle, AlertCircle, Loader2, ChevronDown, ChevronRight } from 'lucide-react';
-import type { PipelineAutoState, PipelineAutoStep, PipelineIntervention, Book, Volume } from '../../types';
+import React, { useState, useEffect, useCallback } from 'react';
+import { Play, Pause, X, SkipForward, RotateCcw, MessageSquare, CheckCircle, AlertCircle, Loader2, ChevronDown, ChevronRight, Plus, Trash2 } from 'lucide-react';
+import type { PipelineAutoState, PipelineAutoStep, PipelineIntervention, Book, Volume, VibePreset } from '../../types';
+import {
+  getVibePresets,
+  ensureDefaultVibePresets,
+  toggleVibePreset,
+  addCustomVibePreset,
+  deleteVibePreset,
+  getCurrentUserId,
+} from '../../db';
 
 interface VibeWritingPanelProps {
   currentBook: Book | null;
@@ -49,7 +57,7 @@ const StepRow: React.FC<{
         <span className="flex-1 text-sm" style={{ color: 'var(--color-vscode-text)' }}>
           {step.name}
         </span>
-        {step.retryCount && step.retryCount > 0 && (
+        {step.retryCount > 0 && (
           <span className="text-xs px-1 rounded" style={{ backgroundColor: 'rgba(240, 173, 78, 0.2)', color: '#f0ad4e' }}>
             重试×{step.retryCount}
           </span>
@@ -119,6 +127,19 @@ const StepRow: React.FC<{
   );
 };
 
+const tagButtonStyle = (selected: boolean): React.CSSProperties => ({
+  padding: '4px 10px',
+  fontSize: '12px',
+  border: selected ? '1px solid var(--color-vscode-active)' : '1px solid var(--color-vscode-border)',
+  borderRadius: '3px',
+  backgroundColor: selected ? 'var(--color-vscode-active-medium, rgba(143, 188, 143, 0.3))' : 'transparent',
+  color: 'var(--color-vscode-text)',
+  cursor: 'pointer',
+  transition: 'all 0.15s ease',
+  whiteSpace: 'nowrap' as const,
+  userSelect: 'none' as const,
+});
+
 export const VibeWritingPanel: React.FC<VibeWritingPanelProps> = ({
   currentBook,
   currentVolume,
@@ -130,11 +151,59 @@ export const VibeWritingPanel: React.FC<VibeWritingPanelProps> = ({
   onClearPipeline,
 }) => {
   const [userRequest, setUserRequest] = useState('');
+  const [presets, setPresets] = useState<VibePreset[]>([]);
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [newPresetName, setNewPresetName] = useState('');
+  const [newPresetContent, setNewPresetContent] = useState('');
+
+  // 加载预设
+  const loadPresets = useCallback(async () => {
+    const userId = getCurrentUserId();
+    if (!userId) return;
+    await ensureDefaultVibePresets(userId);
+    const loaded = await getVibePresets(userId);
+    setPresets(loaded);
+  }, []);
+
+  useEffect(() => {
+    loadPresets();
+  }, [loadPresets]);
+
+  // 切换预设
+  const handleTogglePreset = async (preset: VibePreset) => {
+    const newEnabled = !preset.enabled;
+    setPresets(prev => prev.map(p => p.id === preset.id ? { ...p, enabled: newEnabled } : p));
+    await toggleVibePreset(preset.id, newEnabled);
+  };
+
+  // 添加自定义预设
+  const handleAddPreset = async () => {
+    const userId = getCurrentUserId();
+    if (!userId || !newPresetName.trim() || !newPresetContent.trim()) return;
+    await addCustomVibePreset(userId, newPresetName.trim(), newPresetContent.trim());
+    setNewPresetName('');
+    setNewPresetContent('');
+    setShowAddForm(false);
+    await loadPresets();
+  };
+
+  // 删除自定义预设
+  const handleDeletePreset = async (presetId: string) => {
+    await deleteVibePreset(presetId);
+    await loadPresets();
+  };
 
   const handleStart = () => {
     if (!currentBook || !userRequest.trim()) return;
     const volumeId = currentVolume?.id || '';
-    onStartPipeline(currentBook.id, volumeId, userRequest.trim());
+    // 将选中的参考指令拼接到 userRequest 中
+    const enabledPresets = presets.filter(p => p.enabled);
+    let enhancedRequest = userRequest.trim();
+    if (enabledPresets.length > 0) {
+      const refBlock = enabledPresets.map(p => `[${p.name}]：${p.content}`).join('\n');
+      enhancedRequest += `\n\n---\n参考要求：\n${refBlock}`;
+    }
+    onStartPipeline(currentBook.id, volumeId, enhancedRequest);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -166,12 +235,14 @@ export const VibeWritingPanel: React.FC<VibeWritingPanelProps> = ({
       {!pipelineState || isCompleted || isFailed || isCancelled ? (
         <div className="px-4 pb-3">
           <div className="flex gap-2">
-            <input
-              className="flex-1 text-sm px-3 py-2 rounded"
+            <textarea
+              className="flex-1 text-sm px-3 py-2 rounded resize-y"
               style={{
                 backgroundColor: 'var(--color-vscode-input-bg)',
                 color: 'var(--color-vscode-text)',
                 border: '1px solid var(--color-vscode-border)',
+                minHeight: '60px',
+                maxHeight: '200px',
               }}
               placeholder={
                 currentBook
@@ -182,6 +253,7 @@ export const VibeWritingPanel: React.FC<VibeWritingPanelProps> = ({
               onChange={(e) => setUserRequest(e.target.value)}
               onKeyDown={handleKeyDown}
               disabled={!currentBook || loading}
+              rows={2}
             />
             <button
               className="px-3 py-2 rounded flex items-center gap-1 text-sm font-medium"
@@ -199,6 +271,125 @@ export const VibeWritingPanel: React.FC<VibeWritingPanelProps> = ({
           </div>
           {!currentBook && (
             <p className="text-xs mt-1" style={{ color: '#d9534f' }}>请先在左侧选择一本书</p>
+          )}
+
+          <div className="mt-2">
+            <div className="flex items-center gap-1.5 mb-1.5">
+              <span className="text-xs font-medium" style={{ color: 'var(--color-vscode-text)', opacity: 0.7 }}>参考选项</span>
+              <button
+                className="flex items-center justify-center rounded"
+                style={{
+                  width: '20px', height: '20px',
+                  backgroundColor: 'rgba(128,128,128,0.1)',
+                  border: '1px solid var(--color-vscode-border)',
+                  color: 'var(--color-vscode-text)',
+                  cursor: 'pointer',
+                }}
+                onClick={() => setShowAddForm(!showAddForm)}
+                title="添加自定义参考选项"
+              >
+                <Plus size={12} />
+              </button>
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {presets.map(p => (
+                <div key={p.id} className="flex items-center gap-0.5" style={{ display: 'inline-flex' }}>
+                  <button
+                    style={tagButtonStyle(p.enabled)}
+                    onClick={() => handleTogglePreset(p)}
+                    title={p.content}
+                  >
+                    {p.name}
+                  </button>
+                  {!p.builtIn && (
+                    <button
+                      className="flex items-center justify-center rounded"
+                      style={{
+                        width: '18px', height: '18px',
+                        backgroundColor: 'transparent',
+                        border: '1px solid var(--color-vscode-border)',
+                        color: 'var(--color-vscode-text)',
+                        cursor: 'pointer',
+                        opacity: 0.55,
+                      }}
+                      onClick={() => handleDeletePreset(p.id)}
+                      title="删除此选项"
+                    >
+                      <Trash2 size={10} />
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {showAddForm && (
+            <div
+              className="mt-2 p-2 rounded"
+              style={{
+                backgroundColor: 'var(--color-vscode-input-bg)',
+                border: '1px solid var(--color-vscode-border)',
+              }}
+            >
+              <input
+                className="w-full text-xs px-2 py-1.5 rounded mb-1.5"
+                style={{
+                  backgroundColor: 'var(--color-vscode-bg)',
+                  color: 'var(--color-vscode-text)',
+                  border: '1px solid var(--color-vscode-border)',
+                  outline: 'none',
+                }}
+                placeholder="选项名称（如：不需要生成细纲）"
+                value={newPresetName}
+                onChange={(e) => setNewPresetName(e.target.value)}
+              />
+              <textarea
+                className="w-full text-xs px-2 py-1.5 rounded mb-1.5 resize-none"
+                style={{
+                  backgroundColor: 'var(--color-vscode-bg)',
+                  color: 'var(--color-vscode-text)',
+                  border: '1px solid var(--color-vscode-border)',
+                  outline: 'none',
+                  minHeight: '40px',
+                }}
+                placeholder="指令内容（将注入到提示词中，如：跳过细纲生成步骤，直接基于大纲生成正文。）"
+                value={newPresetContent}
+                onChange={(e) => setNewPresetContent(e.target.value)}
+                rows={2}
+              />
+              <div className="flex gap-1 justify-end">
+                <button
+                  className="text-xs px-2 py-1 rounded"
+                  style={{
+                    backgroundColor: 'transparent',
+                    border: '1px solid var(--color-vscode-border)',
+                    color: 'var(--color-vscode-text)',
+                    cursor: 'pointer',
+                  }}
+                  onClick={() => {
+                    setShowAddForm(false);
+                    setNewPresetName('');
+                    setNewPresetContent('');
+                  }}
+                >
+                  取消
+                </button>
+                <button
+                  className="text-xs px-3 py-1 rounded"
+                  style={{
+                    backgroundColor: newPresetName.trim() && newPresetContent.trim()
+                      ? 'var(--color-vscode-active)' : 'var(--color-vscode-border)',
+                    color: 'var(--color-vscode-text)',
+                    cursor: newPresetName.trim() && newPresetContent.trim() ? 'pointer' : 'not-allowed',
+                    border: 'none',
+                  }}
+                  disabled={!newPresetName.trim() || !newPresetContent.trim()}
+                  onClick={handleAddPreset}
+                >
+                  添加
+                </button>
+              </div>
+            </div>
           )}
         </div>
       ) : null}

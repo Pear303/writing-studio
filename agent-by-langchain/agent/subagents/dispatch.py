@@ -19,7 +19,7 @@ def dispatch(
         callbacks: LangChain 回调列表
     """
     from langchain_core.prompts import ChatPromptTemplate
-    from langchain.agents import create_tool_calling_agent
+    from langchain_classic.agents import create_tool_calling_agent
 
     from ..lc_tools import _SUBAGENT_TOOL_MAP, _llm_ref, _subagent_registry
     from ..subagent_parallel import ParallelAgentExecutor

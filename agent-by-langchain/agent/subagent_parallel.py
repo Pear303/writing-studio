@@ -20,6 +20,11 @@ _READ_ONLY_TOOLS = {
     "glob_tool",
     "grep_tool",
     "load_skill",
+    "read_books",
+    "read_chapters",
+    "read_outline",
+    "read_materials",
+    "search_knowledge",
 }
 
 

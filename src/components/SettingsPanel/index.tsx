@@ -51,6 +51,9 @@ export const SettingsPanel = ({
   const [activeTab, setActiveTab] = useState<SettingsTab>('general');
   const [autoSaveInterval, setAutoSaveInterval] = useState(30);
   const [editorFontSize, setEditorFontSize] = useState(16);
+  const [startupWindowMode, setStartupWindowMode] = useState<'maximized' | 'fullscreen'>(() => {
+    return (localStorage.getItem('startupWindowMode') as 'maximized' | 'fullscreen') || 'maximized';
+  });
   const [toast, setToast] = useState<{ message: string; type: ToastType } | null>(null);
   const [showNicknameModal, setShowNicknameModal] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
@@ -280,6 +283,22 @@ export const SettingsPanel = ({
                 <option value="dark">深色主题</option>
                 <option value="light">浅色主题</option>
                 <option value="eye-care">护眼模式</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs mb-1" style={{ color: 'var(--color-vscode-text, #cccccc)', opacity: 0.6 }}>启动窗口模式</label>
+              <select
+                value={startupWindowMode}
+                onChange={(e) => {
+                  const mode = e.target.value as 'maximized' | 'fullscreen';
+                  setStartupWindowMode(mode);
+                  localStorage.setItem('startupWindowMode', mode);
+                }}
+                className="w-full px-2 py-1.5 text-sm text-vscode-text focus:outline-none focus:border-vscode-active select-field"
+              >
+                <option value="maximized">窗口全屏（最大化窗口）</option>
+                <option value="fullscreen">全屏模式（F11 级别）</option>
               </select>
             </div>
 

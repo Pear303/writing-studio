@@ -92,14 +92,32 @@ async function executeNewChapter(action: PendingNewChapter): Promise<void> {
   const book = await db.books.get(action.bookId);
   if (!book) throw new Error(`书籍不存在: ${action.bookId}`);
 
-  const volume = await db.volumes.get(action.volumeId);
-  if (!volume) throw new Error(`卷不存在: ${action.volumeId}`);
+  let volumeId = action.volumeId || null;
+
+  if (volumeId) {
+    const volume = await db.volumes.get(volumeId);
+    if (!volume) {
+      const firstVolume = await db.volumes.where('bookId').equals(action.bookId).first();
+      if (firstVolume) {
+        console.warn(`[Importer] volumeId "${volumeId}" 不存在，自动使用该书第一个卷 "${firstVolume.id}" (${firstVolume.name})`);
+        volumeId = firstVolume.id;
+      } else {
+        console.warn(`[Importer] volumeId "${volumeId}" 不存在且该书无任何卷，章节将不关联卷`);
+        volumeId = null;
+      }
+    }
+  } else {
+    const firstVolume = await db.volumes.where('bookId').equals(action.bookId).first();
+    if (firstVolume) {
+      volumeId = firstVolume.id;
+    }
+  }
 
   const wordCount = countWords(action.content);
 
   const chapter: Chapter = {
     id: generateId(),
-    volumeId: action.volumeId,
+    volumeId,
     bookId: action.bookId,
     title: action.title,
     content: action.content,
