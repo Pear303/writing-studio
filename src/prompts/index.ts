@@ -60,7 +60,16 @@ export const PROMPT_TEMPLATES: Record<string, PromptTemplate> = {
     description: '根据章节细纲生成正文',
     file: './templates/pipeline/05-chapter-generate.md',
     stage: 'CHAPTER_WRITING',
-    variables: ['outline', 'chapterIndex', 'chapterTitle', 'chapterOutline', 'previousChapterContent', 'writingStyle', 'storyLength', 'customRules'],
+    variables: ['outlineSummary', 'chapterIndex', 'chapterTitle', 'chapterOutline', 'previousChapterContent', 'writingStyle', 'storyLength', 'customRules'],
+    version: '1.1.0',
+  },
+  'chapter-batch-generate': {
+    id: 'chapter-batch-generate',
+    name: '批量生成正文',
+    description: '一次性批量生成所有章节正文，大纲只注入一次',
+    file: './templates/pipeline/05-chapter-batch-generate.md',
+    stage: 'CHAPTER_WRITING',
+    variables: ['outlineSummary', 'chaptersOutline', 'writingStyle', 'storyLength', 'customRules'],
     version: '1.0.0',
   },
   'chapter-refine': {
@@ -69,7 +78,7 @@ export const PROMPT_TEMPLATES: Record<string, PromptTemplate> = {
     description: '根据用户反馈迭代改进正文',
     file: './templates/pipeline/05-chapter-refine.md',
     stage: 'CHAPTER_WRITING',
-    variables: ['outline', 'chapterContent', 'historyLines', 'additions', 'deletions', 'modifications', 'writingStyle', 'storyLength', 'customRules'],
-    version: '1.0.0',
+    variables: ['outlineSummary', 'chapterContent', 'historyLines', 'additions', 'deletions', 'modifications', 'writingStyle', 'storyLength', 'customRules'],
+    version: '1.1.0',
   },
 };
