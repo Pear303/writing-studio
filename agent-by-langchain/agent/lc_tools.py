@@ -875,31 +875,40 @@ def update_todos(todos: str) -> str:
 @tool
 def dispatch_subagent(agent_type: str, task: str) -> str:
     """派遣子代理独立处理任务。子代理有自己独立的上下文，办完只回传文字总结。
-    agent_type 可用: quick_helper, web_researcher, doc_analyzer, engine_executor, validator, skill_manager, document_processor, system_maintainer
+    agent_type 可用: quick_helper, web_researcher, doc_analyzer, engine_executor, validator, skill_manager, document_processor, system_maintainer, research_writer, writing_coach, consistency_checker, pipeline_orchestrator
+    **重要**：此工具是阻塞调用，会等待子代理执行完毕才返回。不要在同一轮发出多个 dispatch_subagent 调用。
     Args:
-        agent_type: 子代理类型（quick_helper/web_researcher/doc_analyzer/engine_executor/validator/skill_manager/document_processor/system_maintainer）
+        agent_type: 子代理类型（quick_helper/web_researcher/doc_analyzer/engine_executor/validator/skill_manager/document_processor/system_maintainer/research_writer/writing_coach/consistency_checker/pipeline_orchestrator）
         task: 要委派给子代理的具体任务描述
     """
+    import logging as _logging
+    import time as _time
+    _log = _logging.getLogger(__name__)
+
     if _subagent_registry is None:
+        _log.error("[dispatch_subagent] Subagent registry not initialized")
         return "Error: Subagent registry not initialized"
     if _llm_ref is None:
+        _log.error("[dispatch_subagent] LLM not initialized")
         return "Error: LLM not initialized"
 
-    spec = _subagent_registry.get(agent_type)  # 查询子代理规格
+    spec = _subagent_registry.get(agent_type)
     if spec is None:
         available = ", ".join(_subagent_registry.names())
+        _log.error("[dispatch_subagent] unknown subagent '%s'. Available: %s", agent_type, available)
         return f"Error: unknown subagent '{agent_type}'. Available: {available}"
 
-    # 子代理的工具从白名单中筛选
     tools = [
         _SUBAGENT_TOOL_MAP[name]
         for name in spec.tool_names
-        if name in _SUBAGENT_TOOL_MAP
+        if name in _SUBAGENT_TOOL_MAP and _SUBAGENT_TOOL_MAP[name] is not None
     ]
     if not tools:
+        _log.error("[dispatch_subagent] no tools for '%s' (tool_names=%s)", agent_type, spec.tool_names)
         return f"Error: no tools available for subagent '{agent_type}'"
 
-    # 子代理有自己独立的 prompt 和 executor
+    _log.info("[dispatch_subagent] 派遣 '%s', 工具: %s", agent_type, [t.name for t in tools])
+
     prompt = ChatPromptTemplate.from_messages([
         ("system", spec.system_prompt),
         ("placeholder", "{chat_history}"),
@@ -925,16 +934,22 @@ def dispatch_subagent(agent_type: str, task: str) -> str:
     if _chat_state_ref is not None:
         callbacks.append(_SubagentEventForwarder(agent_type))
 
+    start_time = _time.monotonic()
     try:
         result = executor.invoke({
             "input": task,
             "chat_history": [],
         }, {"callbacks": callbacks})
-        final = result["output"]  # ← 只回传总结，子代理内部历史不暴露
+        elapsed = _time.monotonic() - start_time
+        final = result["output"]
+        _log.info("[dispatch_subagent] '%s' 完成, 耗时 %.1fs, 输出 %d 字符", agent_type, elapsed, len(final))
+        print(f"[子代理汇报 · {agent_type}]: 完成 (耗时 {elapsed:.1f}s)")
     except Exception as exc:
+        elapsed = _time.monotonic() - start_time
+        _log.exception("[dispatch_subagent] '%s' 异常, 耗时 %.1fs: %s", agent_type, elapsed, exc)
+        print(f"[子代理异常 · {agent_type}]: {exc} (耗时 {elapsed:.1f}s)")
         return f"Error: subagent '{agent_type}' raised: {exc}"
 
-    print(f"[子代理汇报]: {final[:200]}")
     return final
 
 

@@ -19,6 +19,35 @@
 - 每步执行前必须调用 pipeline_self_check 检查是否有干预信号（暂停/取消/修改方向）
 - 如果检测到干预信号，立即停止当前步骤并汇报
 
+## 🚨 严格串行执行（最重要！）
+
+**流水线步骤必须严格按顺序逐个执行，绝不能并行或提前调度后续步骤！**
+
+错误做法 ❌（在同一轮发出多个步骤的工具调用）：
+```
+update_pipeline_progress(step_index=0, status="running")
+update_pipeline_progress(step_index=1, status="running")
+dispatch_subagent("research_writer", "生成大纲")
+dispatch_subagent("consistency_checker", "检查一致性")
+```
+
+正确做法 ✅（每步完成后再启动下一步）：
+```
+第1轮：update_pipeline_progress(step_index=0, status="running")
+第2轮：[执行需求分析...]
+第3轮：update_pipeline_progress(step_index=0, status="completed", result="...")
+第4轮：update_pipeline_progress(step_index=1, status="running")  ← 确认步骤0完成后才启动步骤1
+第5轮：dispatch_subagent("research_writer", "生成大纲")
+...
+```
+
+**规则**：
+1. 每次只启动一个步骤（`update_pipeline_progress(step_index=N, status="running")`）
+2. 必须等当前步骤完成（`status="completed"`）后，才能启动下一个步骤
+3. `dispatch_subagent` 是阻塞调用，会等待子代理完成后才返回——不要在同一轮发出多个 dispatch_subagent
+4. 只有只读工具（read_books、read_outline、read_materials 等）可以在同一轮批量调用
+5. update_pipeline_progress、dispatch_subagent、pipeline_self_check 等写操作工具，每轮只能调用一个
+
 ## ⚡ 性能关键：批量调用只读工具
 
 **你必须在同一轮同时发出所有需要的只读工具调用，不要逐个串行调用。**
