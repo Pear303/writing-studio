@@ -1,6 +1,8 @@
-import React from 'react';
-import { Folder, FolderOpen, FileText, ChevronRight, ChevronDown } from 'lucide-react';
+import React, { forwardRef, CSSProperties } from 'react';
+import { Folder, FolderOpen, FileText, ChevronRight, ChevronDown, GripVertical } from 'lucide-react';
 import type { Volume, Chapter } from '../../types';
+
+export type DropPosition = 'before' | 'after' | 'inside';
 
 interface TreeNodeProps {
   type: 'volume' | 'chapter';
@@ -11,16 +13,16 @@ interface TreeNodeProps {
   onToggle?: () => void;
   onClick?: () => void;
   onContextMenu?: (e: React.MouseEvent) => void;
-  onDragStart?: (e: React.DragEvent) => void;
-  onDragEnd?: () => void;
-  onDrop?: (e: React.DragEvent) => void;
-  onDragOver?: (e: React.DragEvent) => void;
   hasChildren?: boolean;
   isLast?: boolean;
   displayTitle?: string;
+  isDragging?: boolean;
+  dragHandleProps?: Record<string, any>;
+  dropPosition?: DropPosition | null;
+  isDropTarget?: boolean;
 }
 
-export const TreeNode = ({
+export const TreeNode = forwardRef<HTMLDivElement, TreeNodeProps>(({
   type,
   data,
   level,
@@ -29,31 +31,36 @@ export const TreeNode = ({
   onToggle,
   onClick,
   onContextMenu,
-  onDragStart,
-  onDragEnd,
-  onDrop,
-  onDragOver,
   hasChildren = false,
   isLast = false,
   displayTitle,
-}: TreeNodeProps) => {
+  isDragging = false,
+  dragHandleProps,
+  dropPosition = null,
+  isDropTarget = false,
+}, ref) => {
   const paddingLeft = level * 16 + 8;
 
+  const nodeTitle = displayTitle || (type === 'volume' ? (data as Volume).name : (data as Chapter).title);
+
+  const bgClass = isActive
+    ? 'bg-blue-600/20'
+    : isDropTarget && dropPosition === 'inside'
+      ? 'bg-blue-500/20 ring-1 ring-blue-400/50'
+      : 'hover:bg-gray-700/30';
+
   return (
-    <div className="relative w-full">
-      {/* 连接线 */}
+    <div className="relative w-full" ref={ref}>
       {level > 0 && (
         <>
-          {/* 垂直线 */}
           <div
             className="absolute top-0 bottom-0 w-px bg-gray-600 opacity-50"
             style={{ left: `${(level - 1) * 16 + 15}px` }}
           />
-          {/* 水平线 */}
           {!isLast && (
             <div
               className="absolute top-1/2 h-px bg-gray-600 opacity-50"
-              style={{ 
+              style={{
                 left: `${(level - 1) * 16 + 15}px`,
                 width: '8px',
               }}
@@ -62,20 +69,34 @@ export const TreeNode = ({
         </>
       )}
 
+      {dropPosition === 'before' && isDropTarget && (
+        <div
+          className="absolute left-2 right-2 z-20"
+          style={{ top: '-1px' }}
+        >
+          <div className="h-0.5 bg-blue-500 rounded-full">
+            <div className="absolute -left-1 -top-[3px] w-2 h-2 bg-blue-500 rounded-full" />
+          </div>
+        </div>
+      )}
+
       <div
-        className={`flex items-center py-1.5 px-2 cursor-pointer transition-colors duration-150 relative ${
-          isActive ? 'bg-blue-600/20' : 'hover:bg-gray-700/30'
-        }`}
+        className={`flex items-center py-1.5 px-2 cursor-pointer transition-colors duration-150 relative group ${
+          isDragging ? 'opacity-30' : ''
+        } ${bgClass}`}
         style={{ paddingLeft, paddingRight: '12px' }}
         onClick={onClick}
         onContextMenu={onContextMenu}
-        draggable={true}
-        onDragStart={onDragStart}
-        onDragEnd={onDragEnd}
-        onDrop={onDrop}
-        onDragOver={onDragOver}
       >
-        {/* 展开/折叠图标 */}
+        {dragHandleProps && (
+          <span
+            className="mr-0.5 opacity-0 group-hover:opacity-40 hover:!opacity-100 cursor-grab active:cursor-grabbing flex-shrink-0 transition-opacity"
+            {...dragHandleProps}
+          >
+            <GripVertical size={12} className="text-vscode-text" />
+          </span>
+        )}
+
         {type === 'volume' && onToggle && (
           <button
             onClick={(e) => {
@@ -92,10 +113,8 @@ export const TreeNode = ({
           </button>
         )}
 
-        {/* 占位符（章节不需要展开图标） */}
         {type === 'chapter' && <span className="w-5 mr-1" />}
 
-        {/* 图标 - 区分根卷和子卷 */}
         {type === 'volume' ? (
           level === 0 ? (
             <FolderOpen size={16} className="mr-2 text-yellow-500 flex-shrink-0" />
@@ -106,13 +125,44 @@ export const TreeNode = ({
           <FileText size={16} className="mr-2 text-blue-400 flex-shrink-0" />
         )}
 
-        {/* 名称 */}
         <span className="text-sm text-vscode-text truncate min-w-0 flex-1">
-          {displayTitle || (type === 'volume' ? (data as Volume).name : (data as Chapter).title)}
+          {nodeTitle}
         </span>
-
-
       </div>
+
+      {dropPosition === 'after' && isDropTarget && (
+        <div
+          className="absolute left-2 right-2 z-20"
+          style={{ bottom: '-1px' }}
+        >
+          <div className="h-0.5 bg-blue-500 rounded-full">
+            <div className="absolute -left-1 -top-[3px] w-2 h-2 bg-blue-500 rounded-full" />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+});
+
+TreeNode.displayName = 'TreeNode';
+
+export const DragPreview: React.FC<{
+  type: 'volume' | 'chapter';
+  data: Volume | Chapter;
+  displayTitle?: string;
+}> = ({ type, data, displayTitle }) => {
+  const nodeTitle = displayTitle || (type === 'volume' ? (data as Volume).name : (data as Chapter).title);
+
+  return (
+    <div className="flex items-center py-1.5 px-3 bg-vscode-sidebar border border-blue-500/50 rounded shadow-lg opacity-90">
+      {type === 'volume' ? (
+        <FolderOpen size={16} className="mr-2 text-yellow-500 flex-shrink-0" />
+      ) : (
+        <FileText size={16} className="mr-2 text-blue-400 flex-shrink-0" />
+      )}
+      <span className="text-sm text-vscode-text truncate">
+        {nodeTitle}
+      </span>
     </div>
   );
 };

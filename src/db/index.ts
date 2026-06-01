@@ -120,6 +120,24 @@ export class NovelIDEDatabase extends Dexie {
       vibePresets: 'id, userId, enabled, order',
     });
 
+    this.version(12).stores({
+      chapters: 'id, volumeId, bookId, order, createdAt, updatedAt',
+    }).upgrade(async (tx) => {
+      const chapters = await tx.table('chapters').toArray();
+      const byVolume: Record<string, Chapter[]> = {};
+      for (const ch of chapters) {
+        const key = ch.volumeId || '__draft__';
+        if (!byVolume[key]) byVolume[key] = [];
+        byVolume[key].push(ch);
+      }
+      for (const key of Object.keys(byVolume)) {
+        byVolume[key].sort((a, b) => a.createdAt - b.createdAt);
+        for (let i = 0; i < byVolume[key].length; i++) {
+          await tx.table('chapters').update(byVolume[key][i].id, { order: i });
+        }
+      }
+    });
+
     /*
     -- 类似的 SQL 语句
     CREATE TABLE users (
