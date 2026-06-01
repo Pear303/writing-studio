@@ -117,6 +117,26 @@ export const BookOutlineTree = ({ book, onChapterSelect, onBookDeselect, onVolum
   };
 
   // 加载卷和章节数据
+  const EXPANDED_VOLUMES_KEY = `expanded_volumes_${book.id}`;
+
+  const loadExpandedVolumes = (allVolumes: Volume[]): Set<string> => {
+    try {
+      const saved = localStorage.getItem(EXPANDED_VOLUMES_KEY);
+      if (saved) {
+        const savedIds: string[] = JSON.parse(saved);
+        const volumeIds = new Set(allVolumes.map(v => v.id));
+        return new Set(savedIds.filter(id => volumeIds.has(id)));
+      }
+    } catch {}
+    return new Set(allVolumes.map(v => v.id));
+  };
+
+  const saveExpandedVolumes = (expanded: Set<string>) => {
+    try {
+      localStorage.setItem(EXPANDED_VOLUMES_KEY, JSON.stringify([...expanded]));
+    } catch {}
+  };
+
   useEffect(() => {
     console.log('[BookOutlineTree] useEffect 触发，refreshTrigger:', refreshTrigger);
     loadData();
@@ -125,14 +145,12 @@ export const BookOutlineTree = ({ book, onChapterSelect, onBookDeselect, onVolum
   const loadData = async () => {
     try {
       console.log('[BookOutlineTree] 开始加载数据...');
-      // 加载卷
       const allVolumes = await db.volumes
         .where('bookId')
         .equals(book.id)
         .sortBy('order');
       console.log('[BookOutlineTree] 加载了', allVolumes.length, '个卷');
 
-      // 加载所有章节
       const allChapters = await db.chapters
         .where('bookId')
         .equals(book.id)
@@ -142,15 +160,14 @@ export const BookOutlineTree = ({ book, onChapterSelect, onBookDeselect, onVolum
       setVolumes(allVolumes);
       setChapters(allChapters);
 
-      // 默认展开所有卷
-      setExpandedVolumes(new Set(allVolumes.map((v) => v.id)));
+      const restored = loadExpandedVolumes(allVolumes);
+      setExpandedVolumes(restored);
       console.log('[BookOutlineTree] 数据加载完成');
     } catch (error) {
       console.error('[BookOutlineTree] 加载大纲数据失败:', error);
     }
   };
 
-  // 切换卷的展开/折叠状态
   const toggleVolume = (volumeId: string) => {
     const newExpanded = new Set(expandedVolumes);
     if (newExpanded.has(volumeId)) {
@@ -159,6 +176,7 @@ export const BookOutlineTree = ({ book, onChapterSelect, onBookDeselect, onVolum
       newExpanded.add(volumeId);
     }
     setExpandedVolumes(newExpanded);
+    saveExpandedVolumes(newExpanded);
   };
 
   // 获取未归入任何卷的章节（草稿箱）

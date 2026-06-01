@@ -128,16 +128,17 @@ const StepRow: React.FC<{
 };
 
 const tagButtonStyle = (selected: boolean): React.CSSProperties => ({
-  padding: '4px 10px',
-  fontSize: '12px',
-  border: selected ? '1px solid var(--color-vscode-active)' : '1px solid var(--color-vscode-border)',
-  borderRadius: '3px',
-  backgroundColor: selected ? 'var(--color-vscode-active-medium, rgba(143, 188, 143, 0.3))' : 'transparent',
-  color: 'var(--color-vscode-text)',
+  padding: '6px 14px',
+  fontSize: '13px',
+  border: 'none',
+  borderRadius: '4px',
+  backgroundColor: 'transparent',
+  color: selected ? 'var(--color-vscode-active)' : 'var(--color-vscode-text)',
   cursor: 'pointer',
   transition: 'all 0.15s ease',
   whiteSpace: 'nowrap' as const,
   userSelect: 'none' as const,
+  lineHeight: '1.4',
 });
 
 export const VibeWritingPanel: React.FC<VibeWritingPanelProps> = ({
@@ -155,6 +156,7 @@ export const VibeWritingPanel: React.FC<VibeWritingPanelProps> = ({
   const [showAddForm, setShowAddForm] = useState(false);
   const [newPresetName, setNewPresetName] = useState('');
   const [newPresetContent, setNewPresetContent] = useState('');
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
   // 加载预设
   const loadPresets = useCallback(async () => {
@@ -188,8 +190,12 @@ export const VibeWritingPanel: React.FC<VibeWritingPanelProps> = ({
   };
 
   // 删除自定义预设
-  const handleDeletePreset = async (presetId: string) => {
-    await deleteVibePreset(presetId);
+  const handleDeletePreset = async (preset: VibePreset) => {
+    if (preset.builtIn) {
+      setPresets(prev => prev.filter(p => p.id !== preset.id));
+      return;
+    }
+    await deleteVibePreset(preset.id);
     await loadPresets();
   };
 
@@ -274,26 +280,47 @@ export const VibeWritingPanel: React.FC<VibeWritingPanelProps> = ({
           )}
 
           <div className="mt-2">
-            <div className="flex items-center gap-1.5 mb-1.5">
+            <div className="flex items-center gap-2 mb-1.5">
               <span className="text-xs font-medium" style={{ color: 'var(--color-vscode-text)', opacity: 0.7 }}>参考选项</span>
               <button
-                className="flex items-center justify-center rounded"
+                className="flex items-center justify-center rounded text-sm font-medium"
                 style={{
-                  width: '20px', height: '20px',
-                  backgroundColor: 'rgba(128,128,128,0.1)',
+                  width: '22px', height: '22px',
+                  backgroundColor: 'transparent',
                   border: '1px solid var(--color-vscode-border)',
                   color: 'var(--color-vscode-text)',
                   cursor: 'pointer',
+                  transition: 'all 0.15s ease',
+                  lineHeight: '1',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.borderColor = 'var(--color-vscode-active)';
+                  e.currentTarget.style.color = 'var(--color-vscode-active)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.borderColor = 'var(--color-vscode-border)';
+                  e.currentTarget.style.color = 'var(--color-vscode-text)';
                 }}
                 onClick={() => setShowAddForm(!showAddForm)}
                 title="添加自定义参考选项"
               >
-                <Plus size={12} />
+                +
               </button>
             </div>
             <div className="flex flex-wrap gap-1.5">
               {presets.map(p => (
-                <div key={p.id} className="flex items-center gap-0.5" style={{ display: 'inline-flex' }}>
+                <div
+                  key={p.id}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    backgroundColor: p.enabled ? 'var(--color-vscode-active-light, rgba(143, 188, 143, 0.15))' : 'transparent',
+                    border: p.enabled ? '1px solid var(--color-vscode-active)' : '1px solid var(--color-vscode-border)',
+                    borderRadius: '4px',
+                    paddingRight: '3px',
+                    transition: 'all 0.15s ease',
+                  }}
+                >
                   <button
                     style={tagButtonStyle(p.enabled)}
                     onClick={() => handleTogglePreset(p)}
@@ -301,23 +328,49 @@ export const VibeWritingPanel: React.FC<VibeWritingPanelProps> = ({
                   >
                     {p.name}
                   </button>
-                  {!p.builtIn && (
-                    <button
-                      className="flex items-center justify-center rounded"
-                      style={{
-                        width: '18px', height: '18px',
-                        backgroundColor: 'transparent',
-                        border: '1px solid var(--color-vscode-border)',
-                        color: 'var(--color-vscode-text)',
-                        cursor: 'pointer',
-                        opacity: 0.55,
-                      }}
-                      onClick={() => handleDeletePreset(p.id)}
-                      title="删除此选项"
-                    >
-                      <Trash2 size={10} />
-                    </button>
-                  )}
+                  <button
+                    className="flex items-center justify-center rounded text-xs font-medium"
+                    style={{
+                      width: '16px', height: '16px',
+                      backgroundColor: confirmDeleteId === p.id ? 'var(--color-danger)' : 'transparent',
+                      border: confirmDeleteId === p.id ? '1px solid var(--color-danger)' : 'none',
+                      color: confirmDeleteId === p.id ? '#ffffff' : 'var(--color-vscode-text)',
+                      cursor: 'pointer',
+                      transition: 'all 0.15s ease',
+                      lineHeight: '1',
+                      opacity: confirmDeleteId === p.id ? 1 : 0.5,
+                      fontSize: '10px',
+                    }}
+                    onMouseEnter={(e) => {
+                      if (confirmDeleteId !== p.id) {
+                        e.currentTarget.style.opacity = '1';
+                        e.currentTarget.style.color = 'var(--color-danger)';
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      if (confirmDeleteId !== p.id) {
+                        e.currentTarget.style.opacity = '0.5';
+                        e.currentTarget.style.color = 'var(--color-vscode-text)';
+                      }
+                    }}
+                    onClick={() => {
+                      if (confirmDeleteId === p.id) {
+                        // 第三次点击：真正删除
+                        handleDeletePreset(p);
+                        setConfirmDeleteId(null);
+                      } else if (p.enabled) {
+                        // 第一次点击（已选中）：先取消选中，不进警告
+                        handleTogglePreset(p);
+                      } else {
+                        // 第一次点击（未选中）：进入警告状态
+                        setConfirmDeleteId(p.id);
+                        setTimeout(() => setConfirmDeleteId(prev => prev === p.id ? null : prev), 3000);
+                      }
+                    }}
+                    title={confirmDeleteId === p.id ? '再次点击确认删除' : '删除此选项'}
+                  >
+                    {confirmDeleteId === p.id ? '!' : '×'}
+                  </button>
                 </div>
               ))}
             </div>

@@ -31,6 +31,26 @@ export const VolumeTree = ({ book, onVolumeSelect, onChapterSelect, activeVolume
   } | null>(null);
   const [expandedChapterId, setExpandedChapterId] = useState<string | null>(null);
 
+  const EXPANDED_VOLUMES_KEY = `expanded_volumes_volumetree_${book.id}`;
+
+  const loadExpandedIds = (allVolumes: Volume[]): Set<string> => {
+    try {
+      const saved = localStorage.getItem(EXPANDED_VOLUMES_KEY);
+      if (saved) {
+        const savedIds: string[] = JSON.parse(saved);
+        const volumeIds = new Set(allVolumes.map(v => v.id));
+        return new Set(savedIds.filter(id => volumeIds.has(id)));
+      }
+    } catch {}
+    return new Set(allVolumes.map(v => v.id));
+  };
+
+  const saveExpandedIds = (expanded: Set<string>) => {
+    try {
+      localStorage.setItem(EXPANDED_VOLUMES_KEY, JSON.stringify([...expanded]));
+    } catch {}
+  };
+
   useEffect(() => {
     loadData();
   }, [book.id, book, refreshTrigger]);
@@ -47,7 +67,7 @@ export const VolumeTree = ({ book, onVolumeSelect, onChapterSelect, activeVolume
         .toArray();
       setVolumes(allVolumes);
       setChapters(allChapters);
-      setExpandedIds(new Set(allVolumes.map(v => v.id)));
+      setExpandedIds(loadExpandedIds(allVolumes));
     } catch (error) {
       console.error('[VolumeTree] 加载数据失败:', error);
     }
@@ -61,6 +81,7 @@ export const VolumeTree = ({ book, onVolumeSelect, onChapterSelect, activeVolume
       next.add(volumeId);
     }
     setExpandedIds(next);
+    saveExpandedIds(next);
   };
 
   const getRootVolumes = () => volumes.filter(v => !v.parentId);
