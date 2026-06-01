@@ -21,6 +21,7 @@ interface PipelineTabViewProps {
   onPipelineRefineDetailedOutlineChapter?: (step4State: PipelineStep4State, chapterIndices: number[], round: DetailedOutlineRound, outline: string) => Promise<string>;
   onPipelineGenerateChapter?: (chapterIndex: number) => Promise<string>;
   onPipelineRefineChapter?: (step5State: PipelineStep5State, chapterIndex: number, round: ChapterDraftRound) => Promise<string>;
+  onPipelineBatchGenerateChapters?: (chapters: Array<{ index: number; title: string; outline: string }>) => Promise<Array<{ index: number; title: string; content: string }>>;
   onPipelineAddChapterToVolume?: (title: string, content: string, detailedOutline?: string) => void;
   onPipelinePreviewInEditor?: (title: string, content: string, onChange: (content: string) => void) => void;
   showToast?: (message: string, type: 'info' | 'success' | 'error' | 'warning') => void;
@@ -45,6 +46,7 @@ export const PipelineTabView: React.FC<PipelineTabViewProps> = ({
   onPipelineRefineDetailedOutlineChapter,
   onPipelineGenerateChapter,
   onPipelineRefineChapter,
+  onPipelineBatchGenerateChapters,
   onPipelineAddChapterToVolume,
   onPipelinePreviewInEditor,
   showToast,
@@ -108,6 +110,7 @@ export const PipelineTabView: React.FC<PipelineTabViewProps> = ({
               onRefineDetailedOutlineChapter={onPipelineRefineDetailedOutlineChapter}
               onGenerateChapter={onPipelineGenerateChapter}
               onRefineChapter={onPipelineRefineChapter}
+              onBatchGenerateChapters={onPipelineBatchGenerateChapters}
               onAddChapterToVolume={onPipelineAddChapterToVolume}
               onPreviewInEditor={onPipelinePreviewInEditor}
               showToast={showToast}

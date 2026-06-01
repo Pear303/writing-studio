@@ -20,6 +20,7 @@ interface PipelineWritingProps {
   onRefineDetailedOutlineChapter: (step4State: PipelineStep4State, chapterIndices: number[], round: DetailedOutlineRound, outline: string) => Promise<string>;
   onGenerateChapter: (chapterIndex: number) => Promise<string>;
   onRefineChapter: (step5State: PipelineStep5State, chapterIndex: number, round: ChapterDraftRound) => Promise<string>;
+  onBatchGenerateChapters?: (chapters: Array<{ index: number; title: string; outline: string }>) => Promise<Array<{ index: number; title: string; content: string }>>;
   onAddChapterToVolume: (title: string, content: string, detailedOutline?: string) => void;
   onPreviewInEditor?: (title: string, content: string, onChange: (content: string) => void) => void;
   showToast: (message: string, type: 'info' | 'success' | 'error' | 'warning') => void;
@@ -61,6 +62,7 @@ export const PipelineWriting: React.FC<PipelineWritingProps> = ({
   onRefineDetailedOutlineChapter,
   onGenerateChapter,
   onRefineChapter,
+  onBatchGenerateChapters,
   onAddChapterToVolume,
   onPreviewInEditor,
   showToast,
@@ -504,6 +506,7 @@ export const PipelineWriting: React.FC<PipelineWritingProps> = ({
             onStep5StateChange={handleStep5StateChange}
             onGenerateChapter={onGenerateChapter}
             onRefineChapter={onRefineChapter}
+            onBatchGenerateChapters={onBatchGenerateChapters}
             onAddChapterToVolume={onAddChapterToVolume}
             onPreviewInEditor={onPreviewInEditor}
           />

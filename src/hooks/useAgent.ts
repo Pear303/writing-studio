@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef } from 'react';
-import type { AgentState, AgentMessage, AgentToolCall, AgentActivityItem, AgentTokenUsage, AgentConfig } from '../types';
+import type { AgentState, AgentMessage, AgentToolCall, AgentActivityItem, AgentTokenUsage, AgentSession } from '../types';
 
 const DEFAULT_API_URL = 'http://localhost:8000';
 
@@ -12,6 +12,8 @@ const initialState: AgentState = {
   activityLog: [],
   tokenUsage: { input: 0, output: 0, total: 0 },
   error: null,
+  sessionId: null,
+  sessions: [],
 };
 
 function getApiUrl(): string {
@@ -75,8 +77,118 @@ export function useAgent() {
     return false;
   }, []);
 
+  const loadSessions = useCallback(async () => {
+    const apiUrl = getApiUrl();
+    try {
+      const res = await fetch(`${apiUrl}/api/history`);
+      if (!res.ok) return;
+      const data = await res.json();
+      const sessions: AgentSession[] = (data.sessions || []).map((s: any) => ({
+        id: s.id,
+        title: s.title || '新会话',
+        createdAt: s.created_at || '',
+        updatedAt: s.updated_at || '',
+        turnCount: s.turn_count || 0,
+        firstUserMessage: s.first_user_message,
+      }));
+      setState(prev => ({ ...prev, sessions }));
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  const createSession = useCallback(async (title?: string) => {
+    const apiUrl = getApiUrl();
+    try {
+      const res = await fetch(`${apiUrl}/api/history`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: title || null }),
+      });
+      if (!res.ok) return null;
+      const data = await res.json();
+      const session: AgentSession = {
+        id: data.id,
+        title: data.title || '新会话',
+        createdAt: data.created_at || '',
+        updatedAt: data.updated_at || '',
+        turnCount: 0,
+      };
+      setState(prev => ({
+        ...prev,
+        sessionId: session.id,
+        sessions: [session, ...prev.sessions],
+        messages: [],
+        activityLog: [],
+        currentStreamContent: '',
+        error: null,
+      }));
+      return session.id;
+    } catch {
+      return null;
+    }
+  }, []);
+
+  const switchSession = useCallback(async (sessionId: string) => {
+    const apiUrl = getApiUrl();
+    try {
+      const res = await fetch(`${apiUrl}/api/history/${sessionId}`);
+      if (!res.ok) return;
+      const data = await res.json();
+      const messages: AgentMessage[] = [];
+      if (data.turns) {
+        for (const turn of data.turns) {
+          messages.push({
+            id: generateId(),
+            role: turn.role === 'user' ? 'user' : 'assistant',
+            content: turn.full_content || turn.content || '',
+            timestamp: new Date(turn.timestamp || Date.now()).getTime(),
+          });
+        }
+      }
+      setState(prev => ({
+        ...prev,
+        sessionId,
+        messages,
+        activityLog: [],
+        currentStreamContent: '',
+        error: null,
+      }));
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  const deleteSession = useCallback(async (sessionId: string) => {
+    const apiUrl = getApiUrl();
+    try {
+      await fetch(`${apiUrl}/api/history/${sessionId}`, { method: 'DELETE' });
+    } catch {
+      // ignore
+    }
+    setState(prev => {
+      const sessions = prev.sessions.filter(s => s.id !== sessionId);
+      const isCurrent = prev.sessionId === sessionId;
+      return {
+        ...prev,
+        sessions,
+        sessionId: isCurrent ? null : prev.sessionId,
+        messages: isCurrent ? [] : prev.messages,
+        activityLog: isCurrent ? [] : prev.activityLog,
+        currentStreamContent: isCurrent ? '' : prev.currentStreamContent,
+        error: null,
+      };
+    });
+  }, []);
+
   const sendMessage = useCallback(async (message: string) => {
     const apiUrl = getApiUrl();
+
+    let sessionId = state.sessionId;
+    if (!sessionId) {
+      const newId = await createSession(message.slice(0, 30));
+      if (newId) sessionId = newId;
+    }
 
     const userMsg: AgentMessage = {
       id: generateId(),
@@ -103,6 +215,7 @@ export function useAgent() {
       currentStreamGen: 0,
       activityLog: [],
       messages: [...prev.messages, userMsg, assistantMsg],
+      sessionId: sessionId || prev.sessionId,
     }));
 
     pendingToolCallsRef.current = [];
@@ -114,7 +227,7 @@ export function useAgent() {
       const res = await fetch(`${apiUrl}/api/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message, session_id: undefined }),
+        body: JSON.stringify({ message, session_id: sessionId || undefined }),
         signal: abortController.signal,
       });
 
@@ -168,8 +281,9 @@ export function useAgent() {
           m.id === assistantMsgId ? { ...m, isStreaming: false } : m
         ),
       }));
+      loadSessions();
     }
-  }, []);
+  }, [state.sessionId, createSession, loadSessions]);
 
   const handleSSEEvent = useCallback((evt: Record<string, unknown>, assistantMsgId: string) => {
     const eventType = evt.type as string;
@@ -377,6 +491,10 @@ export function useAgent() {
     clearMessages,
     checkConnection,
     updateApiUrl,
+    loadSessions,
+    createSession,
+    switchSession,
+    deleteSession,
     apiUrl: getApiUrl(),
   };
 }

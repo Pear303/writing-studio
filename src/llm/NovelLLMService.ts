@@ -26,10 +26,61 @@ export interface LLMResponse {
 export class NovelLLMService {
   private composer: SmartPromptComposer | null = null;
   private config: LLMConfig | null = null;
+  private sessionPrefix: string | null = null;
+
+  setSessionPrefix(prefix: string | null): void {
+    this.sessionPrefix = prefix;
+  }
   
   init(prompts: Map<string,string>, config: LLMConfig): void {
     this.composer = createComposer(prompts, { enableCache: true });
     this.config = config;
+  }
+
+  private extractOutlineSummary(outline: string, currentChapterIndex: number, maxChars: number = 1500): string {
+    if (!outline || outline.length <= maxChars) return outline;
+
+    const lines = outline.split('\n');
+    const headings: string[] = [];
+    let currentSection: string[] = [];
+    let relevantSection: string[] = [];
+    let foundRelevant = false;
+
+    for (const line of lines) {
+      if (line.startsWith('#')) {
+        if (currentSection.length > 0) {
+          headings.push(currentSection.join('\n'));
+        }
+        currentSection = [line];
+      } else {
+        currentSection.push(line);
+      }
+
+      const chapterMatch = line.match(/第(\d+)[章节]/);
+      if (chapterMatch) {
+        const chNum = parseInt(chapterMatch[1], 10);
+        if (Math.abs(chNum - currentChapterIndex) <= 1) {
+          foundRelevant = true;
+          relevantSection = [...currentSection];
+        } else if (foundRelevant) {
+          foundRelevant = false;
+        }
+      }
+    }
+    if (currentSection.length > 0) {
+      headings.push(currentSection.join('\n'));
+    }
+
+    const allHeadings = lines.filter(l => l.trim().startsWith('#')).join('\n');
+    const relevantText = relevantSection.join('\n');
+
+    let summary = `【大纲结构】\n${allHeadings}\n\n【当前章节附近大纲】\n${relevantText}`;
+
+    if (summary.length > maxChars) {
+      summary = summary.slice(0, maxChars) + '\n...(大纲已截断)';
+    }
+
+    return summary;
   }
   
   async generate(
@@ -42,6 +93,30 @@ export class NovelLLMService {
     }
     
     const { messages, metadata } = this.composer.composeForLLM(stage, userMessage, context);
+
+    const finalMessages: Array<{ role: 'system' | 'user' | 'assistant'; content: string | Array<{ type: string; text: string; cache_control?: { type: string } }> }> = [];
+
+    if (this.sessionPrefix) {
+      finalMessages.push({
+        role: 'system',
+        content: [
+          { type: 'text', text: this.sessionPrefix, cache_control: { type: 'ephemeral' } },
+        ],
+      });
+    }
+
+    for (const msg of messages) {
+      if (msg.role === 'system') {
+        finalMessages.push({
+          role: 'system',
+          content: [
+            { type: 'text', text: msg.content, cache_control: { type: 'ephemeral' } },
+          ],
+        });
+      } else {
+        finalMessages.push(msg);
+      }
+    }
     
     try {
       const response = await fetch(`${this.config.baseUrl}/chat/completions`, {
@@ -52,10 +127,10 @@ export class NovelLLMService {
         },
         body: JSON.stringify({
           model: this.config.model,
-          messages,
+          messages: finalMessages,
           temperature: 0.7,
           max_tokens: 4000,
-        } as LLMRequest),
+        }),
       });
       
       if (!response.ok) {
@@ -308,12 +383,16 @@ async generateOutline(project: {
     outline: string,
     step3Config: { writingStyle: string; storyLength: string; customRules: string },
   ): Promise<string> {
+    const outlineSummary = this.extractOutlineSummary(outline, chapterIndex + 1);
+
+    this.sessionPrefix = `【全书大纲摘要（固定参考）】\n${outlineSummary}`;
+
     const userMessage = await this.composer!.renderTemplate('chapter-generate', {
-      outline,
+      outlineSummary,
       chapterIndex: chapterIndex + 1,
       chapterTitle,
       chapterOutline,
-      previousChapterContent: previousChapterContent ? previousChapterContent.slice(-2000) : '',
+      previousChapterContent: previousChapterContent ? previousChapterContent.slice(-4000) : '',
       writingStyle: step3Config.writingStyle,
       storyLength: step3Config.storyLength,
       customRules: step3Config.customRules,
@@ -341,6 +420,10 @@ async generateOutline(project: {
     const chapter = step5State.chapters.find(ch => ch.index === chapterIndex);
     if (!chapter) throw new Error('未找到章节');
 
+    const outlineSummary = this.extractOutlineSummary(outline, chapterIndex + 1);
+
+    this.sessionPrefix = `【全书大纲摘要（固定参考）】\n${outlineSummary}`;
+
     const historyLines = chapter.rounds.map((r, i) => {
       const parts: string[] = [];
       if (r.additions.trim()) parts.push(`新增：${r.additions.trim()}`);
@@ -350,7 +433,7 @@ async generateOutline(project: {
     });
 
     const userMessage = await this.composer!.renderTemplate('chapter-refine', {
-      outline,
+      outlineSummary,
       chapterContent: chapter.content,
       historyLines: historyLines.length > 0 ? historyLines.join('\n') : '',
       additions: currentRound.additions.trim(),
@@ -375,6 +458,84 @@ async generateOutline(project: {
     });
 
     return result.content;
+  }
+
+  async generatePipelineChaptersBatch(
+    chapters: Array<{ index: number; title: string; outline: string }>,
+    outline: string,
+    step3Config: { writingStyle: string; storyLength: string; customRules: string },
+  ): Promise<Array<{ index: number; title: string; content: string }>> {
+    const outlineSummary = this.extractOutlineSummary(outline, 0, 2000);
+
+    this.sessionPrefix = `【全书大纲摘要（固定参考）】\n${outlineSummary}`;
+
+    const chaptersOutline = chapters.map(ch =>
+      `### 第${ch.index + 1}章：${ch.title}\n${ch.outline}`
+    ).join('\n\n');
+
+    const userMessage = await this.composer!.renderTemplate('chapter-batch-generate', {
+      outlineSummary,
+      chaptersOutline,
+      writingStyle: step3Config.writingStyle,
+      storyLength: step3Config.storyLength,
+      customRules: step3Config.customRules,
+    });
+
+    const result = await this.generate('CHAPTER_WRITING', userMessage, {
+      novelType: '',
+      protagonistTypes: [],
+      plotTypes: [],
+      coreIdea: `批量撰写${chapters.length}章正文`,
+    });
+
+    return this.parseBatchChapters(result.content, chapters);
+  }
+
+  private parseBatchChapters(
+    rawContent: string,
+    chapters: Array<{ index: number; title: string; outline: string }>,
+  ): Array<{ index: number; title: string; content: string }> {
+    const results: Array<{ index: number; title: string; content: string }> = [];
+
+    const chapterPattern = /---第(\d+)章---\s*([\s\S]*?)===第\1章结束===/g;
+    let match: RegExpExecArray | null;
+
+    while ((match = chapterPattern.exec(rawContent)) !== null) {
+      const chNum = parseInt(match[1], 10);
+      const content = match[2].trim();
+      const chapterInfo = chapters.find(ch => ch.index + 1 === chNum);
+      if (chapterInfo && content) {
+        results.push({
+          index: chapterInfo.index,
+          title: chapterInfo.title,
+          content,
+        });
+      }
+    }
+
+    if (results.length === 0) {
+      const sections = rawContent.split(/---第\d+章---/).filter(s => s.trim());
+      for (let i = 0; i < sections.length && i < chapters.length; i++) {
+        const content = sections[i].replace(/===第\d+章结束===/g, '').trim();
+        if (content) {
+          results.push({
+            index: chapters[i].index,
+            title: chapters[i].title,
+            content,
+          });
+        }
+      }
+    }
+
+    if (results.length === 0 && rawContent.trim()) {
+      results.push({
+        index: chapters[0].index,
+        title: chapters[0].title,
+        content: rawContent.trim(),
+      });
+    }
+
+    return results;
   }
 }
 
