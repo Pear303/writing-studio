@@ -1,6 +1,8 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Plus, Edit, Trash2, Download, FolderPlus, FilePlus, ArrowRight, ArrowUp, ArrowDown, FileText, Clock, ArrowLeft, X, Move, ChevronRight, ChevronDown, BookOpen, Folder, FolderOpen, Hash } from 'lucide-react';
-import { TreeNode } from './TreeNode';
+import { DndContext, DragOverlay, closestCenter, PointerSensor, useSensor, useSensors, type DragStartEvent, type DragOverEvent, type DragEndEvent } from '@dnd-kit/core';
+import { SortableContext, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
+import { TreeNode, DragPreview, type DropPosition } from './TreeNode';
 import { ContextMenu, type MenuItem } from '../ContextMenu';
 import { VersionHistory } from '../VersionHistory';
 import { Toast, type ToastType } from '../Toast';
@@ -18,6 +20,72 @@ interface BookOutlineTreeProps {
   activeChapterId?: string | null;
   refreshTrigger?: number;
 }
+
+interface SortableTreeNodeProps {
+  id: string;
+  type: 'volume' | 'chapter';
+  data: Volume | Chapter;
+  level: number;
+  isExpanded?: boolean;
+  isActive?: boolean;
+  onToggle?: () => void;
+  onClick?: () => void;
+  onContextMenu?: (e: React.MouseEvent) => void;
+  hasChildren?: boolean;
+  isLast?: boolean;
+  displayTitle?: string;
+  dropTarget?: { id: string; type: 'volume' | 'chapter'; position: DropPosition } | null;
+}
+
+const SortableTreeNode: React.FC<SortableTreeNodeProps> = ({
+  id,
+  type,
+  data,
+  level,
+  isExpanded,
+  isActive,
+  onToggle,
+  onClick,
+  onContextMenu,
+  hasChildren,
+  isLast,
+  displayTitle,
+  dropTarget,
+}) => {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    isDragging,
+  } = useSortable({
+    id,
+    data: { type },
+  });
+
+  const isDropTarget = dropTarget?.id === id;
+  const dropPosition = isDropTarget ? dropTarget.position : null;
+
+  return (
+    <TreeNode
+      ref={setNodeRef}
+      type={type}
+      data={data}
+      level={level}
+      isExpanded={isExpanded}
+      isActive={isActive}
+      onToggle={onToggle}
+      onClick={onClick}
+      onContextMenu={onContextMenu}
+      hasChildren={hasChildren}
+      isLast={isLast}
+      displayTitle={displayTitle}
+      isDragging={isDragging}
+      dragHandleProps={{ ...listeners, ...attributes }}
+      dropPosition={dropPosition}
+      isDropTarget={isDropTarget}
+    />
+  );
+};
 
 export const BookOutlineTree = ({ book, onChapterSelect, onBookDeselect, onVolumeChange, activeChapterId, refreshTrigger }: BookOutlineTreeProps) => {
   const [volumes, setVolumes] = useState<Volume[]>([]);
@@ -37,6 +105,13 @@ export const BookOutlineTree = ({ book, onChapterSelect, onBookDeselect, onVolum
     type: 'volume' | 'chapter';
     id: string;
   } | null>(null);
+  const [dropTarget, setDropTarget] = useState<{
+    id: string;
+    type: 'volume' | 'chapter';
+    position: DropPosition;
+  } | null>(null);
+  const dragMouseYRef = useRef<number | null>(null);
+  const currentOverRef = useRef<{ id: string; type: 'volume' | 'chapter'; rect: { top: number; height: number } } | null>(null);
   const [showVersionHistory, setShowVersionHistory] = useState<string | null>(null);
   const [toast, setToast] = useState<{ message: string; type: ToastType } | null>(null);
   
@@ -186,7 +261,7 @@ export const BookOutlineTree = ({ book, onChapterSelect, onBookDeselect, onVolum
   const getVolumeChapters = (volumeId: string) => {
     return chapters
       .filter((c) => c.volumeId === volumeId)
-      .sort((a, b) => a.createdAt - b.createdAt);
+      .sort((a, b) => a.order - b.order);
   };
 
   // 获取根卷（没有父卷的卷）
@@ -199,7 +274,6 @@ export const BookOutlineTree = ({ book, onChapterSelect, onBookDeselect, onVolum
     return volumes.filter(v => v.parentId === parentId);
   };
 
-  // 递归渲染卷和章节
   const renderVolumeTree = (volume: Volume, level: number = 0, isLast: boolean = false) => {
     const childVolumes = getChildVolumes(volume.id);
     const volumeChapters = getVolumeChapters(volume.id);
@@ -207,7 +281,8 @@ export const BookOutlineTree = ({ book, onChapterSelect, onBookDeselect, onVolum
 
     return (
       <div key={volume.id}>
-        <TreeNode
+        <SortableTreeNode
+          id={volume.id}
           type="volume"
           data={volume}
           level={level}
@@ -216,14 +291,11 @@ export const BookOutlineTree = ({ book, onChapterSelect, onBookDeselect, onVolum
           isLast={isLast}
           onToggle={() => toggleVolume(volume.id)}
           onContextMenu={(e) => handleContextMenu(e, 'volume', volume)}
-          onDrop={(e) => handleDrop(e, 'volume', volume.id)}
-          onDragOver={handleDragOver}
+          dropTarget={dropTarget}
         />
 
-        {/* 展开时显示子卷和章节 */}
         {expandedVolumes.has(volume.id) && (
           <>
-            {/* 递归渲染子卷 */}
             {childVolumes.map((childVolume, index) => 
               renderVolumeTree(
                 childVolume, 
@@ -232,10 +304,10 @@ export const BookOutlineTree = ({ book, onChapterSelect, onBookDeselect, onVolum
               )
             )}
             
-            {/* 渲染当前卷的章节 */}
             {volumeChapters.map((chapter, index) => (
-              <TreeNode
+              <SortableTreeNode
                 key={chapter.id}
+                id={chapter.id}
                 type="chapter"
                 data={chapter}
                 level={level + 1}
@@ -243,9 +315,8 @@ export const BookOutlineTree = ({ book, onChapterSelect, onBookDeselect, onVolum
                 isLast={index === volumeChapters.length - 1}
                 onClick={() => onChapterSelect(chapter)}
                 onContextMenu={(e) => handleContextMenu(e, 'chapter', chapter)}
-                onDragStart={(e) => handleDragStart(e, 'chapter', chapter.id)}
-                onDragEnd={handleDragEnd}
                 displayTitle={computeChapterDisplayTitle(chapter, chapters, { ...book, autoNumbering, numberingFormat, numberingScope })}
+                dropTarget={dropTarget}
               />
             ))}
           </>
@@ -303,14 +374,22 @@ export const BookOutlineTree = ({ book, onChapterSelect, onBookDeselect, onVolum
     const title = prompt('请输入章节标题:');
     if (!title) return;
 
-    let insertOrder = Date.now();
-    
-    // 如果指定了位置，计算插入顺序
+    const siblings = chapters.filter(c => c.volumeId === volumeId).sort((a, b) => a.order - b.order);
+    let insertOrder = siblings.length;
+
     if (position && referenceChapterId) {
-      const refChapter = chapters.find(c => c.id === referenceChapterId);
-      if (refChapter) {
-        // 简单的顺序计算：before则减1，after则加1
-        insertOrder = position === 'before' ? refChapter.createdAt - 1 : refChapter.createdAt + 1;
+      const refIndex = siblings.findIndex(c => c.id === referenceChapterId);
+      if (refIndex !== -1) {
+        if (position === 'before') {
+          insertOrder = siblings[refIndex].order;
+        } else {
+          insertOrder = siblings[refIndex].order + 1;
+        }
+        for (let i = 0; i < siblings.length; i++) {
+          if (siblings[i].order >= insertOrder && siblings[i].id !== referenceChapterId) {
+            await db.chapters.update(siblings[i].id, { order: siblings[i].order + 1 });
+          }
+        }
       }
     }
 
@@ -321,7 +400,8 @@ export const BookOutlineTree = ({ book, onChapterSelect, onBookDeselect, onVolum
       title,
       content: '',
       wordCount: 0,
-      createdAt: insertOrder,
+      order: insertOrder,
+      createdAt: Date.now(),
       updatedAt: Date.now(),
     };
 
@@ -632,7 +712,7 @@ export const BookOutlineTree = ({ book, onChapterSelect, onBookDeselect, onVolum
   const handleReorderChapter = async (chapter: Chapter) => {
     const siblings = chapters
       .filter(c => c.volumeId === chapter.volumeId && c.bookId === chapter.bookId)
-      .sort((a, b) => a.createdAt - b.createdAt)
+      .sort((a, b) => a.order - b.order)
       .map(c => ({ id: c.id, name: c.title }));
     const parentName = chapter.volumeId
       ? volumes.find(v => v.id === chapter.volumeId)?.name || '当前卷'
@@ -673,11 +753,9 @@ export const BookOutlineTree = ({ book, onChapterSelect, onBookDeselect, onVolum
     if (!reorderModal) return;
     try {
       if (reorderModal.type === 'chapter') {
-        // 根据新顺序更新时间戳
-        const baseTime = Date.now();
         for (let i = 0; i < reorderModal.items.length; i++) {
           await db.chapters.update(reorderModal.items[i].id, {
-            createdAt: baseTime + i,
+            order: i,
             updatedAt: Date.now(),
           });
         }
@@ -733,53 +811,14 @@ export const BookOutlineTree = ({ book, onChapterSelect, onBookDeselect, onVolum
     // TODO: 通过回调通知 App.tsx 更新编辑器
   };
 
-  // 拖拽开始
-  const handleDragStart = (e: React.DragEvent, type: 'volume' | 'chapter', id: string) => {
-    setDraggedItem({ type, id });
-    e.dataTransfer.effectAllowed = 'move';
-  };
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 5,
+      },
+    })
+  );
 
-  // 拖拽结束
-  const handleDragEnd = () => {
-    setDraggedItem(null);
-  };
-
-  // 放置处理
-  const handleDrop = async (e: React.DragEvent, targetType: 'volume' | 'chapter', targetId: string) => {
-    e.preventDefault();
-    
-    if (!draggedItem) return;
-
-    try {
-      // 章节拖拽到卷
-      if (draggedItem.type === 'chapter' && targetType === 'volume') {
-        const chapter = chapters.find(c => c.id === draggedItem.id);
-        const volume = volumes.find(v => v.id === targetId);
-        
-        if (chapter && volume && chapter.volumeId !== targetId) {
-          await db.chapters.update(chapter.id, {
-            volumeId: targetId,
-          });
-          
-          loadData();
-          showToast(`已将章节 "${chapter.title}" 移动到卷 "${volume.name}"`, 'success');
-        }
-      }
-      
-      setDraggedItem(null);
-    } catch (error) {
-      console.error('拖拽失败:', error);
-      showToast('移动失败，请重试', 'error');
-    }
-  };
-
-  // 允许放置
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
-  };
-
-  // 获取某个卷的所有后代卷 ID（含自身）
   const getDescendantVolumeIds = (volumeId: string, allVolumes: Volume[]): Set<string> => {
     const result = new Set<string>([volumeId]);
     const children = allVolumes.filter(v => v.parentId === volumeId);
@@ -789,6 +828,247 @@ export const BookOutlineTree = ({ book, onChapterSelect, onBookDeselect, onVolum
     }
     return result;
   };
+
+  const computeDropPosition = (overRect: { top: number; height: number }, clientY: number): DropPosition => {
+    const midY = overRect.top + overRect.height / 2;
+    const threshold = overRect.height * 0.25;
+    if (clientY < midY - threshold) return 'before';
+    if (clientY > midY + threshold) return 'after';
+    return 'inside';
+  };
+
+  const handleDndDragStart = (event: DragStartEvent) => {
+    const { active } = event;
+    const data = active.data.current;
+    if (data) {
+      setDraggedItem({ type: data.type, id: active.id as string });
+    }
+  };
+
+  const handleDndDragOver = (event: DragOverEvent) => {
+    const { over } = event;
+    if (!over || !draggedItem) {
+      currentOverRef.current = null;
+      setDropTarget(null);
+      return;
+    }
+
+    const overData = over.data.current;
+    if (!overData) {
+      currentOverRef.current = null;
+      setDropTarget(null);
+      return;
+    }
+
+    if (draggedItem.type === 'volume' && overData.type === 'chapter') {
+      currentOverRef.current = null;
+      setDropTarget(null);
+      return;
+    }
+
+    if (draggedItem.id === over.id as string) {
+      currentOverRef.current = null;
+      setDropTarget(null);
+      return;
+    }
+
+    if (draggedItem.type === 'volume' && overData.type === 'volume') {
+      const descendants = getDescendantVolumeIds(draggedItem.id, volumes);
+      if (descendants.has(over.id as string)) {
+        currentOverRef.current = null;
+        setDropTarget(null);
+        return;
+      }
+    }
+
+    currentOverRef.current = {
+      id: over.id as string,
+      type: overData.type,
+      rect: { top: over.rect.top, height: over.rect.height },
+    };
+
+    const clientY = dragMouseYRef.current ?? over.rect.top + over.rect.height / 2;
+    const position = computeDropPosition(over.rect, clientY);
+
+    setDropTarget({
+      id: over.id as string,
+      type: overData.type,
+      position,
+    });
+  };
+
+  const handleDndDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event;
+
+    if (!over || !draggedItem) {
+      setDraggedItem(null);
+      setDropTarget(null);
+      return;
+    }
+
+    const overData = over.data.current;
+    if (!overData) {
+      setDraggedItem(null);
+      setDropTarget(null);
+      return;
+    }
+
+    if (draggedItem.id === over.id as string) {
+      setDraggedItem(null);
+      setDropTarget(null);
+      return;
+    }
+
+    try {
+      if (draggedItem.type === 'chapter') {
+        const chapter = chapters.find(c => c.id === draggedItem.id);
+        if (!chapter) return;
+
+        if (overData.type === 'volume') {
+          const targetVolume = volumes.find(v => v.id === over.id as string);
+          if (!targetVolume) return;
+
+          if (dropTarget?.position === 'inside') {
+            const targetSiblings = chapters.filter(c => c.volumeId === targetVolume.id).sort((a, b) => a.order - b.order);
+            const newOrder = targetSiblings.length > 0 ? targetSiblings[targetSiblings.length - 1].order + 1 : 0;
+            await db.chapters.update(chapter.id, {
+              volumeId: targetVolume.id,
+              order: newOrder,
+              updatedAt: Date.now(),
+            });
+          } else {
+            const position = dropTarget?.position || 'after';
+            const targetSiblings = chapters.filter(c => c.volumeId === targetVolume.id).sort((a, b) => a.order - b.order);
+            const targetIndex = targetSiblings.findIndex(c => c.id === over.id as string);
+            let newOrder: number;
+            if (targetIndex === -1) {
+              newOrder = targetSiblings.length;
+            } else {
+              newOrder = position === 'before' ? targetSiblings[targetIndex].order : targetSiblings[targetIndex].order + 1;
+              for (let i = 0; i < targetSiblings.length; i++) {
+                if (targetSiblings[i].order >= newOrder && targetSiblings[i].id !== chapter.id) {
+                  await db.chapters.update(targetSiblings[i].id, { order: targetSiblings[i].order + 1 });
+                }
+              }
+            }
+            await db.chapters.update(chapter.id, {
+              volumeId: targetVolume.id,
+              order: newOrder,
+              updatedAt: Date.now(),
+            });
+          }
+          showToast(`章节已移动到卷「${targetVolume.name}」`, 'success');
+        } else if (overData.type === 'chapter') {
+          const targetChapter = chapters.find(c => c.id === over.id as string);
+          if (!targetChapter) return;
+
+          const targetVolumeId = targetChapter.volumeId;
+          const position = dropTarget?.position || 'after';
+          const targetSiblings = chapters.filter(c => c.volumeId === targetVolumeId).sort((a, b) => a.order - b.order);
+          const targetIndex = targetSiblings.findIndex(c => c.id === over.id as string);
+          let newOrder: number;
+          if (targetIndex === -1) {
+            newOrder = targetSiblings.length;
+          } else {
+            newOrder = position === 'before' ? targetSiblings[targetIndex].order : targetSiblings[targetIndex].order + 1;
+            for (let i = 0; i < targetSiblings.length; i++) {
+              if (targetSiblings[i].order >= newOrder && targetSiblings[i].id !== chapter.id) {
+                await db.chapters.update(targetSiblings[i].id, { order: targetSiblings[i].order + 1 });
+              }
+            }
+          }
+          await db.chapters.update(chapter.id, {
+            volumeId: targetVolumeId,
+            order: newOrder,
+            updatedAt: Date.now(),
+          });
+          showToast('章节位置已更新', 'success');
+        }
+      } else if (draggedItem.type === 'volume') {
+        const volume = volumes.find(v => v.id === draggedItem.id);
+        if (!volume) return;
+
+        if (overData.type === 'chapter') {
+          showToast('卷不能放到章节内', 'error');
+        } else if (overData.type === 'volume') {
+          const targetVolume = volumes.find(v => v.id === over.id as string);
+          if (!targetVolume) return;
+
+          const descendants = getDescendantVolumeIds(volume.id, volumes);
+          if (descendants.has(targetVolume.id)) {
+            showToast('不能将卷移动到自身或其后代卷内', 'error');
+          } else {
+            const position = dropTarget?.position || 'after';
+
+            if (position === 'inside') {
+              const targetChildren = volumes.filter(v => v.parentId === targetVolume.id).sort((a, b) => a.order - b.order);
+              const newOrder = targetChildren.length > 0 ? targetChildren[targetChildren.length - 1].order + 1 : 0;
+              await db.volumes.update(volume.id, {
+                parentId: targetVolume.id,
+                order: newOrder,
+              });
+              showToast(`卷已移动到「${targetVolume.name}」下`, 'success');
+            } else {
+              const newParentId = targetVolume.parentId;
+              const siblings = volumes.filter(v => v.parentId === newParentId).sort((a, b) => a.order - b.order);
+              const targetIndex = siblings.findIndex(v => v.id === over.id as string);
+              let newOrder: number;
+              if (targetIndex === -1) {
+                newOrder = siblings.length;
+              } else {
+                newOrder = position === 'before' ? siblings[targetIndex].order : siblings[targetIndex].order + 1;
+                for (let i = 0; i < siblings.length; i++) {
+                  if (siblings[i].order >= newOrder && siblings[i].id !== volume.id) {
+                    await db.volumes.update(siblings[i].id, { order: siblings[i].order + 1 });
+                  }
+                }
+              }
+              await db.volumes.update(volume.id, {
+                parentId: newParentId,
+                order: newOrder,
+              });
+              showToast('卷位置已更新', 'success');
+            }
+          }
+        }
+      }
+
+      loadData();
+      onVolumeChange?.();
+    } catch (error) {
+      console.error('拖拽操作失败:', error);
+      showToast('移动失败，请重试', 'error');
+    } finally {
+      setDraggedItem(null);
+      setDropTarget(null);
+      dragMouseYRef.current = null;
+      currentOverRef.current = null;
+    }
+  };
+
+  const handleDndDragCancel = () => {
+    setDraggedItem(null);
+    setDropTarget(null);
+    dragMouseYRef.current = null;
+    currentOverRef.current = null;
+  };
+
+  useEffect(() => {
+    if (!draggedItem) return;
+    const handleMouseMove = (e: MouseEvent) => {
+      dragMouseYRef.current = e.clientY;
+      const over = currentOverRef.current;
+      if (over) {
+        const position = computeDropPosition(over.rect, e.clientY);
+        setDropTarget(prev => {
+          if (prev && prev.id === over.id && prev.position === position) return prev;
+          return { id: over.id, type: over.type, position };
+        });
+      }
+    };
+    window.addEventListener('mousemove', handleMouseMove);
+    return () => window.removeEventListener('mousemove', handleMouseMove);
+  }, [draggedItem]);
 
   // 递归渲染卷树节点（用于移动到模态框）
   const renderVolumeTreeNodes = (
@@ -1004,46 +1284,78 @@ export const BookOutlineTree = ({ book, onChapterSelect, onBookDeselect, onVolum
       )}
 
       {/* 树形列表 - 左右添加 padding */}
-      <div className="flex-1 overflow-auto py-2 px-2">
-        {/* 草稿箱 */}
-        {draftChapters.length > 0 && (
-          <div className="mb-2">
-            <div
-              className="px-3 py-1.5 text-xs font-semibold text-vscode-text opacity-60 uppercase tracking-wider"
-              onContextMenu={(e) => handleContextMenu(e, 'book')}
-            >
-              草稿箱
-            </div>
-            {draftChapters.map((chapter) => (
-              <TreeNode
-                key={chapter.id}
-                type="chapter"
-                data={chapter}
-                level={1}
-                isActive={activeChapterId === chapter.id}
-                onClick={() => onChapterSelect(chapter)}
-                onContextMenu={(e) => handleContextMenu(e, 'chapter', chapter)}
-                onDragStart={(e) => handleDragStart(e, 'chapter', chapter.id)}
-                onDragEnd={handleDragEnd}
-                displayTitle={computeChapterDisplayTitle(chapter, chapters, { ...book, autoNumbering, numberingFormat, numberingScope })}
-              />
-            ))}
-          </div>
-        )}
+      <DndContext
+        sensors={sensors}
+        collisionDetection={closestCenter}
+        onDragStart={handleDndDragStart}
+        onDragOver={handleDndDragOver}
+        onDragEnd={handleDndDragEnd}
+        onDragCancel={handleDndDragCancel}
+      >
+        <SortableContext
+          items={[...volumes.map(v => v.id), ...chapters.map(c => c.id)]}
+          strategy={verticalListSortingStrategy}
+        >
+          <div className="flex-1 overflow-auto py-2 px-2">
+            {draftChapters.length > 0 && (
+              <div className="mb-2">
+                <div
+                  className="px-3 py-1.5 text-xs font-semibold text-vscode-text opacity-60 uppercase tracking-wider"
+                  onContextMenu={(e) => handleContextMenu(e, 'book')}
+                >
+                  草稿箱
+                </div>
+                {draftChapters.map((chapter) => (
+                  <SortableTreeNode
+                    key={chapter.id}
+                    id={chapter.id}
+                    type="chapter"
+                    data={chapter}
+                    level={1}
+                    isActive={activeChapterId === chapter.id}
+                    onClick={() => onChapterSelect(chapter)}
+                    onContextMenu={(e) => handleContextMenu(e, 'chapter', chapter)}
+                    displayTitle={computeChapterDisplayTitle(chapter, chapters, { ...book, autoNumbering, numberingFormat, numberingScope })}
+                    dropTarget={dropTarget}
+                  />
+                ))}
+              </div>
+            )}
 
-        {/* 卷和章节 - 使用递归渲染 */}
-        {getRootVolumes().map((volume, index, array) => 
-          renderVolumeTree(volume, 0, index === array.length - 1)
-        )}
+            {getRootVolumes().map((volume, index, array) => 
+              renderVolumeTree(volume, 0, index === array.length - 1)
+            )}
 
-        {/* 空状态提示 */}
-        {volumes.length === 0 && draftChapters.length === 0 && (
-          <div className="flex flex-col items-center justify-center h-64 text-vscode-text opacity-60 px-4 text-center">
-            <p className="text-sm mb-2">暂无章节</p>
-            <p className="text-xs">点击顶部按钮新建卷或章节</p>
+            {volumes.length === 0 && draftChapters.length === 0 && (
+              <div className="flex flex-col items-center justify-center h-64 text-vscode-text opacity-60 px-4 text-center">
+                <p className="text-sm mb-2">暂无章节</p>
+                <p className="text-xs">点击顶部按钮新建卷或章节</p>
+              </div>
+            )}
           </div>
-        )}
-      </div>
+        </SortableContext>
+
+        <DragOverlay dropAnimation={null}>
+          {draggedItem ? (
+            <DragPreview
+              type={draggedItem.type}
+              data={
+                draggedItem.type === 'volume'
+                  ? volumes.find(v => v.id === draggedItem.id)!
+                  : chapters.find(c => c.id === draggedItem.id)!
+              }
+              displayTitle={
+                draggedItem.type === 'volume'
+                  ? volumes.find(v => v.id === draggedItem.id)?.name
+                  : (() => {
+                      const ch = chapters.find(c => c.id === draggedItem.id);
+                      return ch ? computeChapterDisplayTitle(ch, chapters, { ...book, autoNumbering, numberingFormat, numberingScope }) : undefined;
+                    })()
+              }
+            />
+          ) : null}
+        </DragOverlay>
+      </DndContext>
 
       {/* 右键菜单 */}
       {contextMenu && (

@@ -1056,6 +1056,7 @@ ${chapterContents}
         content: contentHtml,
         wordCount,
         detailedOutline: detailedOutline || undefined,
+        order: existingChapters,
         createdAt: Date.now(),
         updatedAt: Date.now(),
       });

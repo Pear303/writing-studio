@@ -46,13 +46,14 @@ export interface Volume {
 // 章节相关类型
 export interface Chapter {
   id: string;
-  volumeId: string | null; // null 表示未归入任何卷（草稿箱）
+  volumeId: string | null;
   bookId: string;
   title: string;
-  content: string; // 纯文本或HTML或Markdown源码
+  content: string;
   wordCount: number;
-  detailedOutline?: string; // 细纲内容（纯文本）
-  autoNumberExcluded?: boolean;  // 是否排除自动章节序号
+  detailedOutline?: string;
+  autoNumberExcluded?: boolean;
+  order: number;
   createdAt: number;
   updatedAt: number;
 }

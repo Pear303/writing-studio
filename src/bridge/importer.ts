@@ -132,6 +132,7 @@ async function executeNewChapter(action: PendingNewChapter): Promise<void> {
     content: contentHtml,
     wordCount,
     detailedOutline: action.detailedOutline,
+    order: 0,
     createdAt: Date.now(),
     updatedAt: Date.now(),
   };

@@ -87,7 +87,7 @@ export const VolumeTree = ({ book, onVolumeSelect, onChapterSelect, activeVolume
   const getRootVolumes = () => volumes.filter(v => !v.parentId);
   const getChildVolumes = (parentId: string) => volumes.filter(v => v.parentId === parentId);
   const getVolumeChapters = (volumeId: string) =>
-    chapters.filter(c => c.volumeId === volumeId).sort((a, b) => a.createdAt - b.createdAt);
+    chapters.filter(c => c.volumeId === volumeId).sort((a, b) => a.order - b.order);
 
   const handleVolumeContextMenu = (e: React.MouseEvent, volume: Volume) => {
     e.preventDefault();
