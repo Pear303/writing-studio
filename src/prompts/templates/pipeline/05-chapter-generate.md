@@ -6,15 +6,15 @@
 
 # 上下文信息
 
-## 全书大纲概览
-{{outline}}
+## 全书大纲摘要
+{{outlineSummary}}
 
 ## 当前章节细纲
 第{{chapterIndex}}章：{{chapterTitle}}
 {{chapterOutline}}
 
 {{#if previousChapterContent}}
-## 上一章正文（用于衔接）
+## 上一章结尾（用于衔接）
 {{previousChapterContent}}
 {{/if}}
 
@@ -31,8 +31,10 @@
 自定义规则：{{customRules}}
 {{/if}}
 
-# 输出要求
+# ⚡ 输出要求
 1. 紧扣细纲内容展开，不遗漏关键情节点
 2. 与上一章自然衔接（如有）
 3. 章末设置悬念钩子
 4. 只输出正文内容，不要输出章节标题和额外说明
+5. 正文使用纯文本格式，不要使用 Markdown 标记（如 # 标题、**加粗、*斜体等）
+6. 避免冗余和重复描写，保持紧凑流畅

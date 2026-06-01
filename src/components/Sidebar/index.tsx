@@ -44,6 +44,7 @@ interface SidebarProps {
   onPipelinePreviewInEditor?: (title: string, content: string, onChange: (content: string) => void) => void;
   onPipelineGenerateChapter?: (chapterIndex: number) => Promise<string>;
   onPipelineRefineChapter?: (step5State: PipelineStep5State, chapterIndex: number, round: ChapterDraftRound) => Promise<string>;
+  onPipelineBatchGenerateChapters?: (chapters: Array<{ index: number; title: string; outline: string }>) => Promise<Array<{ index: number; title: string; content: string }>>;
   onPipelineAddChapterToVolume?: (title: string, content: string, detailedOutline?: string) => void;
   showToast?: (message: string, type: 'info' | 'success' | 'error' | 'warning') => void;
   agentState?: AgentState;
@@ -52,6 +53,10 @@ interface SidebarProps {
   onAgentClearMessages?: () => void;
   onAgentCheckConnection?: () => void;
   onAgentUpdateApiUrl?: (url: string) => void;
+  onAgentLoadSessions?: () => void;
+  onAgentCreateSession?: (title?: string) => void;
+  onAgentSwitchSession?: (sessionId: string) => void;
+  onAgentDeleteSession?: (sessionId: string) => void;
   agentApiUrl?: string;
   vibePipelineState?: PipelineAutoState | null;
   vibeLoading?: boolean;
@@ -91,6 +96,7 @@ export const Sidebar = ({
   onPipelinePreviewInEditor,
   onPipelineGenerateChapter,
   onPipelineRefineChapter,
+  onPipelineBatchGenerateChapters,
   onPipelineAddChapterToVolume,
   showToast,
   agentState,
@@ -99,6 +105,10 @@ export const Sidebar = ({
   onAgentClearMessages,
   onAgentCheckConnection,
   onAgentUpdateApiUrl,
+  onAgentLoadSessions,
+  onAgentCreateSession,
+  onAgentSwitchSession,
+  onAgentDeleteSession,
   agentApiUrl,
   vibePipelineState,
   vibeLoading,
@@ -201,6 +211,10 @@ export const Sidebar = ({
                 onClearMessages={onAgentClearMessages || (() => {})}
                 onCheckConnection={onAgentCheckConnection || (() => {})}
                 onUpdateApiUrl={onAgentUpdateApiUrl || (() => {})}
+                onLoadSessions={onAgentLoadSessions || (() => {})}
+                onCreateSession={onAgentCreateSession || (() => {})}
+                onSwitchSession={onAgentSwitchSession || (() => {})}
+                onDeleteSession={onAgentDeleteSession || (() => {})}
                 apiUrl={agentApiUrl || 'http://localhost:8000'}
               />
             ) : (
@@ -227,6 +241,7 @@ export const Sidebar = ({
               onPipelineRefineDetailedOutlineChapter={onPipelineRefineDetailedOutlineChapter}
               onPipelineGenerateChapter={onPipelineGenerateChapter}
               onPipelineRefineChapter={onPipelineRefineChapter}
+              onPipelineBatchGenerateChapters={onPipelineBatchGenerateChapters}
               onPipelineAddChapterToVolume={onPipelineAddChapterToVolume}
               onPipelinePreviewInEditor={onPipelinePreviewInEditor}
               showToast={showToast}

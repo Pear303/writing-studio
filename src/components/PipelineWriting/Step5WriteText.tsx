@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Copy, Loader2, RefreshCw, Play, Pause, Check, ExternalLink, BookOpen } from 'lucide-react';
+import { Copy, Loader2, RefreshCw, Play, Pause, Check, ExternalLink, BookOpen, Zap } from 'lucide-react';
 import type { PipelineStep2State, PipelineStep4State, PipelineStep5State, PipelineStep3Config, ChapterDraft, ChapterDraftRound } from '../../types';
 
 interface Step5WriteTextProps {
@@ -10,6 +10,7 @@ interface Step5WriteTextProps {
   onStep5StateChange: (state: PipelineStep5State) => void;
   onGenerateChapter: (chapterIndex: number) => Promise<string>;
   onRefineChapter: (step5State: PipelineStep5State, chapterIndex: number, round: ChapterDraftRound) => Promise<string>;
+  onBatchGenerateChapters?: (chapters: Array<{ index: number; title: string; outline: string }>) => Promise<Array<{ index: number; title: string; content: string }>>;
   onAddChapterToVolume: (title: string, content: string, detailedOutline?: string) => void;
   onPreviewInEditor?: (title: string, content: string, onChange: (content: string) => void) => void;
 }
@@ -65,10 +66,12 @@ export const Step5WriteText: React.FC<Step5WriteTextProps> = ({
   onStep5StateChange,
   onGenerateChapter,
   onRefineChapter,
+  onBatchGenerateChapters,
   onAddChapterToVolume,
   onPreviewInEditor,
 }) => {
   const [isWorking, setIsWorking] = useState(false);
+  const [isBatchGenerating, setIsBatchGenerating] = useState(false);
   const [generatingIndex, setGeneratingIndex] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [copySuccess, setCopySuccess] = useState<string | null>(null);
@@ -282,6 +285,58 @@ export const Step5WriteText: React.FC<Step5WriteTextProps> = ({
     }
   };
 
+  const handleBatchGenerate = async () => {
+    if (!onBatchGenerateChapters || chapters.length === 0) return;
+    setIsBatchGenerating(true);
+    setIsWorking(true);
+    setError(null);
+
+    try {
+      const ungeneratedChapters = chapters
+        .map((ch, idx) => ({ index: idx, title: ch.title, outline: ch.content }))
+        .filter(ch => {
+          const draft = step5State?.chapters.find(d => d.index === ch.index);
+          return !draft?.content;
+        });
+
+      if (ungeneratedChapters.length === 0) {
+        setError('所有章节已生成，无需批量生成');
+        return;
+      }
+
+      const results = await onBatchGenerateChapters(ungeneratedChapters);
+      const state = ensureStep5State();
+      const newChapters = [...state.chapters];
+
+      for (const result of results) {
+        const existingIdx = newChapters.findIndex(ch => ch.index === result.index);
+        const newDraft: ChapterDraft = {
+          index: result.index,
+          title: result.title,
+          content: result.content,
+          rounds: [],
+        };
+        if (existingIdx >= 0) {
+          newChapters[existingIdx] = newDraft;
+        } else {
+          newChapters.push(newDraft);
+        }
+      }
+      newChapters.sort((a, b) => a.index - b.index);
+
+      onStep5StateChange({
+        ...state,
+        chapters: newChapters,
+        currentChapterIndex: results.length > 0 ? results[0].index : state.currentChapterIndex,
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '批量生成失败');
+    } finally {
+      setIsBatchGenerating(false);
+      setIsWorking(false);
+    }
+  };
+
   const handleDragStart = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
     setIsDragging(true);
@@ -340,6 +395,21 @@ export const Step5WriteText: React.FC<Step5WriteTextProps> = ({
             {autoMode ? <Pause size={12} /> : <Play size={12} />}
             {autoMode ? '停止自动' : '自动生成'}
           </button>
+          {onBatchGenerateChapters && (
+            <button
+              type="button"
+              style={{
+                ...btnStyle('primary'),
+                fontSize: '11px',
+                padding: '3px 8px',
+              }}
+              onClick={handleBatchGenerate}
+              disabled={isWorking || isBatchGenerating}
+            >
+              {isBatchGenerating ? <Loader2 size={12} style={{ animation: 'spin 1s linear infinite' }} /> : <Zap size={12} />}
+              {isBatchGenerating ? '批量生成中...' : '批量生成'}
+            </button>
+          )}
         </div>
 
         <div style={{ display: 'flex', gap: '2px', overflow: 'auto', paddingBottom: '4px' }}>

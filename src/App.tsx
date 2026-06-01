@@ -966,23 +966,13 @@ ${chapterContents}
       }
 
       const chapter = step4State.chapters[chapterIndex];
-      const previousChapterContent = chapterIndex > 0 && step4State.chapters[chapterIndex - 1]
-        ? null
-        : null;
+      let previousContent: string | null = null;
 
       const step5State = session?.step5State;
       if (step5State && chapterIndex > 0) {
         const prevDraft = step5State.chapters.find(ch => ch.index === chapterIndex - 1);
         if (prevDraft?.content) {
-          const result = await novelLLMService.generatePipelineChapter(
-            chapterIndex,
-            chapter.title,
-            chapter.content,
-            prevDraft.content,
-            step2State?.currentOutline || '',
-            step3Config || { writingStyle: '', storyLength: '', customRules: '' },
-          );
-          return result;
+          previousContent = prevDraft.content;
         }
       }
 
@@ -990,7 +980,7 @@ ${chapterContents}
         chapterIndex,
         chapter.title,
         chapter.content,
-        null,
+        previousContent,
         step2State?.currentOutline || '',
         step3Config || { writingStyle: '', storyLength: '', customRules: '' },
       );
@@ -1020,6 +1010,29 @@ ${chapterContents}
       return result;
     } catch (error) {
       console.error('流水线章节回炉重造失败:', error);
+      throw error;
+    }
+  };
+
+  const handlePipelineBatchGenerateChapters = async (
+    chapters: Array<{ index: number; title: string; outline: string }>,
+  ): Promise<Array<{ index: number; title: string; content: string }>> => {
+    try {
+      await initPipelineLLM();
+
+      const pipelineSessionId = `${currentBook?.id}_${currentOutlineVolume?.id}`;
+      const session = await db.pipelineSessions.get(pipelineSessionId);
+      const step2State = session?.step2State;
+      const step3Config = session?.step3Config;
+
+      const result = await novelLLMService.generatePipelineChaptersBatch(
+        chapters,
+        step2State?.currentOutline || '',
+        step3Config || { writingStyle: '', storyLength: '', customRules: '' },
+      );
+      return result;
+    } catch (error) {
+      console.error('流水线批量生成章节失败:', error);
       throw error;
     }
   };
@@ -1799,6 +1812,7 @@ ${chapterContents}
                     onPipelinePreviewInEditor={handlePipelinePreviewInEditor}
                     onPipelineGenerateChapter={handlePipelineGenerateChapter}
                     onPipelineRefineChapter={handlePipelineRefineChapter}
+                    onPipelineBatchGenerateChapters={handlePipelineBatchGenerateChapters}
                     onPipelineAddChapterToVolume={handlePipelineAddChapterToVolume}
                     showToast={showToast}
                     agentState={agent.state}
@@ -1807,6 +1821,10 @@ ${chapterContents}
                     onAgentClearMessages={agent.clearMessages}
                     onAgentCheckConnection={agent.checkConnection}
                     onAgentUpdateApiUrl={agent.updateApiUrl}
+                    onAgentLoadSessions={agent.loadSessions}
+                    onAgentCreateSession={agent.createSession}
+                    onAgentSwitchSession={agent.switchSession}
+                    onAgentDeleteSession={agent.deleteSession}
                     agentApiUrl={agent.apiUrl}
                     vibePipelineState={pipeline.state.pipeline}
                     vibeLoading={pipeline.state.loading}

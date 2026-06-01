@@ -748,6 +748,131 @@ onUnmounted(() => {
   margin-bottom: 0;
 }
 
+.message-content :deep(h1),
+.message-content :deep(h2),
+.message-content :deep(h3),
+.message-content :deep(h4),
+.message-content :deep(h5),
+.message-content :deep(h6) {
+  margin-top: var(--spacing-md);
+  margin-bottom: var(--spacing-sm);
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--text-primary);
+}
+
+.message-content :deep(h1) { font-size: 1.5em; }
+.message-content :deep(h2) { font-size: 1.3em; }
+.message-content :deep(h3) { font-size: 1.15em; }
+.message-content :deep(h4) { font-size: 1.05em; }
+.message-content :deep(h5) { font-size: 1em; }
+.message-content :deep(h6) { font-size: 0.95em; color: var(--text-secondary); }
+
+.message-content :deep(h1:first-child),
+.message-content :deep(h2:first-child),
+.message-content :deep(h3:first-child) {
+  margin-top: 0;
+}
+
+.message-content :deep(ul),
+.message-content :deep(ol) {
+  margin-bottom: var(--spacing-sm);
+  padding-left: 1.5em;
+}
+
+.message-content :deep(ul) {
+  list-style-type: disc;
+}
+
+.message-content :deep(ol) {
+  list-style-type: decimal;
+}
+
+.message-content :deep(li) {
+  margin-bottom: 4px;
+  line-height: 1.6;
+}
+
+.message-content :deep(li > ul),
+.message-content :deep(li > ol) {
+  margin-top: 4px;
+  margin-bottom: 4px;
+}
+
+.message-content :deep(strong) {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.message-content :deep(em) {
+  font-style: italic;
+}
+
+.message-content :deep(del) {
+  text-decoration: line-through;
+  color: var(--text-muted);
+}
+
+.message-content :deep(blockquote) {
+  margin: var(--spacing-sm) 0;
+  padding: var(--spacing-sm) var(--spacing-md);
+  border-left: 3px solid var(--accent-primary);
+  background: var(--bg-tertiary);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  color: var(--text-secondary);
+}
+
+.message-content :deep(blockquote p:last-child) {
+  margin-bottom: 0;
+}
+
+.message-content :deep(a) {
+  color: var(--accent-primary);
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+  transition: border-color 0.15s;
+}
+
+.message-content :deep(a:hover) {
+  border-bottom-color: var(--accent-primary);
+}
+
+.message-content :deep(hr) {
+  border: none;
+  border-top: 1px solid var(--border-color);
+  margin: var(--spacing-md) 0;
+}
+
+.message-content :deep(table) {
+  width: 100%;
+  border-collapse: collapse;
+  margin: var(--spacing-sm) 0;
+  font-size: 0.875em;
+}
+
+.message-content :deep(th),
+.message-content :deep(td) {
+  border: 1px solid var(--border-color);
+  padding: 6px 12px;
+  text-align: left;
+}
+
+.message-content :deep(th) {
+  background: var(--bg-tertiary);
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.message-content :deep(tr:nth-child(even) td) {
+  background: var(--bg-secondary);
+}
+
+.message-content :deep(img) {
+  max-width: 100%;
+  border-radius: var(--radius-md);
+  margin: var(--spacing-sm) 0;
+}
+
 .message-content :deep(code) {
   background: var(--bg-tertiary);
   padding: 2px 6px;
@@ -768,6 +893,11 @@ onUnmounted(() => {
 .message-content :deep(pre code) {
   background: none;
   padding: 0;
+}
+
+.message-content :deep(input[type="checkbox"]) {
+  margin-right: 6px;
+  vertical-align: middle;
 }
 
 .message-tokens {
