@@ -499,6 +499,15 @@ export interface AgentTokenUsage {
   total: number;
 }
 
+export interface AgentSession {
+  id: string;
+  title: string;
+  createdAt: string;
+  updatedAt: string;
+  turnCount: number;
+  firstUserMessage?: string;
+}
+
 export interface AgentState {
   connected: boolean;
   running: boolean;
@@ -508,6 +517,8 @@ export interface AgentState {
   activityLog: AgentActivityItem[];
   tokenUsage: AgentTokenUsage;
   error: string | null;
+  sessionId: string | null;
+  sessions: AgentSession[];
 }
 
 export interface AgentActivityItem {
