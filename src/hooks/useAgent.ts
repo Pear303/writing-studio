@@ -1,7 +1,7 @@
 import { useState, useCallback, useRef } from 'react';
 import type { AgentState, AgentMessage, AgentToolCall, AgentActivityItem, AgentTokenUsage, AgentConfig } from '../types';
 
-const DEFAULT_API_URL = 'http://localhost:8765';
+const DEFAULT_API_URL = 'http://localhost:8000';
 
 const initialState: AgentState = {
   connected: false,

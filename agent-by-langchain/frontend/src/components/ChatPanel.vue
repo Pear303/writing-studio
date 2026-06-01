@@ -57,10 +57,8 @@
           </div>
         </div>
         <div v-if="currentStreamContent" class="message assistant streaming">
-          <div class="message-content">
-            <span>{{ currentStreamContent }}</span>
-            <span class="cursor">|</span>
-          </div>
+          <div class="message-content" v-html="renderMarkdown(currentStreamContent)"></div>
+          <span class="cursor">|</span>
         </div>
       </div>
 
@@ -80,6 +78,32 @@
       <button @click="sendMessage" :disabled="isStreaming || !inputMessage.trim()">
         {{ isStreaming ? '处理中...' : '发送' }}
       </button>
+    </div>
+
+    <!-- 写作风格参考标签 -->
+    <div class="vibe-bar">
+      <div class="vibe-bar-header">
+        <span class="vibe-bar-title">写作风格参考</span>
+        <button class="vibe-add-btn" @click="showNewPrompt = true">+ 新增</button>
+      </div>
+      <div v-if="showNewPrompt" class="vibe-new-prompt">
+        <input v-model="newPromptName" placeholder="名称" />
+        <textarea v-model="newPromptContent" placeholder="描述该写作方向的要点..." rows="2"></textarea>
+        <div class="vp-actions">
+          <button @click="saveNewPrompt">保存</button>
+          <button @click="cancelNewPrompt">取消</button>
+        </div>
+      </div>
+      <div class="vibe-tags">
+        <button
+          v-for="p in vibePrompts"
+          :key="p.name"
+          :class="{ active: vibeActiveNames.includes(p.name) }"
+          @click="toggleVibePrompt(p.name)"
+        >
+          {{ p.name }}
+        </button>
+      </div>
     </div>
 
     <div v-if="tokenStats.total > 0" class="token-bar">
@@ -104,6 +128,20 @@ const todoCollapsed = ref(false)
 const currentStatus = ref('')
 const activityLog = ref([])
 let todoRefreshTimer = null
+
+// ── Vibe 写作风格参考 ──
+const DEFAULT_VIBE_PROMPTS = [
+  { name: '注重人物心理描写', content: '注重人物内心活动的刻画，通过心理活动推动情节发展，让读者能深入理解角色的情感变化和决策动机。' },
+  { name: '对话风格简洁明快', content: '对话要简洁自然，符合人物性格和身份，避免冗长的对白。用对话推进情节，每段对话都有明确的戏剧目的。' },
+  { name: '场景描写丰富细腻', content: '注重场景的感官描写（视觉、听觉、嗅觉、触觉），营造沉浸式的阅读体验。场景描写要为情节和情绪服务。' },
+  { name: '情节节奏紧凑', content: '控制叙事节奏，避免拖沓。适当运用悬念、转折和章节断点，保持读者的阅读张力。' },
+  { name: '注重世界观展现', content: '通过情节和对话自然地展现世界观设定，避免大段的说明性文字。让读者在故事中逐步发现世界的规则和秘密。' },
+]
+const vibePrompts = ref(DEFAULT_VIBE_PROMPTS)
+const vibeActiveNames = ref([])
+const showNewPrompt = ref(false)
+const newPromptName = ref('')
+const newPromptContent = ref('')
 
 const todoTotal = computed(() => todos.value.length)
 const todoCompleted = computed(() => todos.value.filter(t => t.status === 'completed').length)
@@ -134,7 +172,7 @@ function statusIcon(status) {
 }
 
 function renderMarkdown(text) {
-  return marked.parse(text || '')
+  return marked.parse(text || '', { breaks: true })
 }
 
 function formatNum(n) {
@@ -203,6 +241,70 @@ function generateSummary(events) {
 
   if (parts.length === 0) return ''
   return parts.join(' → ')
+}
+
+// ── Vibe 写作风格参考 ──
+async function loadVibeSettings() {
+  try {
+    const res = await fetch('/api/vibe-settings')
+    const data = await res.json()
+    vibePrompts.value = data.custom_prompts || []
+    vibeActiveNames.value = data.active_prompt_names || []
+  } catch (e) {
+    console.error('加载 vibe 提示词失败:', e)
+  }
+}
+
+async function saveVibeSettingsWith(overrides) {
+  try {
+    const res = await fetch('/api/vibe-settings')
+    const current = await res.json()
+    const merged = {
+      excluded_steps: current.excluded_steps || [],
+      custom_instructions: current.custom_instructions || '',
+      custom_prompts: current.custom_prompts || [],
+      active_prompt_names: current.active_prompt_names || [],
+      ...overrides,
+    }
+    await fetch('/api/vibe-settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(merged),
+    })
+  } catch (e) {
+    console.error('保存 vibe 设置失败:', e)
+  }
+}
+
+function toggleVibePrompt(name) {
+  const idx = vibeActiveNames.value.indexOf(name)
+  if (idx === -1) {
+    vibeActiveNames.value.push(name)
+  } else {
+    vibeActiveNames.value.splice(idx, 1)
+  }
+  saveVibeSettingsWith({ active_prompt_names: vibeActiveNames.value })
+}
+
+async function saveNewPrompt() {
+  const name = newPromptName.value.trim()
+  const content = newPromptContent.value.trim()
+  if (!name || !content) return
+  vibePrompts.value.push({ name, content })
+  vibeActiveNames.value.push(name)
+  newPromptName.value = ''
+  newPromptContent.value = ''
+  showNewPrompt.value = false
+  await saveVibeSettingsWith({
+    custom_prompts: vibePrompts.value,
+    active_prompt_names: vibeActiveNames.value,
+  })
+}
+
+function cancelNewPrompt() {
+  showNewPrompt.value = false
+  newPromptName.value = ''
+  newPromptContent.value = ''
 }
 
 async function sendMessage() {
@@ -373,6 +475,7 @@ async function sendMessage() {
 onMounted(() => {
   fetchTodo()
   fetchTokenStats()
+  loadVibeSettings()
   todoRefreshTimer = setInterval(fetchTodo, 1500)
 })
 
@@ -742,5 +845,209 @@ onUnmounted(() => {
 @keyframes blink {
   0%, 100% { opacity: 1; }
   50% { opacity: 0; }
+}
+
+/* ── Vibe 写作风格参考标签 ── */
+.vibe-bar {
+  border-top: 2px solid #e5e7eb;
+  padding: 8px 16px;
+  background: #f9fafb;
+  flex-shrink: 0;
+}
+
+.vibe-bar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+.vibe-bar-title {
+  font-size: 13px;
+  color: #374151;
+  font-weight: 600;
+}
+
+.vibe-add-btn {
+  background: none;
+  border: 1px solid #d1d5db;
+  color: #6b7280;
+  font-size: 12px;
+  cursor: pointer;
+  padding: 2px 10px;
+  border-radius: 4px;
+}
+
+.vibe-add-btn:hover {
+  background: #e5e7eb;
+}
+
+.vibe-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.vibe-tags button {
+  font-size: 12px;
+  padding: 3px 12px;
+  border-radius: 14px;
+  border: 1px solid #d1d5db;
+  background: #ffffff;
+  color: #6b7280;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+
+.vibe-tags button:hover {
+  border-color: #3b82f6;
+  color: #3b82f6;
+}
+
+.vibe-tags button.active {
+  background: #3b82f6;
+  color: #ffffff;
+  border-color: #3b82f6;
+}
+
+.vibe-new-prompt {
+  margin-bottom: 8px;
+  padding: 8px;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.vibe-new-prompt input,
+.vibe-new-prompt textarea {
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  padding: 6px 8px;
+  font-size: 13px;
+  outline: none;
+  font-family: inherit;
+}
+
+.vibe-new-prompt input:focus,
+.vibe-new-prompt textarea:focus {
+  border-color: #3b82f6;
+}
+
+.vp-actions {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.vp-actions button:first-child {
+  background: #3b82f6;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  padding: 4px 14px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.vp-actions button:first-child:hover {
+  background: #2563eb;
+}
+
+.vp-actions button:last-child {
+  background: none;
+  border: 1px solid #d1d5db;
+  color: #6b7280;
+  border-radius: 4px;
+  padding: 4px 14px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.vp-actions button:last-child:hover {
+  background: #f3f4f6;
+}
+
+/* ── 新增提示词表单 ── */
+.vibe-new-prompt {
+  margin-top: var(--spacing-sm);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: var(--spacing-sm);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+}
+
+.vp-input {
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  padding: 6px 8px;
+  font-size: 0.8125rem;
+  outline: none;
+  font-family: inherit;
+}
+
+.vp-input:focus {
+  border-color: var(--accent-primary);
+}
+
+.vp-textarea {
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  padding: 6px 8px;
+  font-size: 0.8125rem;
+  resize: vertical;
+  outline: none;
+  font-family: inherit;
+}
+
+.vp-textarea:focus {
+  border-color: var(--accent-primary);
+}
+
+.vp-actions {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.vp-save {
+  background: var(--accent-primary);
+  color: white;
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: 3px 12px;
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.vp-save:hover {
+  background: var(--accent-hover);
+}
+
+.vp-cancel {
+  background: none;
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  border-radius: var(--radius-sm);
+  padding: 3px 12px;
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.vp-cancel:hover {
+  border-color: var(--text-muted);
+  color: var(--text-primary);
 }
 </style>

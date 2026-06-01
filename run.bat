@@ -10,12 +10,10 @@ echo.
 set "ROOT=%~dp0"
 set "AGENT_DIR=%ROOT%agent-by-langchain"
 
-:: Start Agent backend in new window
 echo [1/2] Starting Agent Server (http://127.0.0.1:8000) ...
-start "Agent Server" cmd /u /c "cd /d %AGENT_DIR% && python agent.py --web --no-browser"
+start "Agent Server" cmd /u /c "cd /d %AGENT_DIR% && F:\conda_env\langchain_agent_env\python.exe agent.py --web --no-browser"
 timeout /t 3 /nobreak >nul
 
-:: Start Writing Studio
 echo [2/2] Starting Writing Studio (Tauri dev) ...
 cd /d "%ROOT%"
 call npm run tauri dev

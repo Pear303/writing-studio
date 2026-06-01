@@ -554,4 +554,27 @@ export interface PipelineIntervention {
   createdAt: number;
 }
 
-// 123
+// Vibe Writing 参考选项类型
+export interface VibePreset {
+  id: string;
+  userId: string;
+  name: string;        // 显示名称（标签文字）
+  content: string;     // 注入到提示词中的指令内容
+  enabled: boolean;    // 当前是否选中
+  builtIn: boolean;    // 是否为内置预设（不可删除）
+  order: number;
+  createdAt: number;
+  updatedAt: number;
+}
+
+// 默认内置预设列表
+export const DEFAULT_VIBE_PRESETS: Omit<VibePreset, 'id' | 'userId' | 'enabled' | 'createdAt' | 'updatedAt'>[] = [
+  { name: '不需要生成细纲', content: '注意：跳过细纲生成步骤，直接基于大纲生成正文。', builtIn: true, order: 0 },
+  { name: '不需要一致性检查', content: '注意：跳过输出后的一致性检查步骤。', builtIn: true, order: 1 },
+  { name: '不需要重试', content: '注意：出错时跳过重试，继续下一步。', builtIn: true, order: 2 },
+  { name: '精简模式', content: '注意：精简输出，避免冗余和重复的内容，保持简洁流畅。', builtIn: true, order: 3 },
+  { name: '侧重对话', content: '注意：优先保证对话描写的质量和数量，对话要生动自然。', builtIn: true, order: 4 },
+  { name: '侧重场景描写', content: '注意：加强场景和环境描写，让读者有身临其境之感。', builtIn: true, order: 5 },
+  { name: '注重文学性', content: '注意：使用更具文学性的语言，适当运用修辞手法，增强文字表现力。', builtIn: true, order: 6 },
+  { name: '注重可读性', content: '注意：语言简明易懂，句子不宜过长，段落结构清晰。', builtIn: true, order: 7 },
+];

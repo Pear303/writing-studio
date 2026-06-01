@@ -918,7 +918,9 @@ def dispatch_subagent(agent_type: str, task: str) -> str:
 
     print(f"\n[派遣子代理 · {agent_type}]: {task[:80]}")
 
-    # 构建回调列表：包含事件转发器，使子代理内部进度能实时推送到前端
+    from .writing_tools import clear_tool_cache
+    clear_tool_cache()
+
     callbacks = []
     if _chat_state_ref is not None:
         callbacks.append(_SubagentEventForwarder(agent_type))

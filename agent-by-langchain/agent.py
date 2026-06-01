@@ -35,6 +35,7 @@ def run_web(host="127.0.0.1", port=8000, open_browser=True):
     uvicorn.run(
         app, host=host, port=port, log_level="info",
         server_header=False,
+        access_log=False,
     )
 
 
