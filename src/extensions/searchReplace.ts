@@ -163,6 +163,9 @@ export const SearchReplaceExtension = Extension.create({
           if (currentIndex >= 0 && matches.length > 0) {
             editor.commands.setTextSelection(matches[0].from);
             editor.commands.scrollIntoView();
+            requestAnimationFrame(() => {
+              editor.view.focus();
+            });
           }
 
           return matches.length;
@@ -171,11 +174,16 @@ export const SearchReplaceExtension = Extension.create({
       nextSearchMatch:
         () =>
         ({ editor }: { editor: Editor }) => {
-          const { matches, currentIndex, searchTerm, caseSensitive } =
+          const { currentIndex, searchTerm, caseSensitive } =
             editor.storage.searchReplace;
+
+          const matches = findAllMatches(editor.state.doc, searchTerm, caseSensitive);
           if (matches.length === 0) return false;
 
-          const nextIndex = (currentIndex + 1) % matches.length;
+          const safeCurrentIndex = currentIndex >= 0 && currentIndex < matches.length ? currentIndex : 0;
+          const nextIndex = (safeCurrentIndex + 1) % matches.length;
+
+          editor.storage.searchReplace.matches = matches;
           editor.storage.searchReplace.currentIndex = nextIndex;
 
           const match = matches[nextIndex];
@@ -191,17 +199,26 @@ export const SearchReplaceExtension = Extension.create({
           txn = txn.scrollIntoView();
           editor.view.dispatch(txn);
 
+          requestAnimationFrame(() => {
+            editor.view.focus();
+          });
+
           return true;
         },
 
       previousSearchMatch:
         () =>
         ({ editor }: { editor: Editor }) => {
-          const { matches, currentIndex, searchTerm, caseSensitive } =
+          const { currentIndex, searchTerm, caseSensitive } =
             editor.storage.searchReplace;
+
+          const matches = findAllMatches(editor.state.doc, searchTerm, caseSensitive);
           if (matches.length === 0) return false;
 
-          const prevIndex = (currentIndex - 1 + matches.length) % matches.length;
+          const safeCurrentIndex = currentIndex >= 0 && currentIndex < matches.length ? currentIndex : 0;
+          const prevIndex = (safeCurrentIndex - 1 + matches.length) % matches.length;
+
+          editor.storage.searchReplace.matches = matches;
           editor.storage.searchReplace.currentIndex = prevIndex;
 
           const match = matches[prevIndex];
@@ -216,6 +233,10 @@ export const SearchReplaceExtension = Extension.create({
           txn = txn.setSelection(TextSelection.create(txn.doc, match.from, match.to));
           txn = txn.scrollIntoView();
           editor.view.dispatch(txn);
+
+          requestAnimationFrame(() => {
+            editor.view.focus();
+          });
 
           return true;
         },
@@ -276,7 +297,9 @@ export const SearchReplaceExtension = Extension.create({
       replaceAllSearchMatches:
         (replaceTerm: string) =>
         ({ editor }: { editor: Editor }) => {
-          const { matches } = editor.storage.searchReplace;
+          const { searchTerm, caseSensitive } = editor.storage.searchReplace;
+
+          const matches = findAllMatches(editor.state.doc, searchTerm, caseSensitive);
           if (matches.length === 0) return 0;
 
           const count = matches.length;
@@ -287,16 +310,18 @@ export const SearchReplaceExtension = Extension.create({
           }
           editor.view.dispatch(tr);
 
-          editor.storage.searchReplace.searchTerm = '';
-          editor.storage.searchReplace.matches = [];
-          editor.storage.searchReplace.currentIndex = -1;
+          const newMatches = findAllMatches(editor.state.doc, searchTerm, caseSensitive);
+          const newIndex = newMatches.length > 0 ? 0 : -1;
+
+          editor.storage.searchReplace.matches = newMatches;
+          editor.storage.searchReplace.currentIndex = newIndex;
 
           editor.view.dispatch(
             editor.state.tr.setMeta(pluginKey, {
-              searchTerm: '',
-              caseSensitive: false,
-              matches: [],
-              currentIndex: -1,
+              searchTerm,
+              caseSensitive,
+              matches: newMatches,
+              currentIndex: newIndex,
             }),
           );
 

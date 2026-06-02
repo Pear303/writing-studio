@@ -34,7 +34,7 @@ export const EditorArea = forwardRef<RichTextEditorRef, EditorAreaProps>(({
   currentBook,
 }, ref) => {
   return (
-    <div className="flex-1 h-full flex flex-col bg-vscode-bg">
+    <div className="flex-1 h-full flex flex-col bg-vscode-bg overflow-hidden">
       {/* 标题编辑区域 */}
       {currentChapter && onTitleChange && (
         <div className="border-b border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-6 py-3">
