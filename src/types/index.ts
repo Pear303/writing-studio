@@ -590,3 +590,18 @@ export const DEFAULT_VIBE_PRESETS: Omit<VibePreset, 'id' | 'userId' | 'enabled' 
   { name: '注重文学性', content: '注意：使用更具文学性的语言，适当运用修辞手法，增强文字表现力。', builtIn: true, order: 6 },
   { name: '注重可读性', content: '注意：语言简明易懂，句子不宜过长，段落结构清晰。', builtIn: true, order: 7 },
 ];
+
+export interface PipelinePromptTemplate {
+  id: string;
+  userId: string;
+  name: string;
+  description: string;
+  builtInId: string;
+  content: string;
+  stage: 'PLANNING' | 'DETAILED_OUTLINE' | 'CHAPTER_WRITING';
+  variables: string[];
+  builtIn: boolean;
+  order: number;
+  createdAt: number;
+  updatedAt: number;
+}

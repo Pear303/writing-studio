@@ -37,6 +37,18 @@ export class NovelLLMService {
     this.config = config;
   }
 
+  setUserTemplateOverride(templateId: string, content: string): void {
+    this.composer?.setUserTemplateOverride(templateId, content);
+  }
+
+  removeUserTemplateOverride(templateId: string): void {
+    this.composer?.removeUserTemplateOverride(templateId);
+  }
+
+  clearUserTemplateOverrides(): void {
+    this.composer?.clearUserTemplateOverrides();
+  }
+
   private extractOutlineSummary(outline: string, currentChapterIndex: number, maxChars: number = 1500): string {
     if (!outline || outline.length <= maxChars) return outline;
 

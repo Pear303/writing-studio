@@ -1,7 +1,7 @@
 import Dexie, { Table } from 'dexie';
 import bcrypt from 'bcryptjs';
 import { v4 as uuidv4 } from 'uuid';
-import type { Book, Volume, Chapter, Material, AIConversation, ChapterVersion, LLMConfig, QARecord, FullExportData, ImportResult, FormattingSettings, WritingGoal, PomodoroState, Theme, PipelineSession, VibePreset } from '../types';
+import type { Book, Volume, Chapter, Material, AIConversation, ChapterVersion, LLMConfig, QARecord, FullExportData, ImportResult, FormattingSettings, WritingGoal, PomodoroState, Theme, PipelineSession, VibePreset, PipelinePromptTemplate } from '../types';
 import { DEFAULT_VIBE_PRESETS } from '../types';
 export type { LLMConfig };
 
@@ -78,6 +78,7 @@ export class NovelIDEDatabase extends Dexie {
   qaRecords!: Table<QARecord>;
   pipelineSessions!: Table<PipelineSession>;
   vibePresets!: Table<VibePreset>;
+  pipelinePromptTemplates!: Table<PipelinePromptTemplate>;
 
   constructor() {
     super('NovelIDE');
@@ -136,6 +137,10 @@ export class NovelIDEDatabase extends Dexie {
           await tx.table('chapters').update(byVolume[key][i].id, { order: i });
         }
       }
+    });
+
+    this.version(13).stores({
+      pipelinePromptTemplates: 'id, userId, builtInId, stage, builtIn, order',
     });
 
     /*
@@ -823,4 +828,119 @@ export const updateVibePreset = async (
   updates: { name?: string; content?: string },
 ): Promise<void> => {
   await db.vibePresets.update(presetId, { ...updates, updatedAt: Date.now() });
+};
+
+// ===== PipelinePromptTemplate 辅助函数 =====
+
+const PROMPT_TEMPLATE_INIT_KEY = 'promptTemplatesInit_';
+
+export const getPipelinePromptTemplates = async (userId: string): Promise<PipelinePromptTemplate[]> => {
+  return await db.pipelinePromptTemplates
+    .where('userId')
+    .equals(userId)
+    .sortBy('order');
+};
+
+export const getPipelinePromptTemplatesByStage = async (userId: string, stage: string): Promise<PipelinePromptTemplate[]> => {
+  const all = await db.pipelinePromptTemplates
+    .where('userId')
+    .equals(userId)
+    .sortBy('order');
+  return all.filter(t => t.stage === stage);
+};
+
+export const ensureDefaultPipelinePromptTemplates = async (userId: string): Promise<void> => {
+  const cacheKey = PROMPT_TEMPLATE_INIT_KEY + userId;
+  if (localStorage.getItem(cacheKey)) return;
+
+  const existing = await db.pipelinePromptTemplates.where('userId').equals(userId).count();
+  if (existing > 0) {
+    localStorage.setItem(cacheKey, '1');
+    return;
+  }
+
+  const { PROMPT_TEMPLATES } = await import('../prompts');
+  const now = Date.now();
+  const defaults: PipelinePromptTemplate[] = Object.values(PROMPT_TEMPLATES).map((t, i) => ({
+    id: `pt_default_${i}_${userId}`,
+    userId,
+    name: t.name,
+    description: t.description,
+    builtInId: t.id,
+    content: '',
+    stage: t.stage,
+    variables: t.variables,
+    builtIn: true,
+    order: i,
+    createdAt: now,
+    updatedAt: now,
+  }));
+
+  await db.pipelinePromptTemplates.bulkAdd(defaults);
+  localStorage.setItem(cacheKey, '1');
+};
+
+export const addPipelinePromptTemplate = async (
+  userId: string,
+  data: {
+    name: string;
+    description: string;
+    builtInId: string;
+    content: string;
+    stage: 'PLANNING' | 'DETAILED_OUTLINE' | 'CHAPTER_WRITING';
+    variables: string[];
+  },
+): Promise<string> => {
+  const allTemplates = await db.pipelinePromptTemplates
+    .where('userId')
+    .equals(userId)
+    .sortBy('order');
+  const maxOrder = allTemplates.length > 0 ? allTemplates[allTemplates.length - 1].order : 0;
+  const now = Date.now();
+  const template: PipelinePromptTemplate = {
+    id: `pt_custom_${now}_${userId}`,
+    userId,
+    name: data.name,
+    description: data.description,
+    builtInId: data.builtInId,
+    content: data.content,
+    stage: data.stage,
+    variables: data.variables,
+    builtIn: false,
+    order: maxOrder + 1,
+    createdAt: now,
+    updatedAt: now,
+  };
+  await db.pipelinePromptTemplates.add(template);
+  return template.id;
+};
+
+export const updatePipelinePromptTemplate = async (
+  templateId: string,
+  updates: { name?: string; description?: string; content?: string; variables?: string[] },
+): Promise<void> => {
+  const template = await db.pipelinePromptTemplates.get(templateId);
+  if (template?.builtIn && (updates.name !== undefined || updates.description !== undefined)) {
+    throw new Error('内置模板的名称和描述不可修改');
+  }
+  await db.pipelinePromptTemplates.update(templateId, { ...updates, updatedAt: Date.now() });
+};
+
+export const deletePipelinePromptTemplate = async (templateId: string): Promise<void> => {
+  const template = await db.pipelinePromptTemplates.get(templateId);
+  if (template?.builtIn) {
+    throw new Error('内置模板不可删除');
+  }
+  await db.pipelinePromptTemplates.delete(templateId);
+};
+
+export const getPipelinePromptTemplateByBuiltInId = async (
+  userId: string,
+  builtInId: string,
+): Promise<PipelinePromptTemplate | undefined> => {
+  const templates = await db.pipelinePromptTemplates
+    .where('userId')
+    .equals(userId)
+    .sortBy('order');
+  return templates.find(t => t.builtInId === builtInId);
 };
