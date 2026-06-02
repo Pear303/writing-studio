@@ -41,7 +41,7 @@ export const FormattingToolbar = ({
     <div className="flex items-center space-x-2 px-2 py-1 border-b border-vscode-border bg-vscode-bg">
       <button
         onClick={handleFormat}
-        className="px-3 py-1.5 text-sm text-vscode-text hover:bg-gray-700 rounded flex items-center space-x-2 transition-colors"
+        className="px-3 py-1.5 text-sm text-vscode-text hover:bg-vscode-active/10 rounded flex items-center space-x-2 transition-colors"
         title="一键排版（使用保存的排版规则）"
       >
         <Wand2 size={16} />
@@ -50,7 +50,7 @@ export const FormattingToolbar = ({
 
       <button
         onClick={onOpenSettings}
-        className="px-3 py-1.5 text-sm text-vscode-text hover:bg-gray-700 rounded flex items-center space-x-2 transition-colors"
+        className="px-3 py-1.5 text-sm text-vscode-text hover:bg-vscode-active/10 rounded flex items-center space-x-2 transition-colors"
         title="自定义排版设置"
       >
         <Settings size={16} />

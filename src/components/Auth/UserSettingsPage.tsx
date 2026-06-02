@@ -85,7 +85,7 @@ export const UserSettingsPage = ({ onLogout }: { onLogout: () => void }) => {
 
   return (
     <div className="p-6 max-w-2xl mx-auto">
-      <h2 className="text-2xl font-bold text-slate-800 mb-6">账号设置</h2>
+      <h2 className="text-2xl font-bold text-vscode-text mb-6">账号设置</h2>
 
       {message && (
         <div className="mb-4 p-3 rounded-lg" style={{ backgroundColor: 'var(--color-vscode-active-light)', color: 'var(--color-vscode-text)' }}>
@@ -93,66 +93,78 @@ export const UserSettingsPage = ({ onLogout }: { onLogout: () => void }) => {
         </div>
       )}
 
-      <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 mb-6">
-        <h3 className="text-lg font-medium text-slate-800 mb-4">个人资料</h3>
+      <div className="bg-vscode-input rounded-xl border border-vscode-border p-6 mb-6">
+        <h3 className="text-lg font-medium text-vscode-text mb-4">个人资料</h3>
         
         <div className="space-y-4">
           <div>
-            <label className="block text-sm text-slate-600 mb-1">用户名</label>
+            <label className="block text-sm text-vscode-text opacity-60 mb-1">用户名</label>
             <input
               type="text"
               value={user.username}
               disabled
-              className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-slate-500"
+              className="w-full px-4 py-2 input-field opacity-50"
             />
           </div>
           
           <div>
-            <label className="block text-sm text-slate-600 mb-1">昵称</label>
+            <label className="block text-sm text-vscode-text opacity-60 mb-1">昵称</label>
             <input
               type="text"
               value={nickname}
               onChange={(e) => setNickname(e.target.value)}
               disabled={!isEditing}
-              className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
+              className="w-full px-4 py-2 input-field"
               placeholder="设置昵称"
             />
           </div>
           
           <div>
-            <label className="block text-sm text-slate-600 mb-1">邮箱</label>
+            <label className="block text-sm text-vscode-text opacity-60 mb-1">邮箱</label>
             <input
               type="email"
               value={user.email || '未设置'}
               disabled
-              className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-slate-500"
+              className="w-full px-4 py-2 input-field opacity-50"
             />
           </div>
           
           <button
             onClick={isEditing ? handleSaveProfile : () => setIsEditing(true)}
-            className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition"
+            className="px-4 py-2 rounded-lg transition"
+            style={{
+              backgroundColor: 'var(--color-vscode-active)',
+              color: '#ffffff',
+            }}
           >
             {isEditing ? '保存' : '编辑'}
           </button>
         </div>
       </div>
 
-      <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 mb-6">
-        <h3 className="text-lg font-medium text-slate-800 mb-4">数据管理</h3>
+      <div className="bg-vscode-input rounded-xl border border-vscode-border p-6 mb-6">
+        <h3 className="text-lg font-medium text-vscode-text mb-4">数据管理</h3>
         
         <div className="space-y-3">
           <button
             onClick={handleExport}
             disabled={isExporting}
-            className="w-full px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition disabled:opacity-50"
+            className="w-full px-4 py-2 rounded-lg transition disabled:opacity-50"
+            style={{
+              backgroundColor: 'var(--color-vscode-active-light)',
+              color: 'var(--color-vscode-active)',
+            }}
           >
             {isExporting ? '导出中...' : '导出数据备份'}
           </button>
           
           <button
             onClick={handleViewLogs}
-            className="w-full px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition"
+            className="w-full px-4 py-2 rounded-lg transition"
+            style={{
+              backgroundColor: 'var(--color-vscode-active-light)',
+              color: 'var(--color-vscode-active)',
+            }}
           >
             查看登录历史
           </button>
@@ -160,19 +172,19 @@ export const UserSettingsPage = ({ onLogout }: { onLogout: () => void }) => {
       </div>
 
       {showLogs && (
-        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 mb-6">
+        <div className="bg-vscode-input rounded-xl border border-vscode-border p-6 mb-6">
           <div className="flex justify-between items-center mb-4">
-            <h3 className="text-lg font-medium text-slate-800">登录历史</h3>
-            <button onClick={() => setShowLogs(false)} className="text-slate-500">关闭</button>
+            <h3 className="text-lg font-medium text-vscode-text">登录历史</h3>
+            <button onClick={() => setShowLogs(false)} className="text-vscode-text opacity-60 hover:opacity-100">关闭</button>
           </div>
           
           <div className="space-y-2">
             {logs.map((log) => (
-              <div key={log.id} className="flex justify-between text-sm p-2 bg-slate-50 rounded">
-                <span className="text-slate-600">
+              <div key={log.id} className="flex justify-between text-sm p-2 rounded" style={{ backgroundColor: 'var(--color-vscode-active-light)' }}>
+                <span className="text-vscode-text">
                   {new Date(log.loginTime).toLocaleString('zh-CN')}
                 </span>
-                <span className={log.success ? 'text-green-600' : 'text-red-600'}>
+                <span style={{ color: log.success ? 'var(--color-success)' : 'var(--color-danger)' }}>
                   {log.success ? '成功' : '失败'}
                 </span>
               </div>
@@ -181,33 +193,42 @@ export const UserSettingsPage = ({ onLogout }: { onLogout: () => void }) => {
         </div>
       )}
 
-      <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 mb-6">
-        <h3 className="text-lg font-medium text-slate-800 mb-4">账号安全</h3>
+      <div className="bg-vscode-input rounded-xl border border-vscode-border p-6 mb-6">
+        <h3 className="text-lg font-medium text-vscode-text mb-4">账号安全</h3>
         
         <button
           onClick={handleLogout}
-          className="w-full px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition"
+          className="w-full px-4 py-2 rounded-lg transition"
+          style={{
+            backgroundColor: 'var(--color-vscode-active-light)',
+            color: 'var(--color-vscode-active)',
+          }}
         >
           退出登录
         </button>
       </div>
 
-      <div className="bg-white rounded-xl shadow-sm border border-red-200 p-6">
-        <h3 className="text-lg font-medium text-red-600 mb-4">危险区域</h3>
+      <div className="bg-vscode-input rounded-xl border p-6" style={{ borderColor: 'var(--color-danger)' }}>
+        <h3 className="text-lg font-medium mb-4" style={{ color: 'var(--color-danger)' }}>危险区域</h3>
         
         <div className="space-y-3">
           <input
             type="text"
             value={deleteConfirm}
             onChange={(e) => setDeleteConfirm(e.target.value)}
-            className="w-full px-4 py-2 border border-red-200 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent outline-none transition"
+            className="w-full px-4 py-2 input-field"
+            style={{ borderColor: 'var(--color-danger)' }}
             placeholder="输入 确认删除 以确认"
           />
           
           <button
             onClick={handleDeleteAccount}
             disabled={deleteConfirm !== '确认删除' || isDeleting}
-            className="w-full px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full px-4 py-2 rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
+            style={{
+              backgroundColor: 'var(--color-danger)',
+              color: '#ffffff',
+            }}
           >
             {isDeleting ? '删除中...' : '永久删除账号'}
           </button>

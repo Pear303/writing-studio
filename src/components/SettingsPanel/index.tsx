@@ -24,6 +24,10 @@ interface SettingsPanelProps {
   onSaveWordCountSettings?: (settings: WordCountSettings) => void;
   theme?: Theme;
   onThemeChange?: (theme: Theme) => void;
+  autoSaveInterval?: number;
+  onAutoSaveIntervalChange?: (interval: number) => void;
+  editorFontSize?: number;
+  onEditorFontSizeChange?: (size: number) => void;
 }
 
 export const SettingsPanel = ({
@@ -33,6 +37,10 @@ export const SettingsPanel = ({
   onSaveWordCountSettings,
   theme = 'dark',
   onThemeChange,
+  autoSaveInterval: externalAutoSaveInterval,
+  onAutoSaveIntervalChange,
+  editorFontSize: externalEditorFontSize,
+  onEditorFontSizeChange,
 }: SettingsPanelProps) => {
   // 使用 useUser hook 获取用户信息
   const { user, logout } = useUser();
@@ -49,8 +57,12 @@ export const SettingsPanel = ({
   const allFonts = [...getChineseFonts(), ...getEnglishFonts()];
   
   const [activeTab, setActiveTab] = useState<SettingsTab>('general');
-  const [autoSaveInterval, setAutoSaveInterval] = useState(30);
-  const [editorFontSize, setEditorFontSize] = useState(16);
+  const [localAutoSaveInterval, setLocalAutoSaveInterval] = useState(() => {
+    return externalAutoSaveInterval ?? 30;
+  });
+  const [localEditorFontSize, setLocalEditorFontSize] = useState(() => {
+    return externalEditorFontSize ?? 16;
+  });
   const [startupWindowMode, setStartupWindowMode] = useState<'maximized' | 'fullscreen'>(() => {
     return (localStorage.getItem('startupWindowMode') as 'maximized' | 'fullscreen') || 'maximized';
   });
@@ -306,8 +318,12 @@ export const SettingsPanel = ({
               <label className="block text-xs mb-1" style={{ color: 'var(--color-vscode-text, #cccccc)', opacity: 0.6 }}>自动保存间隔（秒）</label>
               <input
                 type="number"
-                value={autoSaveInterval}
-                onChange={(e) => setAutoSaveInterval(Number(e.target.value))}
+                value={localAutoSaveInterval}
+                onChange={(e) => {
+                  const val = Number(e.target.value);
+                  setLocalAutoSaveInterval(val);
+                  onAutoSaveIntervalChange?.(val);
+                }}
                 min={5}
                 max={300}
                 className="w-full px-2 py-1.5 text-sm text-vscode-text focus:outline-none focus:border-vscode-active input-field"
@@ -317,8 +333,12 @@ export const SettingsPanel = ({
             <div>
               <label className="block text-xs mb-1" style={{ color: 'var(--color-vscode-text, #cccccc)', opacity: 0.6 }}>编辑器默认字号</label>
               <select
-                value={editorFontSize}
-                onChange={(e) => setEditorFontSize(Number(e.target.value))}
+                value={localEditorFontSize}
+                onChange={(e) => {
+                  const val = Number(e.target.value);
+                  setLocalEditorFontSize(val);
+                  onEditorFontSizeChange?.(val);
+                }}
                 className="w-full px-2 py-1.5 text-sm text-vscode-text focus:outline-none focus:border-vscode-active select-field"
               >
                 <option value={12}>12px</option>

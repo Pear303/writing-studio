@@ -353,7 +353,7 @@ export const MaterialPanel = ({ onInsertMaterial, onMaterialSelect, currentBook 
         </div>
 
         {filteredMaterials.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-56 text-gray-500 px-4 text-center">
+          <div className="flex flex-col items-center justify-center h-56 text-vscode-text opacity-50 px-4 text-center">
             <p className="text-sm mb-2">暂无素材</p>
             <p className="text-xs">
               {filterType === 'all_book'

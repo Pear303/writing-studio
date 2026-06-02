@@ -6,6 +6,7 @@ import { Color } from '@tiptap/extension-color';
 import Underline from '@tiptap/extension-underline';
 import { Selection } from '@tiptap/pm/state';
 import type { Editor } from '@tiptap/react';
+import { SearchReplaceExtension } from '../../extensions/searchReplace';
 
 export interface RichTextEditorRef {
   editor: Editor | null;
@@ -38,6 +39,7 @@ export const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>
       FontFamily,
       Color,
       Underline,
+      SearchReplaceExtension,
     ],
     content,
     onCreate: ({ editor }) => {
@@ -138,7 +140,7 @@ export const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>
   } as React.CSSProperties;
 
   return (
-    <div className="flex-1 h-full flex flex-col bg-vscode-bg">
+    <div className="flex-1 h-full flex flex-col bg-vscode-bg overflow-hidden">
       {/* 编辑器内容区 */}
       <div 
         ref={containerRef}

@@ -47,19 +47,19 @@ export const TreeNode = forwardRef<HTMLDivElement, TreeNodeProps>(({
     ? 'bg-blue-600/20'
     : isDropTarget && dropPosition === 'inside'
       ? 'bg-blue-500/20 ring-1 ring-blue-400/50'
-      : 'hover:bg-gray-700/30';
+      : 'hover:bg-vscode-active/10';
 
   return (
     <div className="relative w-full" ref={ref}>
       {level > 0 && (
         <>
           <div
-            className="absolute top-0 bottom-0 w-px bg-gray-600 opacity-50"
+            className="absolute top-0 bottom-0 w-px bg-vscode-border opacity-50"
             style={{ left: `${(level - 1) * 16 + 15}px` }}
           />
           {!isLast && (
             <div
-              className="absolute top-1/2 h-px bg-gray-600 opacity-50"
+              className="absolute top-1/2 h-px bg-vscode-border opacity-50"
               style={{
                 left: `${(level - 1) * 16 + 15}px`,
                 width: '8px',

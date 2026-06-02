@@ -1089,7 +1089,7 @@ export const BookOutlineTree = ({ book, onChapterSelect, onBookDeselect, onVolum
       return (
         <div key={volume.id}>
           <div
-            className="flex items-center py-1.5 px-2 cursor-pointer hover:bg-gray-700/30 transition-colors rounded group"
+            className="flex items-center py-1.5 px-2 cursor-pointer hover:bg-vscode-active/10 transition-colors rounded group"
             style={{ paddingLeft }}
             onClick={(e) => {
               if (onClick) {
@@ -1554,14 +1554,14 @@ export const BookOutlineTree = ({ book, onChapterSelect, onBookDeselect, onVolum
             <div className="flex-1 overflow-auto p-2 max-h-[55vh]">
               {/* 草稿箱选项 */}
               <div
-                className="flex items-center py-2 px-3 cursor-pointer hover:bg-gray-700/30 transition-colors border border-transparent hover:border-vscode-border rounded"
+                className="flex items-center py-2 px-3 cursor-pointer hover:bg-vscode-active/10 transition-colors border border-transparent hover:border-vscode-border rounded"
                 onClick={() => {
                   if (confirm(`确定将章节移动到草稿箱吗？`)) {
                     handleChapterMoveDraft();
                   }
                 }}
               >
-                <FileText size={16} className="mr-2 text-gray-400 flex-shrink-0" />
+                <FileText size={16} className="mr-2 text-vscode-text opacity-40 flex-shrink-0" />
                 <span className="text-sm text-vscode-text">草稿箱（不归入任何卷）</span>
               </div>
 
@@ -1569,7 +1569,7 @@ export const BookOutlineTree = ({ book, onChapterSelect, onBookDeselect, onVolum
               {moveChapterModal.books.map(book => (
                 <div key={book.id} className="mt-1">
                   <div
-                    className="flex items-center py-2 px-3 cursor-pointer hover:bg-gray-700/30 transition-colors rounded"
+                    className="flex items-center py-2 px-3 cursor-pointer hover:bg-vscode-active/10 transition-colors rounded"
                     onClick={() => {
                       const next = new Set(moveChapterModal.expandedBookIds);
                       if (next.has(book.id)) next.delete(book.id); else next.add(book.id);
@@ -1577,9 +1577,9 @@ export const BookOutlineTree = ({ book, onChapterSelect, onBookDeselect, onVolum
                     }}
                   >
                     {moveChapterModal.expandedBookIds.has(book.id) ? (
-                      <ChevronDown size={14} className="mr-1 text-gray-400" />
+                      <ChevronDown size={14} className="mr-1 text-vscode-text opacity-40" />
                     ) : (
-                      <ChevronRight size={14} className="mr-1 text-gray-400" />
+                      <ChevronRight size={14} className="mr-1 text-vscode-text opacity-40" />
                     )}
                     <BookOpen size={16} className="mr-2 text-blue-400 flex-shrink-0" />
                     <span className="text-sm text-vscode-text font-medium">{book.name}</span>
@@ -1637,7 +1637,7 @@ export const BookOutlineTree = ({ book, onChapterSelect, onBookDeselect, onVolum
             <div className="flex-1 overflow-auto p-2 max-h-[55vh]">
               {moveVolumeModal.books.map(book => (
                 <div key={book.id} className="mt-1">
-                  <div className="flex items-center justify-between py-2 px-3 rounded hover:bg-gray-700/30 transition-colors">
+                  <div className="flex items-center justify-between py-2 px-3 rounded hover:bg-vscode-active/10 transition-colors">
                     <div
                       className="flex items-center flex-1 cursor-pointer"
                       onClick={() => {
@@ -1647,9 +1647,9 @@ export const BookOutlineTree = ({ book, onChapterSelect, onBookDeselect, onVolum
                       }}
                     >
                       {moveVolumeModal.expandedBookIds.has(book.id) ? (
-                        <ChevronDown size={14} className="mr-1 text-gray-400" />
+                        <ChevronDown size={14} className="mr-1 text-vscode-text opacity-40" />
                       ) : (
-                        <ChevronRight size={14} className="mr-1 text-gray-400" />
+                        <ChevronRight size={14} className="mr-1 text-vscode-text opacity-40" />
                       )}
                       <BookOpen size={16} className="mr-2 text-blue-400 flex-shrink-0" />
                       <span className="text-sm text-vscode-text font-medium">{book.name}</span>
@@ -1753,7 +1753,7 @@ export const BookOutlineTree = ({ book, onChapterSelect, onBookDeselect, onVolum
                   {reorderModal.items.map((item, index) => (
                     <div
                       key={item.id}
-                      className="flex items-center py-2 px-3 rounded hover:bg-gray-700/30 transition-colors border border-transparent hover:border-vscode-border"
+                      className="flex items-center py-2 px-3 rounded hover:bg-vscode-active/10 transition-colors border border-transparent hover:border-vscode-border"
                     >
                       <span className="text-xs text-vscode-text opacity-50 w-6 flex-shrink-0">{index + 1}.</span>
                       <span className="text-sm text-vscode-text truncate flex-1 min-w-0">{item.name}</span>

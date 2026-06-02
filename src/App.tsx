@@ -19,7 +19,7 @@ import type { RichTextEditorRef } from './components/RichTextEditor';
 import type { ActivityId, Book, Chapter, Volume, FormattingSettings, Material, OutlineItemData, WordCountSettings, PipelineStep1Config, PipelineStep2State, PipelineStep4State, PipelineStep5State, OutlineRound, DetailedOutlineRound, ChapterDraftRound } from './types';
 import { db, saveChapterVersion, cleanupOldVersions, exportAllData, importAllData, getDefaultLLMConfig, decodeApiKey } from './db';
 import { countWords, clearExtraBlankLines, clearExtraSpaces, convertFullWidthToHalfWidth, markdownToOutline } from './utils/helpers';
-import { findMatches, replaceFirst, replaceAll } from './utils/searchUtils';
+import { getSearchReplaceCommands } from './extensions/searchReplace';
 
 import { useUser } from './auth/UserContext';
 import { novelLLMService } from './llm/NovelLLMService';
@@ -67,10 +67,29 @@ function App() {
   const [currentMaterial, setCurrentMaterial] = useState<Material | null>(null);
   const [pipelinePreview, setPipelinePreview] = useState<{ title: string; content: string; onChange: (content: string) => void } | null>(null);
   const [showFindReplace, setShowFindReplace] = useState(false);
+  const [lastSearchText, setLastSearchText] = useState('');
   const [showFormattingSettings, setShowFormattingSettings] = useState(false);
   const [showPromptPreview, setShowPromptPreview] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: ToastType } | null>(null);
-  const [theme, setTheme] = useState<Theme>('light');
+  const [theme, setTheme] = useState<Theme>(() => {
+    return (localStorage.getItem('theme') as Theme) || 'light';
+  });
+
+  const [autoSaveInterval, setAutoSaveInterval] = useState(() => {
+    const saved = localStorage.getItem('autoSaveInterval');
+    return saved ? parseInt(saved, 10) : 30;
+  });
+
+  useEffect(() => {
+    const handleCtrlF = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
+        e.preventDefault();
+        setShowFindReplace(true);
+      }
+    };
+    document.addEventListener('keydown', handleCtrlF);
+    return () => document.removeEventListener('keydown', handleCtrlF);
+  }, []);
   
   // 使用 useUser hook 获取用户认证状态
   const { user } = useUser();
@@ -466,6 +485,11 @@ function App() {
     getThemeClasses();
   }, [theme]);
 
+  const handleThemeChange = (newTheme: Theme) => {
+    setTheme(newTheme);
+    localStorage.setItem('theme', newTheme);
+  };
+
   const dragStartXRef = useRef(0);
   const startWidthRef = useRef(0);
   const isResizingRef = useRef(false);
@@ -520,7 +544,6 @@ function App() {
 
   // 自动保存定时器
   const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const AUTO_SAVE_INTERVAL = 30000; // 30秒
 
   // 设置自动保存
   useEffect(() => {
@@ -533,7 +556,7 @@ function App() {
       // 设置新的定时器
       autoSaveTimerRef.current = setTimeout(() => {
         handleSave();
-      }, AUTO_SAVE_INTERVAL);
+      }, autoSaveInterval * 1000);
     }
 
     // 清理函数
@@ -1230,71 +1253,147 @@ ${chapterContents}
     }
   };
 
-  // 查找/替换功能
   const handleFindReplace = () => {
+    if (showFindReplace) {
+      const cmds = getSearchReplaceCommands(editorRef.current?.editor ?? null);
+      cmds?.clearSearch();
+    }
     setShowFindReplace(!showFindReplace);
   };
 
-  // 查找功能
   const handleFind = (searchText: string, caseSensitive?: boolean) => {
-    if (!editorContent || !searchText) return;
+    const cmds = getSearchReplaceCommands(editorRef.current?.editor ?? null);
+    if (!cmds || !searchText) return;
 
-    const matches = findMatches(editorContent, searchText, caseSensitive);
-    
-    if (matches.length === 0) {
+    setLastSearchText(searchText);
+    const count = cmds.searchInDocument(searchText, caseSensitive);
+    if (count === 0) {
       showToast(`未找到 "${searchText}"`, 'info');
-      return;
+    } else {
+      showToast(`找到 ${count} 个匹配项`, 'success');
     }
-
-    showToast(`找到 ${matches.length} 个匹配项`, 'success');
   };
 
-  // 替换功能
+  const handleFindNext = () => {
+    const cmds = getSearchReplaceCommands(editorRef.current?.editor ?? null);
+    cmds?.nextSearchMatch();
+  };
+
+  const handleFindPrevious = () => {
+    const cmds = getSearchReplaceCommands(editorRef.current?.editor ?? null);
+    cmds?.previousSearchMatch();
+  };
+
   const handleReplace = (searchText: string, replaceText: string, caseSensitive?: boolean) => {
-    if (!editorRef.current?.editor || !searchText) return;
+    const cmds = getSearchReplaceCommands(editorRef.current?.editor ?? null);
+    if (!cmds || !searchText) return;
 
-    const editor = editorRef.current.editor;
-    const { from, to } = editor.state.selection;
-    const selectedText = editor.state.doc.textBetween(from, to);
-    
-    if (!selectedText) {
-      showToast('请先选择文本', 'info');
-      return;
+    const storage = editorRef.current?.editor?.storage.searchReplace;
+    if (!storage || storage.matches.length === 0) {
+      const count = cmds.searchInDocument(searchText, caseSensitive);
+      if (count === 0) {
+        showToast(`未找到 "${searchText}"`, 'info');
+        return;
+      }
     }
 
-    const matches = findMatches(selectedText, searchText, caseSensitive);
-    if (matches.length === 0) {
-      showToast(`未找到 "${searchText}"`, 'info');
-      return;
+    const success = cmds.replaceSearchMatch(replaceText);
+    if (success) {
+      setSaveStatus('unsaved');
+      showToast('替换成功', 'success');
+    } else {
+      showToast('没有可替换的匹配项', 'info');
     }
-
-    const newContent = replaceFirst(selectedText, searchText, replaceText, caseSensitive);
-    editor.chain().focus().insertContent(newContent).run();
-    setSaveStatus('unsaved');
-    showToast('替换成功', 'success');
   };
 
-  // 全部替换功能
   const handleReplaceAll = (searchText: string, replaceText: string, caseSensitive?: boolean) => {
-    if (!editorRef.current?.editor || !searchText) return;
+    const cmds = getSearchReplaceCommands(editorRef.current?.editor ?? null);
+    if (!cmds || !searchText) return;
 
-    const editor = editorRef.current.editor;
-    const content = editor.getText();
-    const matches = findMatches(content, searchText, caseSensitive);
-    
-    if (matches.length === 0) {
-      showToast(`未找到 "${searchText}"`, 'info');
+    const storage = editorRef.current?.editor?.storage.searchReplace;
+    if (!storage || storage.matches.length === 0) {
+      const count = cmds.searchInDocument(searchText, caseSensitive);
+      if (count === 0) {
+        showToast(`未找到 "${searchText}"`, 'info');
+        return;
+      }
+    }
+
+    const matchCount = storage?.matches?.length ?? 0;
+    if (!confirm(`确定要替换所有 ${matchCount} 个匹配项吗？`)) {
       return;
     }
 
-    if (!confirm(`确定要替换所有 ${matches.length} 个匹配项吗？`)) {
-      return;
+    const count = cmds.replaceAllSearchMatches(replaceText);
+    if (count > 0) {
+      setSaveStatus('unsaved');
+      showToast(`已替换 ${count} 个匹配项`, 'success');
+    }
+  };
+
+  const handleClearSearch = () => {
+    const cmds = getSearchReplaceCommands(editorRef.current?.editor ?? null);
+    cmds?.clearSearch();
+  };
+
+  const handleNavigateToChapter = async (chapterId: string) => {
+    if (!currentBook) return;
+    const chapter = await db.chapters.get(chapterId);
+    if (!chapter) return;
+    setCurrentChapter(chapter);
+  };
+
+  const handleBookReplaceAll = async (
+    searchText: string,
+    replaceText: string,
+    caseSensitive: boolean,
+    chapterIds: string[],
+  ): Promise<number> => {
+    let totalCount = 0;
+    for (const chapterId of chapterIds) {
+      const chapter = await db.chapters.get(chapterId);
+      if (!chapter) continue;
+
+      const text = chapter.content;
+      const searchLower = caseSensitive ? searchText : searchText.toLowerCase();
+      const textToSearch = caseSensitive ? text : text.toLowerCase();
+
+      let count = 0;
+      let idx = 0;
+      while ((idx = textToSearch.indexOf(searchLower, idx)) !== -1) {
+        count++;
+        idx += 1;
+      }
+
+      if (count === 0) continue;
+
+      let newContent: string;
+      if (caseSensitive) {
+        newContent = text.split(searchText).join(replaceText);
+      } else {
+        const regex = new RegExp(searchText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
+        newContent = text.replace(regex, replaceText);
+      }
+
+      await db.chapters.update(chapterId, {
+        content: newContent,
+        wordCount: countWords(newContent),
+        updatedAt: Date.now(),
+      });
+
+      if (currentChapter?.id === chapterId) {
+        setEditorContent(newContent);
+      }
+
+      totalCount += count;
     }
 
-    const newContent = replaceAll(editorContent, searchText, replaceText, caseSensitive);
-    editor.commands.setContent(newContent);
-    setSaveStatus('unsaved');
-    showToast(`已替换 ${matches.length} 个匹配项`, 'success');
+    if (totalCount > 0) {
+      setSaveStatus('unsaved');
+      showToast(`全书已替换 ${totalCount} 处`, 'success');
+    }
+
+    return totalCount;
   };
 
   const handleExport = async (format: 'txt' | 'md' | 'html' = 'txt') => {
@@ -1748,7 +1847,7 @@ ${chapterContents}
 
 
   return (
-    <div className="h-screen flex flex-col" data-theme={theme}>
+    <div className="h-screen flex flex-col overflow-hidden" data-theme={theme}>
       <Toolbar
         onSave={handleSave}
         onUndo={handleUndo}
@@ -1770,7 +1869,7 @@ ${chapterContents}
         }}
       />
 
-        <div className="flex flex-1 overflow-hidden">
+        <div className="flex flex-1 min-h-0 overflow-hidden">
           <ActivityBar
             activeActivity={activeActivity}
             onActivityClick={handleActivityClick}
@@ -1806,7 +1905,19 @@ ${chapterContents}
                     localStorage.setItem('wordCountSettings', JSON.stringify(s));
                   }}
                   theme={theme}
-                  onThemeChange={setTheme}
+                  onThemeChange={handleThemeChange}
+                  autoSaveInterval={autoSaveInterval}
+                  onAutoSaveIntervalChange={(val) => {
+                    setAutoSaveInterval(val);
+                    localStorage.setItem('autoSaveInterval', String(val));
+                  }}
+                  editorFontSize={(() => {
+                    const saved = localStorage.getItem('editorFontSize');
+                    return saved ? parseInt(saved, 10) : 16;
+                  })()}
+                  onEditorFontSizeChange={(val) => {
+                    localStorage.setItem('editorFontSize', String(val));
+                  }}
                   outlineRefreshTrigger={outlineRefreshTrigger}
                   width={sidebarWidth}
                   currentOutlineVolume={currentOutlineVolume}
@@ -1860,8 +1971,26 @@ ${chapterContents}
             </>
           )}
 
-          <div className="flex flex-1 overflow-hidden">
-            <div className="flex-1 min-w-[300px]">
+          <div className="flex flex-1 min-h-0 overflow-hidden">
+            <div className="flex-1 min-w-[300px] min-h-0 relative">
+              {showFindReplace && (
+                <FindReplace
+                  editor={editorRef.current?.editor ?? null}
+                  onClose={() => {
+                    handleClearSearch();
+                    setShowFindReplace(false);
+                  }}
+                  onFind={handleFind}
+                  onFindNext={handleFindNext}
+                  onFindPrevious={handleFindPrevious}
+                  onReplace={handleReplace}
+                  onReplaceAll={handleReplaceAll}
+                  initialSearchText={lastSearchText}
+                  currentBookId={currentBook?.id ?? null}
+                  onNavigateToChapter={handleNavigateToChapter}
+                  onBookReplaceAll={handleBookReplaceAll}
+                />
+              )}
               {currentMaterial ? (
                 <MaterialEditor
                   material={currentMaterial}
@@ -2053,7 +2182,7 @@ ${chapterContents}
         onToggleFullScreen={toggleFullScreen}
         isFullScreen={isFullScreen}
         theme={theme}
-        onThemeChange={setTheme}
+        onThemeChange={handleThemeChange}
         onExport={handleExport}
         onFullExport={handleFullExport}
         onImport={handleImportClick}
@@ -2065,16 +2194,6 @@ ${chapterContents}
         onSyncToAgent={handleSyncToAgent}
         agentSyncing={agentSyncing}
       />
-
-      {/* 查找替换面板 */}
-      {showFindReplace && (
-        <FindReplace
-          onClose={() => setShowFindReplace(false)}
-          onFind={handleFind}
-          onReplace={handleReplace}
-          onReplaceAll={handleReplaceAll}
-        />
-      )}
 
 {/* 排版设置面板 */}
       {showFormattingSettings && (
@@ -2116,7 +2235,7 @@ ${chapterContents}
               </button>
               <button
                 onClick={() => { setShowImportModal(false); setImportPreview(null); }}
-                className="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded"
+                className="px-4 py-2 bg-vscode-input text-vscode-text rounded hover:opacity-80"
               >
                 取消
               </button>
