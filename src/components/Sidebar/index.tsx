@@ -50,6 +50,7 @@ interface SidebarProps {
   onPipelineRefineChapter?: (step5State: PipelineStep5State, chapterIndex: number, round: ChapterDraftRound) => Promise<string>;
   onPipelineBatchGenerateChapters?: (chapters: Array<{ index: number; title: string; outline: string }>) => Promise<Array<{ index: number; title: string; content: string }>>;
   onPipelineAddChapterToVolume?: (title: string, content: string, detailedOutline?: string) => void;
+  onPipelineExtractFacts?: (chapterIndex: number, chapterTitle: string, chapterContent: string) => Promise<import('../../types/fact-extraction').ChapterFacts | null>;
   showToast?: (message: string, type: 'info' | 'success' | 'error' | 'warning') => void;
   agentState?: AgentState;
   onAgentSendMessage?: (message: string) => void;
@@ -106,6 +107,7 @@ export const Sidebar = ({
   onPipelineRefineChapter,
   onPipelineBatchGenerateChapters,
   onPipelineAddChapterToVolume,
+  onPipelineExtractFacts,
   showToast,
   agentState,
   onAgentSendMessage,
@@ -256,6 +258,7 @@ export const Sidebar = ({
               onPipelineBatchGenerateChapters={onPipelineBatchGenerateChapters}
               onPipelineAddChapterToVolume={onPipelineAddChapterToVolume}
               onPipelinePreviewInEditor={onPipelinePreviewInEditor}
+              onPipelineExtractFacts={onPipelineExtractFacts}
               showToast={showToast}
             />
           ) : (

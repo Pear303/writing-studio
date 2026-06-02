@@ -1,6 +1,7 @@
 import type { WritingStage, WritingContext } from '../hooks';
-import { SmartPromptComposer, createComposer } from '../hooks';
+import { SmartPromptComposer, createComposer, setTaskBookText } from '../hooks';
 import type { PipelineStep1Config, PipelineStep2State, PipelineStep4State, PipelineStep5State, OutlineRound, DetailedOutlineRound, ChapterDraftRound } from '../types';
+import { taskBookComposer } from '../services/TaskBookComposer';
 
 export interface LLMConfig {
   apiKey: string;
@@ -162,6 +163,47 @@ export class NovelLLMService {
     }
   }
   
+  async generateRaw(prompt: string): Promise<LLMResponse> {
+    if (!this.config) {
+      throw new Error('LLM服务未初始化');
+    }
+
+    const messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [
+      { role: 'user', content: prompt },
+    ];
+
+    try {
+      const response = await fetch(`${this.config.baseUrl}/chat/completions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${this.config.apiKey}`,
+        },
+        body: JSON.stringify({
+          model: this.config.model,
+          messages,
+          temperature: 0.3,
+          max_tokens: 4000,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`API请求失败: ${response.status}`);
+      }
+
+      const data = await response.json();
+      const content = data.choices?.[0]?.message?.content || '';
+
+      return {
+        content,
+        usage: data.usage,
+      };
+    } catch (error) {
+      console.error('[NovelLLMService] generateRaw失败:', error);
+      throw error;
+    }
+  }
+
 async generateOutline(project: {
     novelType: string;
     protagonistTypes: string[];
@@ -394,12 +436,29 @@ async generateOutline(project: {
     previousChapterContent: string | null,
     outline: string,
     step3Config: { writingStyle: string; storyLength: string; customRules: string },
+    bookId?: string,
   ): Promise<string> {
     const outlineSummary = this.extractOutlineSummary(outline, chapterIndex + 1);
 
     this.sessionPrefix = `【全书大纲摘要（固定参考）】\n${outlineSummary}`;
 
+    let taskBookText = '';
+    if (bookId) {
+      try {
+        const taskBook = await taskBookComposer.compose(bookId, chapterIndex, {
+          chapterTitle,
+          chapterOutline,
+          step3Config,
+        });
+        taskBookText = taskBookComposer.render(taskBook);
+        setTaskBookText(taskBookText);
+      } catch {
+        setTaskBookText(null);
+      }
+    }
+
     const userMessage = await this.composer!.renderTemplate('chapter-generate', {
+      taskBook: taskBookText || outlineSummary,
       outlineSummary,
       chapterIndex: chapterIndex + 1,
       chapterTitle,
@@ -419,6 +478,7 @@ async generateOutline(project: {
       chapterTitle,
     });
 
+    setTaskBookText(null);
     return result.content;
   }
 
@@ -476,16 +536,32 @@ async generateOutline(project: {
     chapters: Array<{ index: number; title: string; outline: string }>,
     outline: string,
     step3Config: { writingStyle: string; storyLength: string; customRules: string },
+    bookId?: string,
   ): Promise<Array<{ index: number; title: string; content: string }>> {
     const outlineSummary = this.extractOutlineSummary(outline, 0, 2000);
 
     this.sessionPrefix = `【全书大纲摘要（固定参考）】\n${outlineSummary}`;
+
+    let taskBookText = '';
+    if (bookId && chapters.length > 0) {
+      try {
+        const taskBook = await taskBookComposer.compose(bookId, chapters[0].index, {
+          chapterTitle: chapters.map(ch => ch.title).join('、'),
+          step3Config,
+        });
+        taskBookText = taskBookComposer.render(taskBook);
+        setTaskBookText(taskBookText);
+      } catch {
+        setTaskBookText(null);
+      }
+    }
 
     const chaptersOutline = chapters.map(ch =>
       `### 第${ch.index + 1}章：${ch.title}\n${ch.outline}`
     ).join('\n\n');
 
     const userMessage = await this.composer!.renderTemplate('chapter-batch-generate', {
+      taskBook: taskBookText || outlineSummary,
       outlineSummary,
       chaptersOutline,
       writingStyle: step3Config.writingStyle,
@@ -500,6 +576,7 @@ async generateOutline(project: {
       coreIdea: `批量撰写${chapters.length}章正文`,
     });
 
+    setTaskBookText(null);
     return this.parseBatchChapters(result.content, chapters);
   }
 

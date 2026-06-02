@@ -1,10 +1,11 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import {
   CheckCircle, Circle, ChevronDown, ChevronRight, ClipboardList,
-  Save, RotateCcw, Star, CheckSquare, Square, Sparkles, Loader, Bot, Wrench, Lightbulb
+  Save, RotateCcw, Star, CheckSquare, Square, Sparkles, Loader, Bot, Wrench, Lightbulb,
+  AlertTriangle, Shield, ShieldOff, SkipForward
 } from 'lucide-react';
 import { QUALITY_CHECKLIST, SCORE_DIMENSIONS, type CheckSection } from './checklistData';
-import type { Chapter } from '../../types';
+import type { Chapter, ReviewIssue, ReviewSeverity } from '../../types';
 import { db, getDefaultLLMConfig, decodeApiKey } from '../../db';
 import { LlmProviderFactory } from '../../llm';
 import { generateId } from '../../utils/helpers';
@@ -31,6 +32,10 @@ interface QualityCheckPanelProps {
   bookId?: string;
   currentChapter?: Chapter | null;
   onCheckComplete?: (result: { passed: number; total: number; score: number }) => void;
+  reviewIssues?: ReviewIssue[];
+  reviewScore?: number;
+  reviewPassed?: boolean;
+  onSkipReviewBlock?: () => void;
 }
 
 function buildQualityCheckSystemPrompt(
@@ -169,6 +174,10 @@ export const QualityCheckPanel: React.FC<QualityCheckPanelProps> = ({
   bookId,
   currentChapter,
   onCheckComplete,
+  reviewIssues,
+  reviewScore,
+  reviewPassed,
+  onSkipReviewBlock,
 }) => {
   const storageKey = bookId ? `qa_checked_${bookId}` : null;
 
@@ -527,8 +536,121 @@ ${rawContent}
     );
   }
 
+  const blockingIssues = reviewIssues?.filter(i => i.blocking) || [];
+  const hasBlockingIssues = blockingIssues.length > 0;
+  const [skipConfirmed, setSkipConfirmed] = useState(false);
+
   return (
     <div className="flex flex-col h-full bg-vscode-sidebar">
+      {hasBlockingIssues && !skipConfirmed && (
+        <div style={{
+          padding: '10px 12px',
+          backgroundColor: 'rgba(220, 38, 38, 0.15)',
+          borderBottom: '2px solid rgba(220, 38, 38, 0.6)',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px' }}>
+            <Shield size={16} style={{ color: '#dc2626' }} />
+            <span style={{ fontSize: '13px', fontWeight: 600, color: '#dc2626' }}>
+              审查硬闸门：{blockingIssues.length} 个阻断性问题
+            </span>
+          </div>
+          <div style={{ maxHeight: '120px', overflowY: 'auto', marginBottom: '8px' }}>
+            {blockingIssues.map((issue, idx) => (
+              <div key={idx} style={{
+                padding: '4px 8px',
+                marginBottom: '4px',
+                borderRadius: '3px',
+                backgroundColor: 'rgba(220, 38, 38, 0.1)',
+                fontSize: '11px',
+                color: 'var(--color-vscode-text)',
+              }}>
+                <span style={{
+                  display: 'inline-block',
+                  padding: '1px 4px',
+                  borderRadius: '2px',
+                  fontSize: '10px',
+                  fontWeight: 600,
+                  backgroundColor: issue.severity === 'critical' ? '#dc2626' : '#d97706',
+                  color: 'white',
+                  marginRight: '6px',
+                }}>
+                  {issue.severity === 'critical' ? '严重' : '高危'}
+                </span>
+                <span style={{ opacity: 0.7 }}>[{issue.category}]</span>
+                {' '}
+                {issue.description}
+                {issue.fixHint && (
+                  <div style={{ marginTop: '2px', opacity: 0.6, paddingLeft: '12px' }}>
+                    💡 {issue.fixHint}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+          {reviewScore !== undefined && (
+            <div style={{ fontSize: '11px', color: 'var(--color-vscode-text)', opacity: 0.7, marginBottom: '6px' }}>
+              审查评分：{reviewScore}/100 {reviewPassed ? '✅ 通过' : '❌ 未通过'}
+            </div>
+          )}
+          <div style={{ display: 'flex', gap: '6px' }}>
+            {onSkipReviewBlock && (
+              <button
+                type="button"
+                onClick={() => setSkipConfirmed(true)}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  padding: '4px 10px',
+                  fontSize: '11px',
+                  border: '1px solid var(--color-vscode-border)',
+                  borderRadius: '3px',
+                  cursor: 'pointer',
+                  backgroundColor: 'transparent',
+                  color: 'var(--color-vscode-text)',
+                  opacity: 0.7,
+                }}
+              >
+                <SkipForward size={12} />
+                跳过闸门（确认）
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {skipConfirmed && (
+        <div style={{
+          padding: '6px 12px',
+          backgroundColor: 'rgba(217, 119, 6, 0.15)',
+          borderBottom: '1px solid rgba(217, 119, 6, 0.4)',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '6px',
+        }}>
+          <ShieldOff size={14} style={{ color: '#d97706' }} />
+          <span style={{ fontSize: '11px', color: '#d97706' }}>
+            闸门已跳过 — 存在未修复的阻断性问题
+          </span>
+        </div>
+      )}
+
+      {reviewIssues && reviewIssues.length > 0 && !hasBlockingIssues && (
+        <div style={{
+          padding: '6px 12px',
+          backgroundColor: 'rgba(22, 163, 74, 0.1)',
+          borderBottom: '1px solid rgba(22, 163, 74, 0.3)',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '6px',
+        }}>
+          <CheckCircle size={14} style={{ color: '#16a34a' }} />
+          <span style={{ fontSize: '11px', color: '#16a34a' }}>
+            审查通过 — {reviewIssues.length} 个问题（无阻断性）
+          </span>
+        </div>
+      )}
+
       <div className="p-3 border-b border-vscode-border space-y-2">
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-semibold text-vscode-text">质量检查清单</h2>

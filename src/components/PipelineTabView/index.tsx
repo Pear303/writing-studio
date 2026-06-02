@@ -3,6 +3,7 @@ import { Sparkles, ListChecks } from 'lucide-react';
 import { VibeWritingPanel } from '../VibeWritingPanel';
 import { PipelineWriting } from '../PipelineWriting';
 import type { Book, Volume, PipelineStep1Config, PipelineStep2State, PipelineStep4State, PipelineStep5State, OutlineRound, DetailedOutlineRound, ChapterDraftRound, PipelineAutoState } from '../../types';
+import type { ChapterFacts } from '../../types/fact-extraction';
 
 interface PipelineTabViewProps {
   currentBook: Book | null;
@@ -24,6 +25,7 @@ interface PipelineTabViewProps {
   onPipelineBatchGenerateChapters?: (chapters: Array<{ index: number; title: string; outline: string }>) => Promise<Array<{ index: number; title: string; content: string }>>;
   onPipelineAddChapterToVolume?: (title: string, content: string, detailedOutline?: string) => void;
   onPipelinePreviewInEditor?: (title: string, content: string, onChange: (content: string) => void) => void;
+  onPipelineExtractFacts?: (chapterIndex: number, chapterTitle: string, chapterContent: string) => Promise<ChapterFacts | null>;
   showToast?: (message: string, type: 'info' | 'success' | 'error' | 'warning') => void;
 }
 
@@ -49,6 +51,7 @@ export const PipelineTabView: React.FC<PipelineTabViewProps> = ({
   onPipelineBatchGenerateChapters,
   onPipelineAddChapterToVolume,
   onPipelinePreviewInEditor,
+  onPipelineExtractFacts,
   showToast,
 }) => {
   const [activeTab, setActiveTab] = useState<TabId>('vibe');
@@ -113,6 +116,7 @@ export const PipelineTabView: React.FC<PipelineTabViewProps> = ({
               onBatchGenerateChapters={onPipelineBatchGenerateChapters}
               onAddChapterToVolume={onPipelineAddChapterToVolume}
               onPreviewInEditor={onPipelinePreviewInEditor}
+              onExtractFacts={onPipelineExtractFacts}
               showToast={showToast}
             />
           ) : (

@@ -1,6 +1,16 @@
 import type { WritingStage, WritingContext } from './usePrompt';
 import { STAGE_TO_PROMPTS, STAGE_NAMES } from './prompts-index';
 
+let cachedTaskBookText: string | null = null;
+
+export function setTaskBookText(text: string | null): void {
+  cachedTaskBookText = text;
+}
+
+export function getTaskBookText(): string | null {
+  return cachedTaskBookText;
+}
+
 function getPromptsByStage(stage: WritingStage, promptsMap: Map<string, string>): string[] {
   const fileNames = STAGE_TO_PROMPTS[stage] || [];
   return fileNames.map(fn => promptsMap.get(fn) || '').filter(Boolean);
@@ -59,62 +69,66 @@ function buildContextSection(ctx: Partial<WritingContext>, stage: WritingStage):
   }
   
   if (stage === 'CHAPTER_WRITING') {
-    if (ctx.chapterNumber) 
-      sections.push(`章节序号：第${ctx.chapterNumber}章`);
-    if (ctx.chapterTitle) 
-      sections.push(`章节标题：${ctx.chapterTitle}`);
-    if (ctx.previousChapterSummary) 
-      sections.push(`上章摘要：\n${ctx.previousChapterSummary}`);
-    if (ctx.previousHook) 
-      sections.push(`上章悬念：${ctx.previousHook}`);
-    if (ctx.currentMystery) 
-      sections.push(`本阶段悬念：${ctx.currentMystery}`);
-    if (ctx.wordCountTarget) 
-      sections.push(`目标字数：约${ctx.wordCountTarget}字`);
-    if ((ctx as any).emotionalTone) 
-      sections.push(`情感基调：${(ctx as any).emotionalTone}`);
-    if ((ctx as any).keyPlotPoints) 
-      sections.push(`关键情节点：\n${(ctx as any).keyPlotPoints}`);
-    if ((ctx as any).povCharacter) 
-      sections.push(`视角角色：${(ctx as any).povCharacter}`);
-    
-    const planningCtx = (ctx as any).planningContext;
-    if (planningCtx) {
-      sections.push('\n【大纲规划信息】');
-      if (planningCtx.novelType) sections.push(`题材类型：${planningCtx.novelType}`);
-      if (planningCtx.coreIdea) sections.push(`核心创意：\n${planningCtx.coreIdea}`);
-      if (planningCtx.protagonistTypes?.length) sections.push(`主角类型：${planningCtx.protagonistTypes.join('、')}`);
-    }
-    
-    const characterCtx = (ctx as any).characterContext;
-    if (characterCtx && characterCtx.characterName) {
-      sections.push('\n【角色信息】');
-      sections.push(`角色姓名：${characterCtx.characterName}`);
-      if (characterCtx.personalityCore) sections.push(`性格特点：${characterCtx.personalityCore}`);
-    }
-    
-    const detailedOutlineCtx = (ctx as any).detailedOutlineContext;
-    if (detailedOutlineCtx) {
-      sections.push('\n【详细纲目】');
-      if (detailedOutlineCtx.chaptersToGenerate) 
-        sections.push(`生成章节数：${detailedOutlineCtx.chaptersToGenerate}章`);
-      if (detailedOutlineCtx.startChapter) 
-        sections.push(`起始章节：第${detailedOutlineCtx.startChapter}章`);
+    if (cachedTaskBookText) {
+      sections.push(cachedTaskBookText);
+    } else {
+      if (ctx.chapterNumber) 
+        sections.push(`章节序号：第${ctx.chapterNumber}章`);
+      if (ctx.chapterTitle) 
+        sections.push(`章节标题：${ctx.chapterTitle}`);
+      if (ctx.previousChapterSummary) 
+        sections.push(`上章摘要：\n${ctx.previousChapterSummary}`);
+      if (ctx.previousHook) 
+        sections.push(`上章悬念：${ctx.previousHook}`);
+      if (ctx.currentMystery) 
+        sections.push(`本阶段悬念：${ctx.currentMystery}`);
+      if (ctx.wordCountTarget) 
+        sections.push(`目标字数：约${ctx.wordCountTarget}字`);
+      if ((ctx as any).emotionalTone) 
+        sections.push(`情感基调：${(ctx as any).emotionalTone}`);
+      if ((ctx as any).keyPlotPoints) 
+        sections.push(`关键情节点：\n${(ctx as any).keyPlotPoints}`);
+      if ((ctx as any).povCharacter) 
+        sections.push(`视角角色：${(ctx as any).povCharacter}`);
       
-      const outlineChapters = detailedOutlineCtx.chapters;
-      if (outlineChapters?.length) {
-        sections.push(`\n已有纲目章节：`);
-        const targetChapter = ctx.chapterNumber;
-        const relevantChapters = targetChapter 
-          ? outlineChapters.filter((c: any) => c.chapterNumber === targetChapter || c.chapter === targetChapter)
-          : outlineChapters.slice(0, 3);
-        relevantChapters.forEach((c: any) => {
-          const chNum = c.chapterNumber || c.chapter;
-          const chTitle = c.title || c.chapterTitle || `第${chNum}章`;
-          const chSummary = c.summary || c.summary || '';
-          const chHook = c.hook || c.悬念 || '';
-          sections.push(`- ${chTitle}: ${chSummary}${chHook ? ' | 悬念: ' + chHook : ''}`);
-        });
+      const planningCtx = (ctx as any).planningContext;
+      if (planningCtx) {
+        sections.push('\n【大纲规划信息】');
+        if (planningCtx.novelType) sections.push(`题材类型：${planningCtx.novelType}`);
+        if (planningCtx.coreIdea) sections.push(`核心创意：\n${planningCtx.coreIdea}`);
+        if (planningCtx.protagonistTypes?.length) sections.push(`主角类型：${planningCtx.protagonistTypes.join('、')}`);
+      }
+      
+      const characterCtx = (ctx as any).characterContext;
+      if (characterCtx && characterCtx.characterName) {
+        sections.push('\n【角色信息】');
+        sections.push(`角色姓名：${characterCtx.characterName}`);
+        if (characterCtx.personalityCore) sections.push(`性格特点：${characterCtx.personalityCore}`);
+      }
+      
+      const detailedOutlineCtx = (ctx as any).detailedOutlineContext;
+      if (detailedOutlineCtx) {
+        sections.push('\n【详细纲目】');
+        if (detailedOutlineCtx.chaptersToGenerate) 
+          sections.push(`生成章节数：${detailedOutlineCtx.chaptersToGenerate}章`);
+        if (detailedOutlineCtx.startChapter) 
+          sections.push(`起始章节：第${detailedOutlineCtx.startChapter}章`);
+        
+        const outlineChapters = detailedOutlineCtx.chapters;
+        if (outlineChapters?.length) {
+          sections.push(`\n已有纲目章节：`);
+          const targetChapter = ctx.chapterNumber;
+          const relevantChapters = targetChapter 
+            ? outlineChapters.filter((c: any) => c.chapterNumber === targetChapter || c.chapter === targetChapter)
+            : outlineChapters.slice(0, 3);
+          relevantChapters.forEach((c: any) => {
+            const chNum = c.chapterNumber || c.chapter;
+            const chTitle = c.title || c.chapterTitle || `第${chNum}章`;
+            const chSummary = c.summary || c.summary || '';
+            const chHook = c.hook || c.悬念 || '';
+            sections.push(`- ${chTitle}: ${chSummary}${chHook ? ' | 悬念: ' + chHook : ''}`);
+          });
+        }
       }
     }
   }

@@ -2,39 +2,21 @@
 你是一个小说写作助手。
 
 # 任务
-请根据以下信息撰写章节正文。
+请根据以下写作任务书撰写章节正文。
 
-# 上下文信息
-
-## 全书大纲摘要
-{{outlineSummary}}
-
-## 当前章节细纲
-第{{chapterIndex}}章：{{chapterTitle}}
-{{chapterOutline}}
+# 写作任务书
+{{taskBook}}
 
 {{#if previousChapterContent}}
 ## 上一章结尾（用于衔接）
 {{previousChapterContent}}
 {{/if}}
 
-{{#if writingStyle}}
-## 风格与要求
-写作风格：{{writingStyle}}
-{{/if}}
-
-{{#if storyLength}}
-篇幅要求：{{storyLength}}
-{{/if}}
-
-{{#if customRules}}
-自定义规则：{{customRules}}
-{{/if}}
-
 # ⚡ 输出要求
-1. 紧扣细纲内容展开，不遗漏关键情节点
+1. 紧扣任务书中的情节点展开，不遗漏关键情节点
 2. 与上一章自然衔接（如有）
 3. 章末设置悬念钩子
 4. 只输出正文内容，不要输出章节标题和额外说明
 5. 正文使用纯文本格式，不要使用 Markdown 标记（如 # 标题、**加粗、*斜体等）
-6. 避免冗余和重复描写，保持紧凑流畅
+6. 避免任务书中标注的反模式
+7. 避免冗余和重复描写，保持紧凑流畅

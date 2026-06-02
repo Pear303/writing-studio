@@ -79,6 +79,8 @@ export class NovelIDEDatabase extends Dexie {
   pipelineSessions!: Table<PipelineSession>;
   vibePresets!: Table<VibePreset>;
   pipelinePromptTemplates!: Table<PipelinePromptTemplate>;
+  chapterStateCommits!: Table<import('../types/fact-extraction').ChapterStateCommit>;
+  antiPatterns!: Table<import('../types').AntiPattern>;
 
   constructor() {
     super('NovelIDE');
@@ -141,6 +143,11 @@ export class NovelIDEDatabase extends Dexie {
 
     this.version(13).stores({
       pipelinePromptTemplates: 'id, userId, builtInId, stage, builtIn, order',
+    });
+
+    this.version(14).stores({
+      chapterStateCommits: 'id, bookId, chapterIndex, committedAt',
+      antiPatterns: 'id, bookId, category, frequency, lastSeen',
     });
 
     /*
@@ -311,6 +318,8 @@ export const exportAllData = async (): Promise<string> => {
     chapterVersions,
     llmConfigs,
     qaRecords,
+    chapterStateCommits: await db.chapterStateCommits.toArray(),
+    antiPatterns: await db.antiPatterns.toArray(),
     users,
     userSettings,
     formattingSettings,
@@ -335,7 +344,7 @@ export const importAllData = async (jsonData: string, mergeMode: boolean = true)
 
   if (!mergeMode) {
     await db.transaction('rw', 
-      [db.books, db.volumes, db.chapters, db.materials, db.aiConversations, db.chapterVersions, db.llmConfigs, db.qaRecords, db.users, db.userSettings],
+      [db.books, db.volumes, db.chapters, db.materials, db.aiConversations, db.chapterVersions, db.llmConfigs, db.qaRecords, db.users, db.userSettings, db.chapterStateCommits, db.antiPatterns],
       async () => {
         await db.books.clear();
         await db.volumes.clear();
@@ -347,6 +356,8 @@ export const importAllData = async (jsonData: string, mergeMode: boolean = true)
         await db.qaRecords.clear();
         await db.users.clear();
         await db.userSettings.clear();
+        await db.chapterStateCommits.clear();
+        await db.antiPatterns.clear();
         
         if (data.books?.length) {
           await db.books.bulkAdd(data.books.map(b => ({ ...b, userId: b.userId || importUserId })));
@@ -362,6 +373,8 @@ export const importAllData = async (jsonData: string, mergeMode: boolean = true)
         if (data.qaRecords?.length) await db.qaRecords.bulkAdd(data.qaRecords);
         if (data.users?.length) await db.users.bulkAdd(data.users);
         if (data.userSettings?.length) await db.userSettings.bulkAdd(data.userSettings);
+        if (data.chapterStateCommits?.length) await db.chapterStateCommits.bulkAdd(data.chapterStateCommits);
+        if (data.antiPatterns?.length) await db.antiPatterns.bulkAdd(data.antiPatterns);
       }
     );
     
@@ -378,7 +391,7 @@ export const importAllData = async (jsonData: string, mergeMode: boolean = true)
   }
   
   await db.transaction('rw', 
-    [db.books, db.volumes, db.chapters, db.materials, db.aiConversations, db.chapterVersions, db.llmConfigs, db.qaRecords, db.users, db.userSettings],
+    [db.books, db.volumes, db.chapters, db.materials, db.aiConversations, db.chapterVersions, db.llmConfigs, db.qaRecords, db.users, db.userSettings, db.chapterStateCommits, db.antiPatterns],
     async () => {
       const existingBookIds = new Set((await db.books.toArray()).map(b => b.id));
       const existingVolumeIds = new Set((await db.volumes.toArray()).map(v => v.id));
@@ -429,7 +442,7 @@ export const importAllData = async (jsonData: string, mergeMode: boolean = true)
       
       for (const chapter of data.chapters || []) {
         if (existingChapterIds.has(chapter.id)) {
-          await db.chapters.update(chapter.id, chapter);
+          await db.chapters.put(chapter);
           result.updated++;
         } else {
           await db.chapters.add(chapter);
