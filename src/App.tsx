@@ -2174,6 +2174,8 @@ ${chapterContents}
         writingGoal={writingGoal}
         todayWordCount={todayWordCount}
         pomodoro={pomodoro}
+        pomodoroTime={formatTime(pomodoro.timeLeft)}
+        pomodoroMode={pomodoro.mode}
         onTogglePomodoro={togglePomodoro}
         onResetPomodoro={resetPomodoro}
         onSwitchMode={switchPomodoroMode}

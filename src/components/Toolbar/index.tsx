@@ -52,6 +52,7 @@ export const Toolbar = ({
   const lineHeightDropdownRef = useRef<HTMLDivElement>(null);
   const paraSpacingDropdownRef = useRef<HTMLDivElement>(null);
   const exportMenuRef = useRef<HTMLDivElement>(null);
+  const exportWrapperRef = useRef<HTMLDivElement>(null);
   const showExportMenuRef = useRef(showExportMenu);
   showExportMenuRef.current = showExportMenu;
   const [, forceUpdate] = useState(0);
@@ -113,7 +114,7 @@ export const Toolbar = ({
    
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
-      if (showExportMenuRef.current && exportMenuRef.current && !exportMenuRef.current.contains(e.target as Node)) {
+      if (showExportMenuRef.current && exportWrapperRef.current && !exportWrapperRef.current.contains(e.target as Node)) {
         setShowExportMenu(false);
       }
       if (showFontSizeDropdown && fontSizeDropdownRef.current && !fontSizeDropdownRef.current.contains(e.target as Node)) {
@@ -224,7 +225,7 @@ export const Toolbar = ({
           <span className="toolbar-btn-text">保存</span>
         </button>
         {onExport && (
-          <div className="relative">
+          <div className="relative" ref={exportWrapperRef}>
             <button
               onClick={() => setShowExportMenu(!showExportMenu)}
               className="toolbar-btn"

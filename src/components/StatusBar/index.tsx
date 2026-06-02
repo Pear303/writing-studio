@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { FileText, Clock, Target, Timer, Save, Undo2, Redo2, Search, Type, Bot } from 'lucide-react';
+import React, { useState, useRef, useEffect } from 'react';
+import { FileText, Clock, Target, Timer, Save, Undo2, Redo2, Search, Type, Bot, Play, Pause, RotateCcw, ArrowRightLeft } from 'lucide-react';
 
 interface WritingGoal {
   dailyTarget: number;
@@ -169,18 +169,15 @@ export const StatusBar = ({
         )}
 
         {/* ========== 功能8: 番茄钟状态 ========== */}
-        {pomodoroTime && (
-          <span className="flex items-center space-x-1" title={`番茄钟 ${pomodoroMode === 'work' ? '工作中' : '休息中'}`}>
-            <Timer 
-              size={12} 
-              style={{ 
-                color: pomodoroMode === 'work' 
-                  ? 'var(--color-danger, #ef4444)' 
-                  : 'var(--color-success, #22c55e)' 
-              }} 
-            />
-            <span>{pomodoroTime}</span>
-          </span>
+        {pomodoro && (
+          <PomodoroControl
+            pomodoro={pomodoro}
+            pomodoroTime={pomodoroTime || ''}
+            pomodoroMode={pomodoroMode || 'work'}
+            onToggle={onTogglePomodoro}
+            onReset={onResetPomodoro}
+            onSwitchMode={onSwitchMode}
+          />
         )}
         
         {/* 保存状态 */}
@@ -241,6 +238,104 @@ export const StatusBar = ({
                 </span>
               </div>
             )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+interface PomodoroControlProps {
+  pomodoro: PomodoroState;
+  pomodoroTime: string;
+  pomodoroMode: 'work' | 'break';
+  onToggle?: () => void;
+  onReset?: () => void;
+  onSwitchMode?: () => void;
+}
+
+const PomodoroControl = ({ pomodoro, pomodoroTime, pomodoroMode, onToggle, onReset, onSwitchMode }: PomodoroControlProps) => {
+  const [showMenu, setShowMenu] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!showMenu) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setShowMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showMenu]);
+
+  const modeLabel = pomodoroMode === 'work' ? '专注' : '休息';
+  const modeColor = pomodoroMode === 'work'
+    ? 'var(--color-danger, #ef4444)'
+    : 'var(--color-success, #22c55e)';
+
+  return (
+    <div className="relative flex items-center" ref={menuRef}>
+      <button
+        onClick={onToggle}
+        onContextMenu={(e) => {
+          e.preventDefault();
+          setShowMenu(!showMenu);
+        }}
+        className="flex items-center space-x-1 transition-colors hover:opacity-100"
+        style={{ color: 'inherit', opacity: 0.75 }}
+        title={`番茄钟 · ${modeLabel} · ${pomodoroTime}${pomodoro.isRunning ? '' : '（点击开始）'} · 右键更多选项`}
+      >
+        <Timer
+          size={12}
+          style={{ color: modeColor }}
+        />
+        <span style={{ color: pomodoro.isRunning ? modeColor : 'inherit' }}>
+          {pomodoroTime}
+        </span>
+        {pomodoro.isRunning ? (
+          <Pause size={10} style={{ color: modeColor }} />
+        ) : (
+          <Play size={10} />
+        )}
+        {pomodoro.completedSessions > 0 && (
+          <span style={{ fontSize: '10px', opacity: 0.6 }}>
+            ×{pomodoro.completedSessions}
+          </span>
+        )}
+      </button>
+
+      {showMenu && (
+        <div
+          className="absolute bottom-6 right-0 bg-vscode-sidebar border border-vscode-border py-1 min-w-[140px] z-50 animate-dropdown-in"
+          style={{ borderRadius: '6px', boxShadow: '0 4px 12px rgba(0,0,0,0.15)' }}
+        >
+          <button
+            onClick={() => { onToggle?.(); setShowMenu(false); }}
+            className="w-full px-3 py-1.5 text-xs text-left text-vscode-text hover:bg-vscode-active/20 transition-colors flex items-center gap-2"
+          >
+            {pomodoro.isRunning ? <Pause size={12} /> : <Play size={12} />}
+            {pomodoro.isRunning ? '暂停' : '开始'}
+          </button>
+          <button
+            onClick={() => { onReset?.(); setShowMenu(false); }}
+            className="w-full px-3 py-1.5 text-xs text-left text-vscode-text hover:bg-vscode-active/20 transition-colors flex items-center gap-2"
+          >
+            <RotateCcw size={12} />
+            重置
+          </button>
+          <div className="border-t border-vscode-border my-1" />
+          <button
+            onClick={() => { onSwitchMode?.(); setShowMenu(false); }}
+            className="w-full px-3 py-1.5 text-xs text-left text-vscode-text hover:bg-vscode-active/20 transition-colors flex items-center gap-2"
+          >
+            <ArrowRightLeft size={12} />
+            切换到{pomodoroMode === 'work' ? '休息' : '专注'}模式
+          </button>
+          <div className="border-t border-vscode-border my-1" />
+          <div className="px-3 py-1 text-xs text-vscode-text opacity-50">
+            {modeLabel}时长: {pomodoroMode === 'work' ? pomodoro.workDuration : pomodoro.breakDuration}分钟
+            {pomodoro.completedSessions > 0 && ` · 已完成 ${pomodoro.completedSessions} 次`}
           </div>
         </div>
       )}
