@@ -1,3 +1,5 @@
+import type { ChapterFacts, ChapterStateCommit } from './fact-extraction';
+
 // 章节版本相关类型
 export interface ChapterVersion {
   id: string; // 格式: chapterId_timestamp
@@ -6,6 +8,9 @@ export interface ChapterVersion {
   wordCount: number;
   createdAt: number;
 }
+
+export type { EntitySnapshot, StateChange, NarrativeEvent, TimelineEntry, HookEntry, ChapterFacts, ChapterStateCommit } from './fact-extraction';
+export type { WritingTaskBook, TaskBookSources } from './task-book';
 
 // 书籍相关类型
 export interface Book {
@@ -53,6 +58,7 @@ export interface Chapter {
   wordCount: number;
   detailedOutline?: string;
   autoNumberExcluded?: boolean;
+  factExtraction?: ChapterFacts;
   order: number;
   createdAt: number;
   updatedAt: number;
@@ -411,7 +417,10 @@ export interface QARecord {
   stage: string;
   content: string;
   issues: QAIssue[];
+  reviewIssues?: ReviewIssue[];
+  hasBlocking?: boolean;
   score?: number;
+  dimensionScores?: Array<{ id: string; score: number; reason: string }>;
   createdAt: number;
 }
 
@@ -420,6 +429,41 @@ export interface QAIssue {
   message: string;
   location?: string;
   suggestion?: string;
+}
+
+export type ReviewSeverity = 'critical' | 'high' | 'medium' | 'low';
+export type ReviewCategory = 'continuity' | 'setting' | 'character' | 'timeline' | 'ai_flavor' | 'logic' | 'pacing' | 'other';
+
+export interface ReviewIssue {
+  severity: ReviewSeverity;
+  category: ReviewCategory;
+  location: string;
+  description: string;
+  evidence: string;
+  fixHint: string;
+  blocking: boolean;
+}
+
+export interface AntiPattern {
+  id: string;
+  bookId: string;
+  text: string;
+  source: 'review' | 'manual';
+  category: ReviewCategory;
+  frequency: number;
+  firstSeen: number;
+  lastSeen: number;
+}
+
+export interface ReviewContract {
+  mustCheck: string[];
+  blockingRules: string[];
+  genreRisks: string[];
+  antiPatterns: string[];
+  thresholds: {
+    blockingCount: number;
+    minScore: number;
+  };
 }
 
 export interface WritingGoal {
@@ -458,6 +502,8 @@ export interface FullExportData {
   llmConfigs: LLMConfig[];
 
   qaRecords: QARecord[];
+  chapterStateCommits: ChapterStateCommit[];
+  antiPatterns: AntiPattern[];
   users: any[];
   userSettings: any[];
   formattingSettings: Record<string, FormattingSettings>;

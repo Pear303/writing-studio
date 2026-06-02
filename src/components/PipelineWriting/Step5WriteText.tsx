@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Copy, Loader2, RefreshCw, Play, Pause, Check, ExternalLink, BookOpen, Zap } from 'lucide-react';
 import type { PipelineStep2State, PipelineStep4State, PipelineStep5State, PipelineStep3Config, ChapterDraft, ChapterDraftRound } from '../../types';
+import type { ChapterFacts } from '../../types/fact-extraction';
 
 interface Step5WriteTextProps {
   step2State: PipelineStep2State | null;
@@ -13,6 +14,7 @@ interface Step5WriteTextProps {
   onBatchGenerateChapters?: (chapters: Array<{ index: number; title: string; outline: string }>) => Promise<Array<{ index: number; title: string; content: string }>>;
   onAddChapterToVolume: (title: string, content: string, detailedOutline?: string) => void;
   onPreviewInEditor?: (title: string, content: string, onChange: (content: string) => void) => void;
+  onExtractFacts?: (chapterIndex: number, chapterTitle: string, chapterContent: string) => Promise<ChapterFacts | null>;
 }
 
 const btnStyle = (variant: 'primary' | 'secondary' | 'danger' | 'warning' | 'success'): React.CSSProperties => {
@@ -69,6 +71,7 @@ export const Step5WriteText: React.FC<Step5WriteTextProps> = ({
   onBatchGenerateChapters,
   onAddChapterToVolume,
   onPreviewInEditor,
+  onExtractFacts,
 }) => {
   const [isWorking, setIsWorking] = useState(false);
   const [isBatchGenerating, setIsBatchGenerating] = useState(false);
@@ -166,6 +169,14 @@ export const Step5WriteText: React.FC<Step5WriteTextProps> = ({
         chapters: newChapters,
         currentChapterIndex: currentIdx,
       });
+
+      if (onExtractFacts && content) {
+        try {
+          await onExtractFacts(currentIdx, chapters[currentIdx].title, content);
+        } catch {
+          // extraction failure is non-blocking
+        }
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : '生成章节失败');
       setAutoMode(false);

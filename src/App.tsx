@@ -1018,6 +1018,7 @@ ${chapterContents}
         previousContent,
         step2State?.currentOutline || '',
         step3Config || { writingStyle: '', storyLength: '', customRules: '' },
+        currentBook?.id,
       );
       return result;
     } catch (error) {
@@ -1064,6 +1065,7 @@ ${chapterContents}
         chapters,
         step2State?.currentOutline || '',
         step3Config || { writingStyle: '', storyLength: '', customRules: '' },
+        currentBook?.id,
       );
       return result;
     } catch (error) {
@@ -1112,6 +1114,30 @@ ${chapterContents}
     } catch (error) {
       console.error('录入章节失败:', error);
       showToast('录入章节失败', 'error');
+    }
+  };
+
+  const handlePipelineExtractFacts = async (chapterIndex: number, chapterTitle: string, chapterContent: string): Promise<import('./types/fact-extraction').ChapterFacts | null> => {
+    if (!currentBook) return null;
+    try {
+      const { factExtractor } = await import('./services/FactExtractor');
+      const { novelLLMService } = await import('./llm/NovelLLMService');
+      const llmCall = async (prompt: string): Promise<string> => {
+        const result = await novelLLMService.generateRaw(prompt);
+        return result.content;
+      };
+      const facts = await factExtractor.extractFromChapter(
+        currentBook.id,
+        chapterIndex,
+        chapterTitle,
+        chapterContent,
+        llmCall,
+      );
+      await factExtractor.commitState(currentBook.id, chapterIndex, facts);
+      return facts;
+    } catch (error) {
+      console.error('事实提取失败:', error);
+      return null;
     }
   };
 
@@ -1945,6 +1971,7 @@ ${chapterContents}
                   onPipelineRefineChapter={handlePipelineRefineChapter}
                   onPipelineBatchGenerateChapters={handlePipelineBatchGenerateChapters}
                   onPipelineAddChapterToVolume={handlePipelineAddChapterToVolume}
+                  onPipelineExtractFacts={handlePipelineExtractFacts}
                   showToast={showToast}
                   agentState={agent.state}
                   onAgentSendMessage={agent.sendMessage}

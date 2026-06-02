@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { FolderPlus, ChevronRight, ChevronLeft, FileText } from 'lucide-react';
 import type { Book, Volume, PipelineStep, PipelineStep1Config, PipelineStep3Config, PipelineStep2State, PipelineStep4State, PipelineStep5State, OutlineRound, DetailedOutlineRound, ChapterDraftRound, PipelineSession } from '../../types';
+import type { ChapterFacts } from '../../types/fact-extraction';
 import { db, getCurrentUserId, getPipelinePromptTemplates, ensureDefaultPipelinePromptTemplates } from '../../db';
 import { Step1Config } from './Step1Config';
 import { Step2Outline } from './Step2Outline';
@@ -24,6 +25,7 @@ interface PipelineWritingProps {
   onBatchGenerateChapters?: (chapters: Array<{ index: number; title: string; outline: string }>) => Promise<Array<{ index: number; title: string; content: string }>>;
   onAddChapterToVolume: (title: string, content: string, detailedOutline?: string) => void;
   onPreviewInEditor?: (title: string, content: string, onChange: (content: string) => void) => void;
+  onExtractFacts?: (chapterIndex: number, chapterTitle: string, chapterContent: string) => Promise<ChapterFacts | null>;
   showToast: (message: string, type: 'info' | 'success' | 'error' | 'warning') => void;
 }
 
@@ -66,6 +68,7 @@ export const PipelineWriting: React.FC<PipelineWritingProps> = ({
   onBatchGenerateChapters,
   onAddChapterToVolume,
   onPreviewInEditor,
+  onExtractFacts,
   showToast,
 }) => {
   const [step, setStep] = useState<PipelineStep>('step1');
@@ -537,6 +540,7 @@ export const PipelineWriting: React.FC<PipelineWritingProps> = ({
             onBatchGenerateChapters={onBatchGenerateChapters}
             onAddChapterToVolume={onAddChapterToVolume}
             onPreviewInEditor={onPreviewInEditor}
+            onExtractFacts={onExtractFacts}
           />
         )}
       </div>
