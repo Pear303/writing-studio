@@ -344,6 +344,64 @@ export const SettingsPanel = ({
                     onScopeChange={(scope) => updateFontSettings({ fontApplyScope: scope })}
                   />
                 </div>
+
+                <div>
+                  <label className="block text-xs mb-1" style={{ color: 'var(--color-vscode-text, #cccccc)', opacity: 0.6 }}>字体粗细</label>
+                  <select
+                    value={fontSettings.fontWeight}
+                    onChange={(e) => updateFontSettings({ fontWeight: e.target.value })}
+                    className="w-full px-2 py-1.5 text-sm text-vscode-text focus:outline-none focus:border-vscode-active select-field"
+                  >
+                    <option value="100">100 - 极细</option>
+                    <option value="200">200 - 特细</option>
+                    <option value="300">300 - 细体</option>
+                    <option value="400">400 - 常规</option>
+                    <option value="500">500 - 中等</option>
+                    <option value="600">600 - 半粗</option>
+                    <option value="700">700 - 粗体</option>
+                    <option value="800">800 - 特粗</option>
+                    <option value="900">900 - 极粗</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs mb-1" style={{ color: 'var(--color-vscode-text, #cccccc)', opacity: 0.6 }}>字体大小</label>
+                  <select
+                    value={fontSettings.fontSize}
+                    onChange={(e) => updateFontSettings({ fontSize: e.target.value })}
+                    className="w-full px-2 py-1.5 text-sm text-vscode-text focus:outline-none focus:border-vscode-active select-field"
+                  >
+                    <option value="12">12px</option>
+                    <option value="13">13px</option>
+                    <option value="14">14px</option>
+                    <option value="15">15px</option>
+                    <option value="16">16px</option>
+                    <option value="17">17px</option>
+                    <option value="18">18px</option>
+                    <option value="20">20px</option>
+                    <option value="22">22px</option>
+                    <option value="24">24px</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs mb-1" style={{ color: 'var(--color-vscode-text, #cccccc)', opacity: 0.6 }}>字间距</label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="range"
+                      min="-2"
+                      max="10"
+                      step="0.5"
+                      value={fontSettings.letterSpacing}
+                      onChange={(e) => updateFontSettings({ letterSpacing: e.target.value })}
+                      className="flex-1"
+                      style={{ accentColor: 'var(--color-vscode-active)' }}
+                    />
+                    <span className="text-xs text-vscode-text" style={{ minWidth: '36px', textAlign: 'right', opacity: 0.7 }}>
+                      {fontSettings.letterSpacing}px
+                    </span>
+                  </div>
+                </div>
               </div>
             </div>
 

@@ -304,15 +304,14 @@ export const BookCardList = ({ books, onBookSelect, onRefresh }: BookCardListPro
           <p className="text-sm mt-2">点击"新建书籍"开始创作</p>
         </div>
       ) : (
-        <div className="flex flex-wrap content-start justify-center gap-3 px-4 py-4">
+        <div className="flex flex-col gap-2 px-4 py-4">
           {books.map((book) => (
-            <div key={book.id} className="w-[118px]">
-              <BookCard
-                book={book}
-                onClick={() => onBookSelect(book)}
-                onContextMenu={(e) => handleContextMenu(e, book)}
-              />
-            </div>
+            <BookCard
+              key={book.id}
+              book={book}
+              onClick={() => onBookSelect(book)}
+              onContextMenu={(e) => handleContextMenu(e, book)}
+            />
           ))}
         </div>
       )}

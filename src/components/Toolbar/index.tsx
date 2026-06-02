@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Save, Undo, Redo, Search, Download, Wand2, Settings, Bold, Italic, Underline, Strikethrough, Quote, Type, X, ChevronDown, AlignJustify, MoveVertical, Maximize2, Minimize2 } from 'lucide-react';
+import { Save, Undo, Redo, Search, Download, Wand2, Settings, Bold, Italic, Underline, Strikethrough, Quote, Type, ChevronDown, Maximize2, Minimize2 } from 'lucide-react';
 import type { FormattingSettings, Book, Chapter } from '../../types';
 import type { Editor } from '@tiptap/react';
 import { FontSelector } from '../FontSelector';
@@ -212,15 +212,15 @@ export const Toolbar = ({
   const paragraphSpacingOptions = ['0px', '0.25em', '0.5em', '0.75em', '1em', '1.5em', '2em'];
 
   return (
-    <div className="h-toolbar bg-vscode-bg border-b border-vscode-border flex items-center px-4 relative">
-      <div className="flex items-center space-x-1">
+    <div className="h-toolbar bg-vscode-bg border-b border-vscode-border flex items-center px-3 gap-1">
+      <div className="flex items-center gap-0.5 shrink-0">
         <button
           onClick={onSave}
           className={`toolbar-btn ${!currentChapter ? 'opacity-50 cursor-not-allowed' : ''}`}
           title={!currentChapter ? "请先选择或创建一个章节" : "保存 (Ctrl+S)"}
           disabled={!currentChapter}
         >
-          <Save size={16} />
+          <Save size={15} />
           <span className="toolbar-btn-text">保存</span>
         </button>
         {onExport && (
@@ -230,14 +230,15 @@ export const Toolbar = ({
               className="toolbar-btn"
               title="导出当前书籍"
             >
-              <Download size={16} />
+              <Download size={15} />
               <span className="toolbar-btn-text">导出</span>
             </button>
             
             {showExportMenu && (
               <div 
                 ref={exportMenuRef}
-                className="absolute top-full left-0 mt-1 bg-vscode-sidebar border border-vscode-border py-1 min-w-[120px] z-50 rounded-sm shadow-lg"
+                className="absolute top-full left-0 mt-1 bg-vscode-sidebar border border-vscode-border py-1 min-w-[120px] z-50 animate-dropdown-in"
+                style={{ borderRadius: '6px', boxShadow: '0 4px 12px rgba(0,0,0,0.15)' }}
               >
                 {(['txt', 'md', 'html'] as const).map((format) => (
                   <button
@@ -246,7 +247,7 @@ export const Toolbar = ({
                       onExport(format);
                       setShowExportMenu(false);
                     }}
-                    className="w-full px-3 py-2 text-sm text-left text-vscode-text hover:bg-vscode-active/20 transition-colors capitalize"
+                    className="w-full px-3 py-1.5 text-sm text-left text-vscode-text hover:bg-vscode-active/20 transition-colors capitalize"
                   >
                     导出为 {format === 'md' ? 'Markdown' : format.toUpperCase()}
                   </button>
@@ -257,30 +258,29 @@ export const Toolbar = ({
         )}
         {onFormat && onOpenFormattingSettings && (
           <>
-            <div className="w-px h-5 bg-vscode-border mx-1"></div>
+            <div className="w-px h-4 bg-vscode-border mx-0.5"></div>
             <button
               onClick={handleFormat}
               className="toolbar-btn"
               title="一键排版（使用保存的排版规则）"
             >
-              <Wand2 size={16} />
-              <span className="toolbar-btn-text">一键排版</span>
+              <Wand2 size={15} />
+              <span className="toolbar-btn-text">排版</span>
             </button>
             <button
               onClick={onOpenFormattingSettings}
               className="toolbar-btn"
               title="自定义排版设置"
             >
-              <Settings size={16} />
-              <span className="toolbar-btn-text">排版设置</span>
+              <Settings size={15} />
             </button>
           </>
         )}
-
-        
       </div>
 
-      <div className="flex items-center space-x-2 absolute left-1/2 -translate-x-1/2 z-10">
+      <div className="w-px h-4 bg-vscode-border mx-1 shrink-0"></div>
+
+      <div className="flex items-center gap-0.5 shrink-0">
         {editor && (
           <div className="relative">
             <button
@@ -288,19 +288,25 @@ export const Toolbar = ({
                 e.stopPropagation();
                 setShowFontPanel(!showFontPanel);
               }}
-              className={`flex items-center space-x-1 px-2 py-1 border border-vscode-border ${
-                showFontPanel ? 'bg-vscode-active text-white' : 'text-vscode-text hover:bg-gray-700'
-              }`}
-              title="字体设置"
+              className={`toolbar-btn ${showFontPanel ? 'bg-vscode-active/15' : ''}`}
+              style={{ color: showFontPanel ? 'var(--color-vscode-active)' : undefined }}
+              title="字体与格式"
             >
-              <Type size={16} />
-              <span className="text-xs">字体</span>
+              <Type size={15} />
+              <span className="toolbar-btn-text">字体</span>
             </button>
 
-{showFontPanel && (
-              <div className="absolute top-full left-0 mt-1 bg-vscode-sidebar border border-vscode-border z-50 flex items-center px-2 py-1">
-                <div className="flex items-center space-x-2 border-r border-vscode-border pr-2">
-                  <Type size={14} className="text-vscode-text opacity-60" />
+            {showFontPanel && (
+              <div 
+                className="absolute top-full left-0 mt-1 bg-vscode-sidebar border border-vscode-border z-50 p-2 animate-dropdown-in"
+                style={{ 
+                  borderRadius: '8px', 
+                  boxShadow: '0 8px 24px rgba(0,0,0,0.15)',
+                  width: '320px',
+                }}
+              >
+                <div className="flex items-center gap-2 mb-2 pb-2 border-b border-vscode-border">
+                  <Type size={13} className="text-vscode-text opacity-50 shrink-0" />
                   <FontSelector
                     fonts={[...chineseFonts, ...englishFonts]}
                     value={settings.chineseFont}
@@ -314,195 +320,192 @@ export const Toolbar = ({
                   />
                 </div>
 
-                <div className="flex items-center space-x-1 border-r border-vscode-border pr-2 ml-2">
+                <div className="flex items-center gap-1 mb-2 pb-2 border-b border-vscode-border">
                   <button
                     onClick={() => editor.chain().focus().toggleBold().run()}
-                    className={`p-1.5 cursor-pointer ${editor.isActive('bold') ? 'bg-vscode-active text-white' : 'text-vscode-text hover:bg-gray-700'}`}
+                    className={`p-1.5 cursor-pointer ${editor.isActive('bold') ? 'bg-vscode-active text-white' : 'text-vscode-text hover:bg-vscode-active/10'}`}
+                    style={{ borderRadius: '4px', transition: 'background-color 0.15s ease, color 0.15s ease' }}
                     title="加粗 (Ctrl+B)"
                   >
-                    <Bold size={18} />
+                    <Bold size={16} />
                   </button>
                   <button
                     onClick={() => editor.chain().focus().toggleItalic().run()}
-                    className={`p-1.5 cursor-pointer ${editor.isActive('italic') ? 'bg-vscode-active text-white' : 'text-vscode-text hover:bg-gray-700'}`}
+                    className={`p-1.5 cursor-pointer ${editor.isActive('italic') ? 'bg-vscode-active text-white' : 'text-vscode-text hover:bg-vscode-active/10'}`}
+                    style={{ borderRadius: '4px', transition: 'background-color 0.15s ease, color 0.15s ease' }}
                     title="斜体 (Ctrl+I)"
                   >
-                    <Italic size={18} />
+                    <Italic size={16} />
                   </button>
                   <button
                     onClick={() => editor.chain().focus().toggleUnderline().run()}
-                    className={`p-1.5 cursor-pointer ${editor.isActive('underline') ? 'bg-vscode-active text-white' : 'text-vscode-text hover:bg-gray-700'}`}
+                    className={`p-1.5 cursor-pointer ${editor.isActive('underline') ? 'bg-vscode-active text-white' : 'text-vscode-text hover:bg-vscode-active/10'}`}
+                    style={{ borderRadius: '4px', transition: 'background-color 0.15s ease, color 0.15s ease' }}
                     title="下划线 (Ctrl+U)"
                   >
-                    <Underline size={18} />
+                    <Underline size={16} />
                   </button>
                   <button
                     onClick={() => editor.chain().focus().toggleStrike().run()}
-                    className={`p-1.5 cursor-pointer ${editor.isActive('strike') ? 'bg-vscode-active text-white' : 'text-vscode-text hover:bg-gray-700'}`}
+                    className={`p-1.5 cursor-pointer ${editor.isActive('strike') ? 'bg-vscode-active text-white' : 'text-vscode-text hover:bg-vscode-active/10'}`}
+                    style={{ borderRadius: '4px', transition: 'background-color 0.15s ease, color 0.15s ease' }}
                     title="删除线"
                   >
-                    <Strikethrough size={18} />
+                    <Strikethrough size={16} />
+                  </button>
+                  <div className="w-px h-4 bg-vscode-border mx-0.5"></div>
+                  <button
+                    onClick={() => editor.chain().focus().toggleBlockquote().run()}
+                    className={`p-1.5 cursor-pointer ${editor.isActive('blockquote') ? 'bg-vscode-active text-white' : 'text-vscode-text hover:bg-vscode-active/10'}`}
+                    style={{ borderRadius: '4px', transition: 'background-color 0.15s ease, color 0.15s ease' }}
+                    title="引用"
+                  >
+                    <Quote size={16} />
                   </button>
                 </div>
 
-                <div className="flex items-center space-x-1 border-r border-vscode-border pr-2 ml-2">
-                  <Type size={14} className="text-vscode-text opacity-60" />
-                  <div ref={fontSizeDropdownRef} className="relative">
-                    <button
-                      onClick={() => setShowFontSizeDropdown(!showFontSizeDropdown)}
-                      className={`font-size-btn flex items-center justify-between text-xs ${
-                        showFontSizeDropdown ? 'bg-vscode-active text-white' : 'text-vscode-text hover:bg-gray-700'
-                      }`}
-                      style={{ width: '52px' }}
-                    >
-                      <span className="text-xs">{fontSize}</span>
-                      <ChevronDown size={12} className="shrink-0 ml-1" />
-                    </button>
-                    {showFontSizeDropdown && (
-                      <div className="absolute top-full left-0 mt-1 bg-vscode-sidebar border border-vscode-border z-50 w-[58px] rounded-sm shadow-lg py-1">
-                        {['12', '14', '16', '18', '20', '24'].map((size) => (
-                          <button
-                            key={size}
-                            onClick={() => {
-                              handleFontSizeChange(size);
-                              setShowFontSizeDropdown(false);
-                            }}
-                            className={`w-full px-3 py-1 text-xs text-left text-vscode-text hover:bg-vscode-active/20 ${
-                              fontSize === size ? 'bg-vscode-active/30 text-white' : ''
-                            }`}
-                          >
-                            {size}
-                          </button>
-                        ))}
-                      </div>
-                    )}
+                <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs text-vscode-text opacity-50 shrink-0">字号</span>
+                    <div ref={fontSizeDropdownRef} className="relative">
+                      <button
+                        onClick={() => setShowFontSizeDropdown(!showFontSizeDropdown)}
+                        className="flex items-center justify-between text-xs px-1.5 py-0.5 border border-vscode-border text-vscode-text hover:bg-vscode-active/10"
+                        style={{ width: '48px', borderRadius: '4px', transition: 'background-color 0.15s ease' }}
+                      >
+                        <span>{fontSize}</span>
+                        <ChevronDown size={10} className="shrink-0 ml-0.5 opacity-50" />
+                      </button>
+                      {showFontSizeDropdown && (
+                        <div className="absolute top-full left-0 mt-1 bg-vscode-sidebar border border-vscode-border z-50 w-[52px] py-0.5 animate-dropdown-in" style={{ borderRadius: '6px', boxShadow: '0 4px 12px rgba(0,0,0,0.12)' }}>
+                          {['12', '14', '16', '18', '20', '24'].map((size) => (
+                            <button
+                              key={size}
+                              onClick={() => {
+                                handleFontSizeChange(size);
+                                setShowFontSizeDropdown(false);
+                              }}
+                              className={`w-full px-2 py-1 text-xs text-left text-vscode-text hover:bg-vscode-active/20 transition-colors ${
+                                fontSize === size ? 'bg-vscode-active/20' : ''
+                              }`}
+                            >
+                              {size}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs text-vscode-text opacity-50 shrink-0">行距</span>
+                    <div ref={lineHeightDropdownRef} className="relative">
+                      <button
+                        onClick={() => setShowLineHeightDropdown(!showLineHeightDropdown)}
+                        className="flex items-center justify-between text-xs px-1.5 py-0.5 border border-vscode-border text-vscode-text hover:bg-vscode-active/10"
+                        style={{ width: '48px', borderRadius: '4px', transition: 'background-color 0.15s ease' }}
+                        title="行间距"
+                      >
+                        <span>{localLineHeight}</span>
+                        <ChevronDown size={10} className="shrink-0 ml-0.5 opacity-50" />
+                      </button>
+                      {showLineHeightDropdown && (
+                        <div className="absolute top-full left-0 mt-1 bg-vscode-sidebar border border-vscode-border z-50 w-[56px] py-0.5 animate-dropdown-in" style={{ borderRadius: '6px', boxShadow: '0 4px 12px rgba(0,0,0,0.12)' }}>
+                          {lineHeightOptions.map((lh) => (
+                            <button
+                              key={lh}
+                              onClick={() => {
+                                handleLineHeightChange(lh);
+                                setShowLineHeightDropdown(false);
+                              }}
+                              className={`w-full px-2 py-1 text-xs text-left text-vscode-text hover:bg-vscode-active/20 transition-colors ${
+                                localLineHeight === lh ? 'bg-vscode-active/20' : ''
+                              }`}
+                            >
+                              {lh}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs text-vscode-text opacity-50 shrink-0">段距</span>
+                    <div ref={paraSpacingDropdownRef} className="relative">
+                      <button
+                        onClick={() => setShowParaSpacingDropdown(!showParaSpacingDropdown)}
+                        className="flex items-center justify-between text-xs px-1.5 py-0.5 border border-vscode-border text-vscode-text hover:bg-vscode-active/10"
+                        style={{ width: '52px', borderRadius: '4px', transition: 'background-color 0.15s ease' }}
+                        title="段间距"
+                      >
+                        <span>{localParagraphSpacing}</span>
+                        <ChevronDown size={10} className="shrink-0 ml-0.5 opacity-50" />
+                      </button>
+                      {showParaSpacingDropdown && (
+                        <div className="absolute top-full left-0 mt-1 bg-vscode-sidebar border border-vscode-border z-50 w-[60px] py-0.5 animate-dropdown-in" style={{ borderRadius: '6px', boxShadow: '0 4px 12px rgba(0,0,0,0.12)' }}>
+                          {paragraphSpacingOptions.map((ps) => (
+                            <button
+                              key={ps}
+                              onClick={() => {
+                                handleParagraphSpacingChange(ps);
+                                setShowParaSpacingDropdown(false);
+                              }}
+                              className={`w-full px-2 py-1 text-xs text-left text-vscode-text hover:bg-vscode-active/20 transition-colors ${
+                                localParagraphSpacing === ps ? 'bg-vscode-active/20' : ''
+                              }`}
+                            >
+                              {ps}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
-
-                {/* 行间距 */}
-                <div className="flex items-center space-x-1 border-r border-vscode-border pr-2 ml-2">
-                  <AlignJustify size={14} className="text-vscode-text opacity-60" />
-                  <div ref={lineHeightDropdownRef} className="relative">
-                    <button
-                      onClick={() => setShowLineHeightDropdown(!showLineHeightDropdown)}
-                      className={`font-size-btn flex items-center justify-between text-xs ${
-                        showLineHeightDropdown ? 'bg-vscode-active text-white' : 'text-vscode-text hover:bg-gray-700'
-                      }`}
-                      style={{ width: '56px' }}
-                      title="行间距"
-                    >
-                      <span className="text-xs">{localLineHeight}</span>
-                      <ChevronDown size={12} className="shrink-0 ml-1" />
-                    </button>
-                    {showLineHeightDropdown && (
-                      <div className="absolute top-full left-0 mt-1 bg-vscode-sidebar border border-vscode-border z-50 w-[64px] rounded-sm shadow-lg py-1">
-                        {lineHeightOptions.map((lh) => (
-                          <button
-                            key={lh}
-                            onClick={() => {
-                              handleLineHeightChange(lh);
-                              setShowLineHeightDropdown(false);
-                            }}
-                            className={`w-full px-3 py-1 text-xs text-left text-vscode-text hover:bg-vscode-active/20 ${
-                              localLineHeight === lh ? 'bg-vscode-active/30 text-white' : ''
-                            }`}
-                          >
-                            {lh}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* 段间距 */}
-                <div className="flex items-center space-x-1 border-r border-vscode-border pr-2 ml-2">
-                  <MoveVertical size={14} className="text-vscode-text opacity-60" />
-                  <div ref={paraSpacingDropdownRef} className="relative">
-                    <button
-                      onClick={() => setShowParaSpacingDropdown(!showParaSpacingDropdown)}
-                      className={`font-size-btn flex items-center justify-between text-xs ${
-                        showParaSpacingDropdown ? 'bg-vscode-active text-white' : 'text-vscode-text hover:bg-gray-700'
-                      }`}
-                      style={{ width: '62px' }}
-                      title="段间距"
-                    >
-                      <span className="text-xs">{localParagraphSpacing}</span>
-                      <ChevronDown size={12} className="shrink-0 ml-1" />
-                    </button>
-                    {showParaSpacingDropdown && (
-                      <div className="absolute top-full left-0 mt-1 bg-vscode-sidebar border border-vscode-border z-50 w-[72px] rounded-sm shadow-lg py-1">
-                        {paragraphSpacingOptions.map((ps) => (
-                          <button
-                            key={ps}
-                            onClick={() => {
-                              handleParagraphSpacingChange(ps);
-                              setShowParaSpacingDropdown(false);
-                            }}
-                            className={`w-full px-3 py-1 text-xs text-left text-vscode-text hover:bg-vscode-active/20 ${
-                              localParagraphSpacing === ps ? 'bg-vscode-active/30 text-white' : ''
-                            }`}
-                          >
-                            {ps}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                <button
-                  onClick={() => editor.chain().focus().toggleBlockquote().run()}
-                  className={`p-1.5 ml-2 cursor-pointer ${editor.isActive('blockquote') ? 'bg-vscode-active text-white' : 'text-vscode-text hover:bg-gray-700'}`}
-                  title="引用"
-                >
-                  <Quote size={18} />
-                </button>
-
-                <button
-                  onClick={() => setShowFontPanel(false)}
-                  className="p-1.5 ml-2 cursor-pointer text-vscode-text hover:bg-gray-700"
-                  title="关闭"
-                >
-                  <X size={18} />
-                </button>
               </div>
             )}
           </div>
         )}
-        
+      </div>
+
+      <div className="w-px h-4 bg-vscode-border mx-1 shrink-0"></div>
+
+      <div className="flex items-center gap-0.5 shrink-0">
         <button
           onClick={onUndo}
           className="icon-btn"
           title="撤销 (Ctrl+Z)"
         >
-          <Undo size={18} />
+          <Undo size={16} />
         </button>
         <button
           onClick={onRedo}
           className="icon-btn"
           title="重做 (Ctrl+Y)"
         >
-          <Redo size={18} />
+          <Redo size={16} />
         </button>
         <button
           onClick={onFindReplace}
           className="icon-btn"
           title="查找/替换 (Ctrl+F)"
         >
-          <Search size={18} />
+          <Search size={16} />
         </button>
       </div>
 
-      <div className="absolute right-4 flex items-center gap-3">
+      <div className="flex-1" />
+
+      <div className="flex items-center gap-2 shrink-0">
         <button
           onClick={toggleFullscreen}
           className="icon-btn"
           title={isFullscreen ? '退出全屏 (F11)' : '全屏 (F11)'}
         >
-          {isFullscreen ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
+          {isFullscreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
         </button>
-        <span className="text-sm text-vscode-text min-w-[80px] text-right">字数: {wordCount.toLocaleString()}</span>
+        <span className="text-xs text-vscode-text opacity-60 min-w-[60px] text-right">{wordCount.toLocaleString()} 字</span>
       </div>
     </div>
   );

@@ -25,33 +25,39 @@ export const ConfirmDialog = ({
 
   return (
     <div
-      className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+      className="fixed inset-0 flex items-center justify-center z-50 animate-fade-in"
+      style={{ backgroundColor: 'rgba(0, 0, 0, 0.5)', backdropFilter: 'blur(2px)' }}
       onClick={onCancel}
     >
       <div
-        className="bg-vscode-sidebar border border-vscode-border w-[360px]"
-        style={{ borderRadius: 0, boxShadow: 'none' }}
+        className="bg-vscode-sidebar border border-vscode-border w-[360px] animate-scale-in"
+        style={{ borderRadius: '8px', boxShadow: '0 8px 32px rgba(0,0,0,0.2)' }}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="p-4 border-b border-vscode-border">
-          <h3 className="text-lg font-semibold text-vscode-text">{title}</h3>
+          <h3 className="text-base font-semibold text-vscode-text">{title}</h3>
         </div>
 
         <div className="p-4">
-          <p className="text-vscode-text">{message}</p>
+          <p className="text-sm text-vscode-text leading-relaxed">{message}</p>
         </div>
 
-        <div className="flex justify-end space-x-3 px-4 py-3 border-t border-vscode-border">
+        <div className="flex justify-end gap-2 px-4 py-3 border-t border-vscode-border">
           <button
             onClick={onCancel}
-            className="btn-secondary px-4 py-2"
+            className="btn-secondary px-4 py-1.5 text-sm"
+            style={{ borderRadius: '6px', transition: 'background-color 0.15s ease' }}
           >
             {cancelText}
           </button>
           <button
             onClick={onConfirm}
-            className="btn-primary px-4 py-2"
-            style={danger ? { color: 'var(--color-danger, #ef4444)' } : undefined}
+            className="btn-primary px-4 py-1.5 text-sm"
+            style={{ 
+              borderRadius: '6px', 
+              transition: 'background-color 0.15s ease',
+              ...(danger ? { color: 'var(--color-danger, #ef4444)' } : {}),
+            }}
           >
             {confirmText}
           </button>

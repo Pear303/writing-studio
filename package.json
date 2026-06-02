@@ -33,8 +33,10 @@
     "react": "^19.1.0",
     "react-complex-tree": "^2.6.1",
     "react-dom": "^19.1.0",
+    "react-markdown": "^10.1.0",
     "react-virtualized-auto-sizer": "^2.0.3",
     "react-window": "^2.2.7",
+    "remark-gfm": "^4.0.1",
     "tailwindcss": "^4.2.2",
     "uuid": "^13.0.0"
   },

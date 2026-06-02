@@ -16,6 +16,8 @@ export interface FontSettings {
   chineseFont: string;
   englishFont: string;
   fontSize: string;
+  fontWeight: string;
+  letterSpacing: string;
   fontApplyScope: 'global' | 'editor';
 }
 
@@ -23,7 +25,15 @@ function loadSettings(): FontSettings {
   const saved = localStorage.getItem(FONT_SETTINGS_KEY);
   if (saved) {
     try {
-      return JSON.parse(saved);
+      const parsed = JSON.parse(saved);
+      return {
+        chineseFont: parsed.chineseFont || 'Microsoft YaHei',
+        englishFont: parsed.englishFont || 'Arial',
+        fontSize: parsed.fontSize || '16',
+        fontWeight: parsed.fontWeight || '400',
+        letterSpacing: parsed.letterSpacing || '0',
+        fontApplyScope: parsed.fontApplyScope || 'editor',
+      };
     } catch {
       // ignore parse error
     }
@@ -32,6 +42,8 @@ function loadSettings(): FontSettings {
     chineseFont: 'Microsoft YaHei',
     englishFont: 'Arial',
     fontSize: '16',
+    fontWeight: '400',
+    letterSpacing: '0',
     fontApplyScope: 'editor',
   };
 }
@@ -87,12 +99,20 @@ export function useFontManager() {
   useEffect(() => {
     if (settings.fontApplyScope === 'global') {
       document.documentElement.style.setProperty('--app-font-family', settings.chineseFont);
+      document.documentElement.style.setProperty('--app-font-weight', settings.fontWeight);
+      document.documentElement.style.setProperty('--app-letter-spacing', settings.letterSpacing + 'px');
       document.documentElement.style.removeProperty('--editor-font-family');
+      document.documentElement.style.removeProperty('--editor-font-weight');
+      document.documentElement.style.removeProperty('--editor-letter-spacing');
     } else {
       document.documentElement.style.removeProperty('--app-font-family');
+      document.documentElement.style.removeProperty('--app-font-weight');
+      document.documentElement.style.removeProperty('--app-letter-spacing');
       document.documentElement.style.setProperty('--editor-font-family', settings.chineseFont);
+      document.documentElement.style.setProperty('--editor-font-weight', settings.fontWeight);
+      document.documentElement.style.setProperty('--editor-letter-spacing', settings.letterSpacing + 'px');
     }
-  }, [settings.fontApplyScope, settings.chineseFont]);
+  }, [settings.fontApplyScope, settings.chineseFont, settings.fontWeight, settings.letterSpacing]);
 
   const updateSettings = useCallback((newSettings: Partial<FontSettings>) => {
     setSettings((prev) => {

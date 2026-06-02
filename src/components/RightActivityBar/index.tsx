@@ -1,5 +1,5 @@
-import React from 'react';
-import { FileText, BookOpen, CheckCircle, ListChecks } from 'lucide-react';
+import React, { useState } from 'react';
+import { FileText, BookOpen, ListChecks } from 'lucide-react';
 
 export type RightActivityId = 'preview' | 'outline' | 'qa';
 
@@ -19,11 +19,11 @@ const activities: Array<{ id: RightActivityId; label: string }> = [
 const getActivityIcon = (id: RightActivityId) => {
   switch (id) {
     case 'preview':
-      return <FileText size={20} />;
+      return <FileText size={18} />;
     case 'outline':
-      return <BookOpen size={20} />;
+      return <BookOpen size={18} />;
     case 'qa':
-      return <ListChecks size={20} />;
+      return <ListChecks size={18} />;
     default:
       return null;
   }
@@ -35,6 +35,8 @@ export const RightActivityBar: React.FC<RightActivityBarProps> = ({
   onTogglePanel,
   isPanelVisible 
 }) => {
+  const [hoveredActivity, setHoveredActivity] = useState<string | null>(null);
+
   return (
     <div 
       className="w-10 h-full flex flex-col items-center py-2 border-l"
@@ -44,23 +46,50 @@ export const RightActivityBar: React.FC<RightActivityBarProps> = ({
       }}
     >
       <div className="flex-1 flex flex-col items-center">
-        {activities.map((activity) => (
-          <button
-            key={activity.id}
-            onClick={() => onActivityClick(activity.id)}
-            className="w-10 h-10 flex items-center justify-center mb-1 transition-all duration-200"
-            style={{
-              color: activeActivity === activity.id ? 'var(--color-vscode-active)' : 'var(--color-vscode-text)',
-              borderLeft: activeActivity === activity.id ? '2px solid var(--color-vscode-active)' : '2px solid transparent',
-              backgroundColor: activeActivity === activity.id ? 'rgba(0, 122, 204, 0.1)' : 'transparent',
-            }}
-            title={activity.label}
-          >
-            <span style={{ color: 'inherit' }}>
-              {getActivityIcon(activity.id)}
-            </span>
-          </button>
-        ))}
+        {activities.map((activity) => {
+          const isActive = activeActivity === activity.id;
+          const isHovered = hoveredActivity === activity.id;
+          return (
+            <button
+              key={activity.id}
+              onClick={() => onActivityClick(activity.id)}
+              onMouseEnter={() => setHoveredActivity(activity.id)}
+              onMouseLeave={() => setHoveredActivity(null)}
+              className="w-9 h-9 flex items-center justify-center mb-1 relative"
+              style={{
+                color: isActive ? 'var(--color-vscode-active)' : 'var(--color-vscode-text)',
+                transition: 'color 0.2s ease',
+              }}
+              title={activity.label}
+            >
+              <div
+                style={{
+                  position: 'absolute',
+                  right: 0,
+                  top: '50%',
+                  transform: `translateY(-50%) scaleX(${isActive ? 1 : 0})`,
+                  width: '2px',
+                  height: '18px',
+                  backgroundColor: 'var(--color-vscode-active)',
+                  borderRadius: '2px 0 0 2px',
+                  transition: 'transform 0.2s cubic-bezier(0.16, 1, 0.3, 1)',
+                }}
+              />
+              <div
+                style={{
+                  position: 'absolute',
+                  inset: '4px',
+                  borderRadius: '5px',
+                  backgroundColor: isActive ? 'var(--color-vscode-active-light)' : isHovered ? 'var(--color-hover-bg)' : 'transparent',
+                  transition: 'background-color 0.15s ease',
+                }}
+              />
+              <span style={{ color: 'inherit', position: 'relative', zIndex: 1, transition: 'transform 0.15s ease', transform: isHovered && !isActive ? 'scale(1.1)' : 'scale(1)' }}>
+                {getActivityIcon(activity.id)}
+              </span>
+            </button>
+          );
+        })}
       </div>
     </div>
   );

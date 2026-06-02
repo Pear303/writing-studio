@@ -3,10 +3,10 @@
   "userId": "f996dbc8-701b-4027-ab7d-4aa7e992d2b6",
   "name": "1",
   "description": "",
-  "totalWords": 9696,
+  "totalWords": 7360,
   "status": "ongoing",
   "createdAt": 1779764452099,
-  "updatedAt": 1780324603645,
+  "updatedAt": 1780373697462,
   "autoNumbering": true,
   "numberingFormat": "arabic",
   "numberingScope": "global"
