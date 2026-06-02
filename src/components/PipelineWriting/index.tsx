@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { FolderPlus, ChevronRight, ChevronLeft } from 'lucide-react';
+import { FolderPlus, ChevronRight, ChevronLeft, FileText } from 'lucide-react';
 import type { Book, Volume, PipelineStep, PipelineStep1Config, PipelineStep3Config, PipelineStep2State, PipelineStep4State, PipelineStep5State, OutlineRound, DetailedOutlineRound, ChapterDraftRound, PipelineSession } from '../../types';
-import { db } from '../../db';
+import { db, getCurrentUserId, getPipelinePromptTemplates, ensureDefaultPipelinePromptTemplates } from '../../db';
 import { Step1Config } from './Step1Config';
 import { Step2Outline } from './Step2Outline';
 import { Step3Style } from './Step3Style';
 import { Step4DetailedOutline } from './Step4DetailedOutline';
 import { Step5WriteText } from './Step5WriteText';
+import { PromptTemplateManager } from './PromptTemplateManager';
 
 interface PipelineWritingProps {
   currentBook: Book | null;
@@ -80,6 +81,7 @@ export const PipelineWriting: React.FC<PipelineWritingProps> = ({
   const [creatingVolume, setCreatingVolume] = useState(false);
   const [newVolumeName, setNewVolumeName] = useState('');
   const [sessionLoaded, setSessionLoaded] = useState(false);
+  const [showTemplateManager, setShowTemplateManager] = useState(false);
 
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -422,22 +424,48 @@ export const PipelineWriting: React.FC<PipelineWritingProps> = ({
         borderBottom: '1px solid var(--color-vscode-border)',
         flexShrink: 0,
       }}>
-        <div style={{ fontSize: '11px', color: 'var(--color-vscode-text)', opacity: 0.6, marginBottom: '4px' }}>
-          当前卷：{selectedVolume?.name}
+        <div style={{ fontSize: '11px', color: 'var(--color-vscode-text)', opacity: 0.6, marginBottom: '4px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div>
+            当前卷：{selectedVolume?.name}
+            <button
+              type="button"
+              style={{
+                marginLeft: '6px',
+                fontSize: '11px',
+                color: 'var(--color-vscode-active)',
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                textDecoration: 'underline',
+              }}
+              onClick={() => setSelectedVolumeId(null)}
+            >
+              切换
+            </button>
+          </div>
           <button
             type="button"
             style={{
-              marginLeft: '6px',
               fontSize: '11px',
-              color: 'var(--color-vscode-active)',
+              color: 'var(--color-vscode-text)',
               background: 'none',
-              border: 'none',
+              border: '1px solid var(--color-vscode-border)',
+              borderRadius: '3px',
               cursor: 'pointer',
-              textDecoration: 'underline',
+              padding: '2px 8px',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '4px',
+              opacity: 0.7,
+              transition: 'all 0.15s ease',
             }}
-            onClick={() => setSelectedVolumeId(null)}
+            onMouseEnter={e => { e.currentTarget.style.opacity = '1'; e.currentTarget.style.borderColor = 'var(--color-vscode-active)'; }}
+            onMouseLeave={e => { e.currentTarget.style.opacity = '0.7'; e.currentTarget.style.borderColor = 'var(--color-vscode-border)'; }}
+            onClick={() => setShowTemplateManager(true)}
+            title="管理提示词模板"
           >
-            切换
+            <FileText size={12} />
+            模板
           </button>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -545,6 +573,13 @@ export const PipelineWriting: React.FC<PipelineWritingProps> = ({
           </span>
         )}
       </div>
+
+      {showTemplateManager && (
+        <PromptTemplateManager
+          onClose={() => setShowTemplateManager(false)}
+          showToast={showToast}
+        />
+      )}
     </div>
   );
 };

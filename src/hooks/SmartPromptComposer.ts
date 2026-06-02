@@ -21,10 +21,12 @@ export class SmartPromptComposer {
   private prompts: Map<string, string>;
   private cache: Map<string, string>;
   private options: ComposerOptions;
+  private userTemplateOverrides: Map<string, string>;
   
   constructor(prompts: Map<string, string>, options: ComposerOptions = {}) {
     this.prompts = prompts;
     this.cache = new Map();
+    this.userTemplateOverrides = new Map();
     this.options = {
       enableCache: true,
       ...options,
@@ -131,10 +133,30 @@ export class SmartPromptComposer {
     this.clearCache();
   }
 
+  setUserTemplateOverride(templateId: string, content: string): void {
+    this.userTemplateOverrides.set(templateId, content);
+    this.clearCache();
+  }
+
+  removeUserTemplateOverride(templateId: string): void {
+    this.userTemplateOverrides.delete(templateId);
+    this.clearCache();
+  }
+
+  clearUserTemplateOverrides(): void {
+    this.userTemplateOverrides.clear();
+    this.clearCache();
+  }
+
   async loadTemplate(templateId: string): Promise<string> {
     const templateConfig = PROMPT_TEMPLATES[templateId];
     if (!templateConfig) {
       throw new Error(`未找到模板配置: ${templateId}`);
+    }
+
+    const userOverride = this.userTemplateOverrides.get(templateId);
+    if (userOverride) {
+      return userOverride;
     }
 
     const userTemplate = await this.loadUserTemplate(templateConfig.file);

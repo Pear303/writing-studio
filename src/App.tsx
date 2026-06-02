@@ -17,7 +17,7 @@ import { MaterialEditor } from './components/MaterialEditor';
 import { QAPanel } from './components/QAPanel';
 import type { RichTextEditorRef } from './components/RichTextEditor';
 import type { ActivityId, Book, Chapter, Volume, FormattingSettings, Material, OutlineItemData, WordCountSettings, PipelineStep1Config, PipelineStep2State, PipelineStep4State, PipelineStep5State, OutlineRound, DetailedOutlineRound, ChapterDraftRound } from './types';
-import { db, saveChapterVersion, cleanupOldVersions, exportAllData, importAllData, getDefaultLLMConfig, decodeApiKey } from './db';
+import { db, saveChapterVersion, cleanupOldVersions, exportAllData, importAllData, getDefaultLLMConfig, decodeApiKey, getCurrentUserId, getPipelinePromptTemplates, ensureDefaultPipelinePromptTemplates } from './db';
 import { countWords, clearExtraBlankLines, clearExtraSpaces, convertFullWidthToHalfWidth, markdownToOutline } from './utils/helpers';
 import { getSearchReplaceCommands } from './extensions/searchReplace';
 
@@ -868,6 +868,18 @@ ${chapterContents}
       baseUrl: defaultConfig.apiUrl.replace(/\/chat\/completions\/?$/, '').replace(/\/$/, ''),
       model: defaultConfig.model,
     });
+
+    const userId = getCurrentUserId();
+    if (userId) {
+      await ensureDefaultPipelinePromptTemplates(userId);
+      const userTemplates = await getPipelinePromptTemplates(userId);
+      novelLLMService.clearUserTemplateOverrides();
+      for (const t of userTemplates) {
+        if (t.builtIn && t.content.trim()) {
+          novelLLMService.setUserTemplateOverride(t.builtInId, t.content);
+        }
+      }
+    }
   };
 
   const handlePipelineGenerateOutline = async (config: PipelineStep1Config): Promise<string> => {
