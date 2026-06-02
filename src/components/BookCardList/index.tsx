@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Plus, Edit, Trash2, Download, BookOpen, X, Upload } from 'lucide-react';
+import { Plus, Edit, Trash2, Download, BookOpen, X, Upload, FileUp } from 'lucide-react';
 import { save } from '@tauri-apps/plugin-dialog';
 import { writeTextFile } from '@tauri-apps/plugin-fs';
 import { BookCard } from '../BookCard';
 import { ContextMenu } from '../ContextMenu';
 import { Toast, type ToastType } from '../Toast';
+import { ImportNovelModal } from '../ImportNovelModal';
 import type { Book } from '../../types';
 import { db, getCurrentUserId } from '../../db';
 import { generateId } from '../../utils/helpers';
@@ -22,6 +23,8 @@ export const BookCardList = ({ books, onBookSelect, onRefresh }: BookCardListPro
     book: Book;
   } | null>(null);
   const [toast, setToast] = useState<{ message: string; type: ToastType } | null>(null);
+  
+  const [showImportModal, setShowImportModal] = useState(false);
   
   // 上次导出路径
   const [lastExportPath, setLastExportPath] = useState<string | null>(null);
@@ -287,13 +290,22 @@ export const BookCardList = ({ books, onBookSelect, onRefresh }: BookCardListPro
       {/* 次左侧-顶部-标题栏 */}
       <div className="flex items-center justify-between px-4 py-3">
         <h2 className="text-2xl font-bold text-vscode-text">我的书架</h2>
-        <button
-          onClick={handleCreateBook}
-          className="btn-primary flex items-center space-x-2"
-        >
-          <Plus size={18} />
-          <span>新建书籍</span>
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowImportModal(true)}
+            className="btn-secondary flex items-center space-x-2"
+          >
+            <FileUp size={18} />
+            <span>导入小说</span>
+          </button>
+          <button
+            onClick={handleCreateBook}
+            className="btn-primary flex items-center space-x-2"
+          >
+            <Plus size={18} />
+            <span>新建书籍</span>
+          </button>
+        </div>
       </div>
 
       {/* 次左侧-书架 */}
@@ -518,6 +530,17 @@ export const BookCardList = ({ books, onBookSelect, onRefresh }: BookCardListPro
           </div>
         </div>
       )}
+
+      <ImportNovelModal
+        isOpen={showImportModal}
+        onClose={() => setShowImportModal(false)}
+        onImportComplete={(bookId) => {
+          onRefresh();
+          const book = books.find(b => b.id === bookId);
+          if (book) onBookSelect(book);
+        }}
+        showToast={showToast}
+      />
     </div>
   );
 };

@@ -15,7 +15,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-from api.routes import chat, history, tokens, skills, memory, todo, pipeline, vibe_settings
+from api.routes import chat, history, tokens, skills, memory, todo, pipeline, vibe_settings, novel_import
 app.include_router(chat.router, prefix="/api/chat", tags=["chat"])
 app.include_router(history.router, prefix="/api/history", tags=["history"])
 app.include_router(tokens.router, prefix="/api/tokens", tags=["tokens"])
@@ -24,6 +24,7 @@ app.include_router(memory.router, prefix="/api/memory", tags=["memory"])
 app.include_router(todo.router, prefix="/api/todo", tags=["todo"])
 app.include_router(pipeline.router, prefix="/api/pipeline", tags=["pipeline"])
 app.include_router(vibe_settings.router, prefix="/api/vibe-settings", tags=["vibe-settings"])
+app.include_router(novel_import.router, prefix="/api/novel-import", tags=["novel-import"])
 
 _agent_instance = None
 

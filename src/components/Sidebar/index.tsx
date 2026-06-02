@@ -8,6 +8,7 @@ import { PipelineWriting } from '../PipelineWriting';
 import { AgentPanel } from '../AgentPanel';
 import { VibeWritingPanel } from '../VibeWritingPanel';
 import { PipelineTabView } from '../PipelineTabView';
+import { ImportNovelModal } from '../ImportNovelModal';
 import type { ActivityId, Book, Chapter, Material, FormattingSettings, WordCountSettings, PipelineStep1Config, PipelineStep2State, PipelineStep4State, PipelineStep5State, OutlineRound, DetailedOutlineRound, ChapterDraftRound, Volume, AgentState, PipelineAutoState } from '../../types';
 import { db } from '../../db';
 import { useUser } from '../../auth/UserContext';
@@ -127,10 +128,10 @@ export const Sidebar = ({
   onVibeIntervene,
   onVibeClearPipeline,
 }: SidebarProps) => {
-  // 使用 useUser hook 获取用户信息
   const { user } = useUser();
   
   const [books, setBooks] = useState<Book[]>([]);
+  const [showImportModal, setShowImportModal] = useState(false);
 
   // 加载书籍列表
   useEffect(() => {
@@ -230,6 +231,7 @@ export const Sidebar = ({
                 onSwitchSession={onAgentSwitchSession || (() => {})}
                 onDeleteSession={onAgentDeleteSession || (() => {})}
                 apiUrl={agentApiUrl || 'http://localhost:8000'}
+                onImportNovel={() => setShowImportModal(true)}
               />
             ) : (
               <div className="p-4 text-vscode-text">
@@ -270,6 +272,17 @@ export const Sidebar = ({
             </div>
           )}
       </div>
+
+      <ImportNovelModal
+        isOpen={showImportModal}
+        onClose={() => setShowImportModal(false)}
+        onImportComplete={(bookId) => {
+          loadBooks();
+          const book = books.find(b => b.id === bookId);
+          if (book && onBookSelect) onBookSelect(book);
+        }}
+        showToast={showToast || ((msg, type) => {})}
+      />
     </div>
   );
 };
