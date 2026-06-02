@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Bot, Settings, Trash2, Wifi, WifiOff, Send, Square, Loader2, ChevronRight, ChevronDown, Plus, MessageSquare, PanelLeftClose, PanelLeft } from 'lucide-react';
+import { Bot, Settings, Trash2, Wifi, WifiOff, Send, Square, Loader2, ChevronRight, ChevronDown, Plus, MessageSquare, PanelLeftClose, PanelLeft, FileUp } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import type { AgentState, AgentMessage, AgentActivityItem, AgentSession } from '../../types';
@@ -17,6 +17,7 @@ interface AgentPanelProps {
   onSwitchSession: (sessionId: string) => void;
   onDeleteSession: (sessionId: string) => void;
   apiUrl: string;
+  onImportNovel?: () => void;
 }
 
 export const AgentPanel: React.FC<AgentPanelProps> = ({
@@ -31,6 +32,7 @@ export const AgentPanel: React.FC<AgentPanelProps> = ({
   onSwitchSession,
   onDeleteSession,
   apiUrl,
+  onImportNovel,
 }) => {
   const [inputMessage, setInputMessage] = useState('');
   const [showSettings, setShowSettings] = useState(false);
@@ -287,6 +289,25 @@ export const AgentPanel: React.FC<AgentPanelProps> = ({
         {state.tokenUsage.total > 0 && (
           <div className="px-3 py-1 border-t flex items-center gap-3" style={{ borderColor: 'var(--color-vscode-border)', fontSize: '10px', color: 'var(--color-vscode-text)', opacity: 0.5 }}>
             <span>Tokens: {state.tokenUsage.input} in / {state.tokenUsage.output} out</span>
+          </div>
+        )}
+
+        {onImportNovel && (
+          <div className="px-3 pt-2 flex gap-1.5" style={{ borderTop: '1px solid var(--color-vscode-border)' }}>
+            <button
+              onClick={onImportNovel}
+              className="flex items-center gap-1 px-2 py-1 rounded text-xs transition-colors"
+              style={{
+                border: '1px solid var(--color-vscode-border)',
+                color: 'var(--color-vscode-text)',
+                backgroundColor: 'transparent',
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--color-vscode-active-light)'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
+            >
+              <FileUp size={12} />
+              导入小说
+            </button>
           </div>
         )}
 
