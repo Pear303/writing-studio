@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 
 export type ToastType = 'success' | 'error' | 'warning' | 'info';
 
@@ -15,10 +15,13 @@ export const Toast = ({
   duration = 1500,
   onClose,
 }: ToastProps) => {
+  const [isExiting, setIsExiting] = useState(false);
+
   useEffect(() => {
     if (duration > 0) {
       const timer = setTimeout(() => {
-        onClose();
+        setIsExiting(true);
+        setTimeout(onClose, 250);
       }, duration);
       return () => clearTimeout(timer);
     }
@@ -37,23 +40,55 @@ export const Toast = ({
     }
   };
 
+  const getIcon = () => {
+    switch (type) {
+      case 'success':
+        return '✓';
+      case 'error':
+        return '✕';
+      case 'warning':
+        return '!';
+      default:
+        return 'i';
+    }
+  };
+
   return (
-    <div className="fixed top-2 right-2 z-[100]" style={{ pointerEvents: 'none' }}>
+    <div className="fixed top-4 right-4 z-[100]" style={{ pointerEvents: 'none' }}>
       <div
-        className="px-2.5 py-1 text-xs"
+        className={isExiting ? 'animate-slide-out' : 'animate-slide-in'}
         style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+          padding: '8px 14px',
           backgroundColor: 'var(--color-vscode-sidebar, #252526)',
           color: 'var(--color-vscode-text, #cccccc)',
+          border: `1px solid var(--color-vscode-border)`,
           borderLeft: `3px solid ${getColor()}`,
-          borderTop: '1px solid var(--color-vscode-border)',
-          borderRight: '1px solid var(--color-vscode-border)',
-          borderBottom: '1px solid var(--color-vscode-border)',
-          borderRadius: '2px',
-          boxShadow: '0 1px 4px rgba(0,0,0,0.2)',
+          borderRadius: '6px',
+          boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
           whiteSpace: 'nowrap',
+          fontSize: '13px',
+          pointerEvents: 'auto',
         }}
       >
-        {message}
+        <span style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          width: '18px',
+          height: '18px',
+          borderRadius: '50%',
+          backgroundColor: getColor(),
+          color: '#fff',
+          fontSize: '11px',
+          fontWeight: 700,
+          flexShrink: 0,
+        }}>
+          {getIcon()}
+        </span>
+        <span>{message}</span>
       </div>
     </div>
   );

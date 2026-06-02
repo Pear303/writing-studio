@@ -206,8 +206,8 @@ export const StatusBar = ({
       {/* 详细统计弹窗 */}
       {showDetails && (
         <div 
-          className="absolute bottom-8 right-4 bg-vscode-sidebar border border-vscode-border p-4 min-w-[200px] z-50"
-          style={{ borderRadius: '2px' }}
+          className="absolute bottom-8 right-4 bg-vscode-sidebar border border-vscode-border p-4 min-w-[200px] z-50 animate-dropdown-in"
+          style={{ borderRadius: '8px', boxShadow: '0 4px 16px rgba(0,0,0,0.15)' }}
         >
           <h3 className="text-sm font-semibold text-vscode-text mb-3">详细统计</h3>
           <div className="space-y-2 text-xs">

@@ -277,8 +277,11 @@ export function useAgent() {
       setState(prev => ({
         ...prev,
         running: false,
+        currentStreamContent: '',
         messages: prev.messages.map(m =>
-          m.id === assistantMsgId ? { ...m, isStreaming: false } : m
+          m.id === assistantMsgId
+            ? { ...m, content: m.content || prev.currentStreamContent, isStreaming: false }
+            : m
         ),
       }));
       loadSessions();
@@ -300,9 +303,6 @@ export function useAgent() {
           ...prev,
           currentStreamContent: newStreamContent,
           currentStreamGen: gen,
-          messages: prev.messages.map(m =>
-            m.id === assistantMsgId ? { ...m, content: newStreamContent } : m
-          ),
         };
       });
       return;
@@ -411,9 +411,10 @@ export function useAgent() {
       setState(prev => ({
         ...prev,
         tokenUsage: tokens || prev.tokenUsage,
+        currentStreamContent: '',
         messages: prev.messages.map(m =>
           m.id === assistantMsgId
-            ? { ...m, content: reply || m.content, isStreaming: false }
+            ? { ...m, content: reply || prev.currentStreamContent || m.content, isStreaming: false }
             : m
         ),
       }));

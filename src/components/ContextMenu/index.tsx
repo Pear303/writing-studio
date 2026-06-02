@@ -1,5 +1,4 @@
 import React, { useEffect, useRef } from 'react';
-import { Edit, Trash2, Download } from 'lucide-react';
 
 export type MenuItem = {
   icon?: React.ReactNode;
@@ -51,8 +50,8 @@ export const ContextMenu = ({ x, y, items, onClose }: ContextMenuProps) => {
   return (
     <div
       ref={menuRef}
-      className="fixed bg-vscode-sidebar border border-vscode-border py-1 z-50 min-w-[160px]"
-      style={{ borderRadius: '2px', left: adjustedX, top: adjustedY }}
+      className="fixed bg-vscode-sidebar border border-vscode-border py-1 z-50 min-w-[160px] animate-dropdown-in"
+      style={{ borderRadius: '6px', left: adjustedX, top: adjustedY, boxShadow: '0 4px 16px rgba(0,0,0,0.15)' }}
     >
       {items.map((item, index) =>
         item.type === 'divider' ? (
@@ -64,16 +63,17 @@ export const ContextMenu = ({ x, y, items, onClose }: ContextMenuProps) => {
               item.onClick();
               onClose();
             }}
-            className={`w-full px-3 py-2 text-sm text-left flex items-center space-x-2 transition-colors ${
+            className={`w-full px-3 py-1.5 text-sm text-left flex items-center gap-2 ${
               item.danger
-                ? 'hover:opacity-80'
-                : 'text-vscode-text hover:bg-vscode-active/20'
+                ? 'hover:bg-red-500/10'
+                : 'text-vscode-text hover:bg-vscode-active/10'
             }`}
-            style={item.danger ? {
-              color: 'var(--color-danger, #ef4444)',
-            } : undefined}
+            style={{
+              color: item.danger ? 'var(--color-danger, #ef4444)' : undefined,
+              transition: 'background-color 0.1s ease',
+            }}
           >
-            {item.icon && <span className="w-4 h-4">{item.icon}</span>}
+            {item.icon && <span className="w-4 h-4 shrink-0">{item.icon}</span>}
             <span>{item.label}</span>
           </button>
         )

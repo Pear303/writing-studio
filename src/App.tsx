@@ -1778,78 +1778,85 @@ ${chapterContents}
 
           {!isFullScreen && (
             <>
-              {isSidebarVisible && (
-                  <Sidebar
-                    activeActivity={activeActivity}
-                    isSidebarVisible={isSidebarVisible}
-                    currentBook={currentBook}
-                    onBookSelect={handleBookSelect}
-                    onBookDeselect={handleBookDeselect}
-                    onChapterSelect={handleChapterSelect}
-                    onVolumeChange={() => setOutlineRefreshTrigger(prev => prev + 1)}
-                    activeChapterId={currentChapter?.id || null}
-                    onInsertMaterial={handleInsertMaterial}
-                    onMaterialSelect={handleMaterialSelect}
-                    formattingSettings={formattingSettings}
-                    onSaveFormattingSettings={handleSaveFormattingSettings}
-                    wordCountSettings={wordCountSettings}
-                    onSaveWordCountSettings={(s: WordCountSettings) => {
-                      setWordCountSettings(s);
-                      localStorage.setItem('wordCountSettings', JSON.stringify(s));
-                    }}
-                    theme={theme}
-                    onThemeChange={setTheme}
-                    outlineRefreshTrigger={outlineRefreshTrigger}
-                    width={sidebarWidth}
-                    currentOutlineVolume={currentOutlineVolume}
-                    onVolumeOutlineSelect={handleVolumeOutlineSelect}
-                    onPipelineGenerateOutline={handlePipelineGenerateOutline}
-                    onPipelineRefineOutline={handlePipelineRefineOutline}
-                    onPipelineOverwriteOutline={handlePipelineOverwriteOutline}
-                    onPipelineGenerateDetailedOutline={handlePipelineGenerateDetailedOutline}
-                    onPipelineRefineDetailedOutline={handlePipelineRefineDetailedOutline}
-                    onPipelineRefineDetailedOutlineChapter={handlePipelineRefineDetailedOutlineChapter}
-                    onPipelinePreviewInEditor={handlePipelinePreviewInEditor}
-                    onPipelineGenerateChapter={handlePipelineGenerateChapter}
-                    onPipelineRefineChapter={handlePipelineRefineChapter}
-                    onPipelineBatchGenerateChapters={handlePipelineBatchGenerateChapters}
-                    onPipelineAddChapterToVolume={handlePipelineAddChapterToVolume}
-                    showToast={showToast}
-                    agentState={agent.state}
-                    onAgentSendMessage={agent.sendMessage}
-                    onAgentStopGeneration={agent.stopGeneration}
-                    onAgentClearMessages={agent.clearMessages}
-                    onAgentCheckConnection={agent.checkConnection}
-                    onAgentUpdateApiUrl={agent.updateApiUrl}
-                    onAgentLoadSessions={agent.loadSessions}
-                    onAgentCreateSession={agent.createSession}
-                    onAgentSwitchSession={agent.switchSession}
-                    onAgentDeleteSession={agent.deleteSession}
-                    agentApiUrl={agent.apiUrl}
-                    vibePipelineState={pipeline.state.pipeline}
-                    vibeLoading={pipeline.state.loading}
-                    vibeError={pipeline.state.error}
-                    onVibeStartPipeline={pipeline.startPipeline}
-                    onVibeIntervene={pipeline.intervene}
-                    onVibeClearPipeline={pipeline.clearPipeline}
-                  />
-              )}
-              {isSidebarVisible && (
-                <div
-                  className="w-2 cursor-col-resize hover:bg-vscode-active resize-handle"
-                  onMouseDown={handleSidebarDragStart}
-                  title="拖动调整宽度"
+              <div
+                className={isResizing ? 'sidebar-transition-no-animate' : 'sidebar-transition'}
+                style={{
+                  width: isSidebarVisible ? sidebarWidth : 0,
+                  minWidth: isSidebarVisible ? sidebarWidth : 0,
+                  maxWidth: isSidebarVisible ? sidebarWidth : 0,
+                  overflow: 'hidden',
+                }}
+              >
+                <Sidebar
+                  activeActivity={activeActivity}
+                  isSidebarVisible={isSidebarVisible}
+                  currentBook={currentBook}
+                  onBookSelect={handleBookSelect}
+                  onBookDeselect={handleBookDeselect}
+                  onChapterSelect={handleChapterSelect}
+                  onVolumeChange={() => setOutlineRefreshTrigger(prev => prev + 1)}
+                  activeChapterId={currentChapter?.id || null}
+                  onInsertMaterial={handleInsertMaterial}
+                  onMaterialSelect={handleMaterialSelect}
+                  formattingSettings={formattingSettings}
+                  onSaveFormattingSettings={handleSaveFormattingSettings}
+                  wordCountSettings={wordCountSettings}
+                  onSaveWordCountSettings={(s: WordCountSettings) => {
+                    setWordCountSettings(s);
+                    localStorage.setItem('wordCountSettings', JSON.stringify(s));
+                  }}
+                  theme={theme}
+                  onThemeChange={setTheme}
+                  outlineRefreshTrigger={outlineRefreshTrigger}
+                  width={sidebarWidth}
+                  currentOutlineVolume={currentOutlineVolume}
+                  onVolumeOutlineSelect={handleVolumeOutlineSelect}
+                  onPipelineGenerateOutline={handlePipelineGenerateOutline}
+                  onPipelineRefineOutline={handlePipelineRefineOutline}
+                  onPipelineOverwriteOutline={handlePipelineOverwriteOutline}
+                  onPipelineGenerateDetailedOutline={handlePipelineGenerateDetailedOutline}
+                  onPipelineRefineDetailedOutline={handlePipelineRefineDetailedOutline}
+                  onPipelineRefineDetailedOutlineChapter={handlePipelineRefineDetailedOutlineChapter}
+                  onPipelinePreviewInEditor={handlePipelinePreviewInEditor}
+                  onPipelineGenerateChapter={handlePipelineGenerateChapter}
+                  onPipelineRefineChapter={handlePipelineRefineChapter}
+                  onPipelineBatchGenerateChapters={handlePipelineBatchGenerateChapters}
+                  onPipelineAddChapterToVolume={handlePipelineAddChapterToVolume}
+                  showToast={showToast}
+                  agentState={agent.state}
+                  onAgentSendMessage={agent.sendMessage}
+                  onAgentStopGeneration={agent.stopGeneration}
+                  onAgentClearMessages={agent.clearMessages}
+                  onAgentCheckConnection={agent.checkConnection}
+                  onAgentUpdateApiUrl={agent.updateApiUrl}
+                  onAgentLoadSessions={agent.loadSessions}
+                  onAgentCreateSession={agent.createSession}
+                  onAgentSwitchSession={agent.switchSession}
+                  onAgentDeleteSession={agent.deleteSession}
+                  agentApiUrl={agent.apiUrl}
+                  vibePipelineState={pipeline.state.pipeline}
+                  vibeLoading={pipeline.state.loading}
+                  vibeError={pipeline.state.error}
+                  onVibeStartPipeline={pipeline.startPipeline}
+                  onVibeIntervene={pipeline.intervene}
+                  onVibeClearPipeline={pipeline.clearPipeline}
                 />
-              )}
-              {!isSidebarVisible && (
-                <div
-                  className="w-4 cursor-col-resize hover:bg-vscode-active flex items-center"
-                  onMouseDown={handleSidebarDragStart}
-                  title="拖动显示侧边栏"
-                >
-                  <div className="w-1 h-8 bg-vscode-border rounded" />
-                </div>
-              )}
+              </div>
+              <div
+                className="resize-handle"
+                onMouseDown={handleSidebarDragStart}
+                title={isSidebarVisible ? "拖动调整宽度" : "拖动显示侧边栏"}
+                style={{
+                  width: isSidebarVisible ? '4px' : '8px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                {!isSidebarVisible && (
+                  <div className="w-1 h-8 bg-vscode-border rounded-full" />
+                )}
+              </div>
             </>
           )}
 

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { BookOpen, Calendar, FileText } from 'lucide-react';
 import type { Book } from '../../types';
 import { formatTimestamp } from '../../utils/helpers';
@@ -10,16 +10,18 @@ interface BookCardProps {
 }
 
 export const BookCard = ({ book, onClick, onContextMenu }: BookCardProps) => {
+  const [isHovered, setIsHovered] = useState(false);
+
   const getStatusColor = () => {
     switch (book.status) {
       case 'ongoing':
-        return 'bg-[#007acc]';
+        return '#007acc';
       case 'finished':
-        return 'bg-[#22c55e]';
+        return '#22c55e';
       case 'abandoned':
-        return 'bg-[#6b7280]';
+        return '#6b7280';
       default:
-        return 'bg-[#6b7280]';
+        return '#6b7280';
     }
   };
 
@@ -40,61 +42,75 @@ export const BookCard = ({ book, onClick, onContextMenu }: BookCardProps) => {
     <div
       onClick={onClick}
       onContextMenu={onContextMenu}
-      className="card card-hover p-4 cursor-pointer"
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+      style={{
+        display: 'flex',
+        flexDirection: 'row',
+        alignItems: 'stretch',
+        padding: '12px',
+        cursor: 'pointer',
+        backgroundColor: isHovered ? 'var(--color-vscode-sidebar)' : 'transparent',
+        border: '1px solid',
+        borderColor: isHovered ? 'var(--color-vscode-border)' : 'transparent',
+        borderRadius: '8px',
+        transition: 'background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease',
+        boxShadow: isHovered ? '0 2px 8px rgba(0,0,0,0.08)' : 'none',
+        gap: '14px',
+      }}
     >
-      {/* 封面占位 - 调整宽高比 = 3:4 */}
-      <div className="w-full aspect-[3/4] mb-3 flex items-left justify-left" style={{
-        background: 'linear-gradient(135deg, var(--color-vscode-border, #454545) 0%, var(--color-vscode-sidebar, #252526) 100%)'
-      }}>
+      <div
+        style={{
+          width: '72px',
+          minWidth: '72px',
+          aspectRatio: '3/4',
+          flexShrink: 0,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          overflow: 'hidden',
+          background: 'linear-gradient(135deg, var(--color-vscode-border, #454545) 0%, var(--color-vscode-sidebar, #252526) 100%)',
+          borderRadius: '6px',
+        }}
+      >
         {book.cover ? (
-          <img src={book.cover} alt={book.name} className="w-full h-full object-cover" />
+          <img src={book.cover} alt={book.name} style={{ width: '100%', height: '100%', objectFit: 'cover', transition: 'transform 0.3s ease', transform: isHovered ? 'scale(1.03)' : 'scale(1)' }} />
         ) : (
-          <BookOpen size={48} className="text-vscode-text opacity-50" />
+          <BookOpen size={28} className="text-vscode-text opacity-50" />
         )}
       </div>
 
-      {/* 书名 */}
-      <h3 className="text-vscode-text font-semibold text-lg mb-2 leading-snug line-clamp-2">
-        {book.name}
-      </h3>
+      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+        <h3 style={{ color: 'var(--color-vscode-text)', fontWeight: 600, fontSize: '15px', marginBottom: '4px', lineHeight: '1.3', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {book.name}
+        </h3>
 
-      {/* 简介 */}
-      <p className="text-sm text-vscode-text opacity-70 mb-3 line-clamp-2 h-10 leading-relaxed">
-        {book.description || '暂无简介'}
-      </p>
+        <p style={{ fontSize: '12px', color: 'var(--color-vscode-text)', opacity: 0.65, marginBottom: '8px', lineHeight: '1.5', overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
+          {book.description || '暂无简介'}
+        </p>
 
-      {/* 统计信息 */}
-      <div className="flex items-center justify-between text-xs text-vscode-text opacity-60 mb-2">
-        <div className="flex items-center space-x-1">
-          <FileText size={12} />
-          <span>{book.totalWords.toLocaleString()} 字</span>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', fontSize: '11px', color: 'var(--color-vscode-text)', opacity: 0.55 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
+            <FileText size={11} />
+            <span>{book.totalWords.toLocaleString()} 字</span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
+            <Calendar size={11} />
+            <span>{formatTimestamp(book.updatedAt)}</span>
+          </div>
+          <div style={{
+            padding: '1px 8px',
+            backgroundColor: getStatusColor(),
+            color: '#fff',
+            fontSize: '10px',
+            borderRadius: '10px',
+            lineHeight: '1.4',
+            alignSelf: 'flex-start',
+          }}>
+            {getStatusText()}
+          </div>
         </div>
-        <div className={`px-2 py-0.5 ${getStatusColor()} text-white text-xs`}>
-          {getStatusText()}
-        </div>
-      </div>
-
-      {/* 最后更新时间 */}
-      <div className="flex items-center text-xs text-vscode-text opacity-60">
-        <Calendar size={12} className="mr-1" />
-        <span>{formatTimestamp(book.updatedAt)}</span>
       </div>
     </div>
   );
 };
-
-/*
-父组件 (BookCardList)
-  ↓ 循环遍历 books 数组
-  ↓ 对每个 book 调用 <BookCard />
-  ↓
-BookCard 组件
-  ↓ 接收 props (book, onClick, onContextMenu)
-  ↓ 返回 JSX 对象
-  ↓
-React 引擎
-  ↓ 将 JSX 转换为真实 DOM
-  ↓
-浏览器页面
-  ↓ 显示书籍卡片
-*/

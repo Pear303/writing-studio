@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Bot, Settings, Trash2, Wifi, WifiOff, Send, Square, Loader2, ChevronRight, ChevronDown, Plus, MessageSquare, PanelLeftClose, PanelLeft } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import type { AgentState, AgentMessage, AgentActivityItem, AgentSession } from '../../types';
 import { AgentToolCallView } from './ToolCallView';
 
@@ -154,7 +156,7 @@ export const AgentPanel: React.FC<AgentPanelProps> = ({
         </div>
 
         {showSettings && (
-          <div className="px-3 py-2 border-b" style={{ borderColor: 'var(--color-vscode-border)', backgroundColor: 'var(--color-vscode-sidebar)' }}>
+          <div className="px-3 py-2 border-b animate-dropdown-in" style={{ borderColor: 'var(--color-vscode-border)', backgroundColor: 'var(--color-vscode-sidebar)' }}>
             <label style={{ fontSize: '11px', color: 'var(--color-vscode-text)', display: 'block', marginBottom: '4px' }}>Agent 后端地址</label>
             <div className="flex gap-1">
               <input
@@ -166,11 +168,14 @@ export const AgentPanel: React.FC<AgentPanelProps> = ({
                   padding: '3px 8px',
                   fontSize: '12px',
                   border: '1px solid var(--color-vscode-border)',
-                  borderRadius: '3px',
+                  borderRadius: '4px',
                   backgroundColor: 'var(--color-vscode-bg)',
                   color: 'var(--color-vscode-text)',
                   outline: 'none',
+                  transition: 'border-color 0.2s ease',
                 }}
+                onFocus={(e) => { e.target.style.borderColor = 'var(--color-vscode-active)'; }}
+                onBlur={(e) => { e.target.style.borderColor = 'var(--color-vscode-border)'; }}
                 placeholder="http://localhost:8000"
               />
               <button
@@ -179,10 +184,11 @@ export const AgentPanel: React.FC<AgentPanelProps> = ({
                   padding: '3px 10px',
                   fontSize: '11px',
                   border: '1px solid var(--color-vscode-active)',
-                  borderRadius: '3px',
+                  borderRadius: '4px',
                   backgroundColor: 'var(--color-vscode-active)',
                   color: 'white',
                   cursor: 'pointer',
+                  transition: 'opacity 0.15s ease',
                 }}
               >
                 保存
@@ -193,10 +199,11 @@ export const AgentPanel: React.FC<AgentPanelProps> = ({
                   padding: '3px 10px',
                   fontSize: '11px',
                   border: '1px solid var(--color-vscode-border)',
-                  borderRadius: '3px',
+                  borderRadius: '4px',
                   backgroundColor: 'transparent',
                   color: 'var(--color-vscode-text)',
                   cursor: 'pointer',
+                  transition: 'background-color 0.15s ease',
                 }}
               >
                 测试
@@ -221,8 +228,8 @@ export const AgentPanel: React.FC<AgentPanelProps> = ({
           {state.running && state.currentStreamContent && (
             <div className="mb-2" style={{ fontSize: '13px', color: 'var(--color-vscode-text)' }}>
               <span style={{ color: 'var(--color-vscode-active)', fontSize: '11px', fontWeight: 600 }}>Agent</span>
-              <div className="mt-1" style={{ lineHeight: '1.5' }}>
-                {state.currentStreamContent}
+              <div className="agent-markdown-body mt-1" style={{ lineHeight: '1.5' }}>
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>{state.currentStreamContent}</ReactMarkdown>
                 <span className="animate-pulse">▎</span>
               </div>
             </div>
@@ -266,7 +273,7 @@ export const AgentPanel: React.FC<AgentPanelProps> = ({
                 padding: '6px 10px',
                 fontSize: '13px',
                 border: '1px solid var(--color-vscode-border)',
-                borderRadius: '4px',
+                borderRadius: '6px',
                 backgroundColor: 'var(--color-vscode-bg)',
                 color: 'var(--color-vscode-text)',
                 outline: 'none',
@@ -275,6 +282,15 @@ export const AgentPanel: React.FC<AgentPanelProps> = ({
                 lineHeight: '1.4',
                 minHeight: '34px',
                 maxHeight: '120px',
+                transition: 'border-color 0.2s ease, box-shadow 0.2s ease',
+              }}
+              onFocus={(e) => {
+                e.target.style.borderColor = 'var(--color-vscode-active)';
+                e.target.style.boxShadow = '0 0 0 1px var(--color-vscode-active)';
+              }}
+              onBlur={(e) => {
+                e.target.style.borderColor = 'var(--color-vscode-border)';
+                e.target.style.boxShadow = 'none';
               }}
             />
             {state.running ? (
@@ -283,7 +299,7 @@ export const AgentPanel: React.FC<AgentPanelProps> = ({
                 style={{
                   padding: '6px 12px',
                   border: '1px solid #dc2626',
-                  borderRadius: '4px',
+                  borderRadius: '6px',
                   backgroundColor: '#dc2626',
                   color: 'white',
                   cursor: 'pointer',
@@ -291,6 +307,7 @@ export const AgentPanel: React.FC<AgentPanelProps> = ({
                   alignItems: 'center',
                   gap: '4px',
                   fontSize: '12px',
+                  transition: 'opacity 0.15s ease',
                 }}
                 title="停止生成"
               >
@@ -303,7 +320,7 @@ export const AgentPanel: React.FC<AgentPanelProps> = ({
                 style={{
                   padding: '6px 12px',
                   border: '1px solid var(--color-vscode-active)',
-                  borderRadius: '4px',
+                  borderRadius: '6px',
                   backgroundColor: inputMessage.trim() && state.connected ? 'var(--color-vscode-active)' : 'transparent',
                   color: inputMessage.trim() && state.connected ? 'white' : 'var(--color-vscode-text)',
                   cursor: inputMessage.trim() && state.connected ? 'pointer' : 'not-allowed',
@@ -312,6 +329,7 @@ export const AgentPanel: React.FC<AgentPanelProps> = ({
                   gap: '4px',
                   fontSize: '12px',
                   opacity: inputMessage.trim() && state.connected ? 1 : 0.5,
+                  transition: 'background-color 0.2s ease, color 0.2s ease, opacity 0.2s ease',
                 }}
                 title="发送"
               >
@@ -339,6 +357,7 @@ const SessionItem: React.FC<{
       style={{
         backgroundColor: isActive ? 'rgba(59, 130, 246, 0.1)' : hovering ? 'rgba(255,255,255,0.04)' : 'transparent',
         borderLeft: isActive ? '2px solid var(--color-vscode-active)' : '2px solid transparent',
+        transition: 'background-color 0.15s ease, border-color 0.15s ease',
       }}
       onClick={onSwitch}
       onMouseEnter={() => setHovering(true)}
@@ -388,17 +407,25 @@ const MessageBubble: React.FC<{ message: AgentMessage }> = ({ message }) => {
       <div style={{ fontSize: '11px', fontWeight: 600, marginBottom: '4px', color: isUser ? 'var(--color-vscode-text)' : 'var(--color-vscode-active)' }}>
         {isUser ? '你' : 'Agent'}
       </div>
-      <div
-        style={{
-          fontSize: '13px',
-          lineHeight: '1.6',
-          color: 'var(--color-vscode-text)',
-          whiteSpace: 'pre-wrap',
-          wordBreak: 'break-word',
-        }}
-      >
-        {message.content}
-      </div>
+      {!message.isStreaming && (
+        isUser ? (
+          <div
+            style={{
+              fontSize: '13px',
+              lineHeight: '1.6',
+              color: 'var(--color-vscode-text)',
+              whiteSpace: 'pre-wrap',
+              wordBreak: 'break-word',
+            }}
+          >
+            {message.content}
+          </div>
+        ) : (
+          <div className="agent-markdown-body" style={{ fontSize: '13px', lineHeight: '1.6', color: 'var(--color-vscode-text)' }}>
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>{message.content}</ReactMarkdown>
+          </div>
+        )
+      )}
       {toolCalls.length > 0 && (
         <div className="mt-2">
           <div
