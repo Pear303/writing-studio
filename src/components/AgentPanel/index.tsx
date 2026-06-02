@@ -251,6 +251,112 @@ export const AgentPanel: React.FC<AgentPanelProps> = ({
               {state.error}
             </div>
           )}
+
+          {state.messages.map(msg => (
+            <MessageBubble key={msg.id} message={msg} />
+          ))}
+
+          {state.running && state.currentStreamContent && (
+            <div className="mb-2" style={{ fontSize: '13px', color: 'var(--color-vscode-text)' }}>
+              <span style={{ color: 'var(--color-vscode-active)', fontSize: '11px', fontWeight: 600 }}>Agent</span>
+              <div className="mt-1" style={{ lineHeight: '1.5' }}>
+                {state.currentStreamContent}
+                <span className="animate-pulse">▎</span>
+              </div>
+            </div>
+          )}
+
+          {state.running && !state.currentStreamContent && state.activityLog.length > 0 && (
+            <div className="mb-2 flex items-center gap-2" style={{ color: 'var(--color-vscode-text)', fontSize: '12px', opacity: 0.7 }}>
+              <Loader2 size={12} className="animate-spin" />
+              <span>Agent 正在工作...</span>
+            </div>
+          )}
+
+          {state.activityLog.length > 0 && (
+            <ActivityLogView items={state.activityLog} running={state.running} />
+          )}
+
+          {state.error && (
+            <div className="mb-2 p-2 rounded" style={{ backgroundColor: '#dc262620', color: '#dc2626', fontSize: '12px' }}>
+              {state.error}
+            </div>
+          )}
+        </div>
+
+        {state.tokenUsage.total > 0 && (
+          <div className="px-3 py-1 border-t flex items-center gap-3" style={{ borderColor: 'var(--color-vscode-border)', fontSize: '10px', color: 'var(--color-vscode-text)', opacity: 0.5 }}>
+            <span>Tokens: {state.tokenUsage.input} in / {state.tokenUsage.output} out</span>
+          </div>
+        )}
+
+        <div className="px-3 py-2 border-t" style={{ borderColor: 'var(--color-vscode-border)' }}>
+          <div className="flex gap-1">
+            <textarea
+              value={inputMessage}
+              onChange={e => setInputMessage(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder={state.connected ? '输入消息... (Enter 发送)' : 'Agent 未连接，请检查设置'}
+              disabled={state.running || !state.connected}
+              rows={1}
+              style={{
+                flex: 1,
+                padding: '6px 10px',
+                fontSize: '13px',
+                border: '1px solid var(--color-vscode-border)',
+                borderRadius: '4px',
+                backgroundColor: 'var(--color-vscode-bg)',
+                color: 'var(--color-vscode-text)',
+                outline: 'none',
+                resize: 'none',
+                fontFamily: 'inherit',
+                lineHeight: '1.4',
+                minHeight: '34px',
+                maxHeight: '120px',
+              }}
+            />
+            {state.running ? (
+              <button
+                onClick={onStopGeneration}
+                style={{
+                  padding: '6px 12px',
+                  border: '1px solid #dc2626',
+                  borderRadius: '4px',
+                  backgroundColor: '#dc2626',
+                  color: 'white',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  fontSize: '12px',
+                }}
+                title="停止生成"
+              >
+                <Square size={12} />
+              </button>
+            ) : (
+              <button
+                onClick={handleSend}
+                disabled={!inputMessage.trim() || !state.connected}
+                style={{
+                  padding: '6px 12px',
+                  border: '1px solid var(--color-vscode-active)',
+                  borderRadius: '4px',
+                  backgroundColor: inputMessage.trim() && state.connected ? 'var(--color-vscode-active)' : 'transparent',
+                  color: inputMessage.trim() && state.connected ? 'white' : 'var(--color-vscode-text)',
+                  cursor: inputMessage.trim() && state.connected ? 'pointer' : 'not-allowed',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  fontSize: '12px',
+                  opacity: inputMessage.trim() && state.connected ? 1 : 0.5,
+                }}
+                title="发送"
+              >
+                <Send size={12} />
+              </button>
+            )}
+          </div>
         </div>
 
         {state.tokenUsage.total > 0 && (
