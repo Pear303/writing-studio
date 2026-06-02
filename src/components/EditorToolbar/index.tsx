@@ -19,7 +19,7 @@ export const EditorToolbar = ({ editor }: EditorToolbarProps) => {
         className={`p-1.5 rounded transition-colors ${
           editor.isActive('bold')
             ? 'bg-vscode-active text-white'
-            : 'text-vscode-text hover:bg-gray-700'
+            : 'text-vscode-text hover:bg-vscode-active/10'
         }`}
         title="加粗 (Ctrl+B)"
       >
@@ -32,7 +32,7 @@ export const EditorToolbar = ({ editor }: EditorToolbarProps) => {
         className={`p-1.5 rounded transition-colors ${
           editor.isActive('italic')
             ? 'bg-vscode-active text-white'
-            : 'text-vscode-text hover:bg-gray-700'
+            : 'text-vscode-text hover:bg-vscode-active/10'
         }`}
         title="斜体 (Ctrl+I)"
       >
@@ -45,7 +45,7 @@ export const EditorToolbar = ({ editor }: EditorToolbarProps) => {
         className={`p-1.5 rounded transition-colors ${
           editor.isActive('underline')
             ? 'bg-vscode-active text-white'
-            : 'text-vscode-text hover:bg-gray-700'
+            : 'text-vscode-text hover:bg-vscode-active/10'
         }`}
         title="下划线 (Ctrl+U)"
       >
@@ -58,7 +58,7 @@ export const EditorToolbar = ({ editor }: EditorToolbarProps) => {
         className={`p-1.5 rounded transition-colors ${
           editor.isActive('strike')
             ? 'bg-vscode-active text-white'
-            : 'text-vscode-text hover:bg-gray-700'
+            : 'text-vscode-text hover:bg-vscode-active/10'
         }`}
         title="删除线"
       >
@@ -74,7 +74,7 @@ export const EditorToolbar = ({ editor }: EditorToolbarProps) => {
         className={`p-1.5 rounded transition-colors ${
           editor.isActive('blockquote')
             ? 'bg-vscode-active text-white'
-            : 'text-vscode-text hover:bg-gray-700'
+            : 'text-vscode-text hover:bg-vscode-active/10'
         }`}
         title="引用"
       >

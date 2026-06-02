@@ -34,16 +34,17 @@ export const EditorArea = forwardRef<RichTextEditorRef, EditorAreaProps>(({
   currentBook,
 }, ref) => {
   return (
-    <div className="flex-1 h-full flex flex-col bg-vscode-bg">
+    <div className="flex-1 h-full flex flex-col bg-vscode-bg overflow-hidden">
       {/* 标题编辑区域 */}
       {currentChapter && onTitleChange && (
-        <div className="border-b border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-6 py-3">
+        <div className="border-b border-vscode-border bg-vscode-bg px-6 py-3">
           <input
             type="text"
             value={title}
             onChange={(e) => onTitleChange(e.target.value)}
             placeholder="输入章节标题..."
-            className="w-full text-xl font-semibold text-gray-900 dark:text-gray-100 bg-transparent border-none outline-none placeholder-gray-400 dark:placeholder-gray-500"
+            className="w-full text-xl font-semibold text-vscode-text bg-transparent border-none outline-none"
+            style={{ color: 'var(--color-vscode-text)' }}
           />
         </div>
       )}

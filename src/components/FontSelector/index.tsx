@@ -64,7 +64,7 @@ export const FontSelector: React.FC<FontSelectorProps> = ({
       <button
         onClick={() => setIsOpen(!isOpen)}
         className={`font-selector-btn flex items-center justify-between text-xs ${
-          isOpen ? 'bg-vscode-active text-white' : 'text-vscode-text hover:bg-gray-700'
+          isOpen ? 'bg-vscode-active text-white' : 'text-vscode-text hover:bg-vscode-active/10'
         }`}
       >
         <span className="font-selector-btn-text" style={{ fontFamily: value, fontSize: '12px' }}>

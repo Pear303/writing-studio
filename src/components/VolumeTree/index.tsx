@@ -147,7 +147,7 @@ export const VolumeTree = ({ book, onVolumeSelect, onChapterSelect, activeVolume
           className={`flex items-center py-1.5 px-2 cursor-pointer transition-colors duration-150 ${
             isActive
               ? 'bg-blue-600/20 text-vscode-text'
-              : 'hover:bg-gray-700/30 text-vscode-text'
+              : 'hover:bg-vscode-active/10 text-vscode-text'
           }`}
           style={{ paddingLeft: level * 16 + 8 }}
           onClick={() => onVolumeSelect(volume)}
@@ -203,7 +203,7 @@ export const VolumeTree = ({ book, onVolumeSelect, onChapterSelect, activeVolume
                     className={`flex items-center py-1.5 px-2 cursor-pointer transition-colors duration-150 ${
                       isChapterActive
                         ? 'bg-blue-600/15 text-vscode-text'
-                        : 'hover:bg-gray-700/20 text-vscode-text'
+                        : 'hover:bg-vscode-active/10 text-vscode-text'
                     }`}
                     style={{ paddingLeft: (level + 1) * 16 + 8 }}
                     onClick={() => {

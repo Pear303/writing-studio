@@ -31,6 +31,10 @@ interface SidebarProps {
   onSaveWordCountSettings?: (settings: WordCountSettings) => void;
   theme?: Theme;
   onThemeChange?: (theme: Theme) => void;
+  autoSaveInterval?: number;
+  onAutoSaveIntervalChange?: (interval: number) => void;
+  editorFontSize?: number;
+  onEditorFontSizeChange?: (size: number) => void;
   outlineRefreshTrigger?: number;
   width?: number;
   currentOutlineVolume?: Volume | null;
@@ -83,6 +87,10 @@ export const Sidebar = ({
   onSaveWordCountSettings,
   theme = 'dark',
   onThemeChange,
+  autoSaveInterval,
+  onAutoSaveIntervalChange,
+  editorFontSize,
+  onEditorFontSizeChange,
   outlineRefreshTrigger = 0,
   width = 300,
   currentOutlineVolume,
@@ -200,6 +208,10 @@ export const Sidebar = ({
                 onSaveWordCountSettings={onSaveWordCountSettings}
                 theme={theme}
                 onThemeChange={onThemeChange}
+                autoSaveInterval={autoSaveInterval}
+                onAutoSaveIntervalChange={onAutoSaveIntervalChange}
+                editorFontSize={editorFontSize}
+                onEditorFontSizeChange={onEditorFontSizeChange}
               />
             ) : null
           ) : activeActivity === 'agent' ? (
