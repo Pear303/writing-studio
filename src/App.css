@@ -405,6 +405,7 @@ body {
   font-family: var(--editor-font-family, inherit);
   font-weight: var(--editor-font-weight, inherit);
   letter-spacing: var(--editor-letter-spacing, inherit);
+  padding-bottom: 33vh !important;
 }
 
 .ProseMirror p,
