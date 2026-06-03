@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import type { PipelineAutoState, PipelineAutoStep, PipelineIntervention } from '../types';
+import { debugLogger } from '../services/DebugLogger';
 
 const DEFAULT_API_URL = 'http://localhost:8000';
 
@@ -146,6 +147,14 @@ export function usePipeline() {
 
   const handlePipelineEvent = useCallback((evt: Record<string, unknown>) => {
     const eventType = evt.type as string;
+
+    // Debug: 记录 Vibe Writing pipeline 事件
+    debugLogger.log({
+      source: 'vibe-writing',
+      category: 'pipeline-event',
+      direction: `SSE → ${eventType}`,
+      metadata: { ...evt },
+    });
 
     if (eventType === 'pipeline_started') {
       const steps = (evt.steps as Array<{ name: string; status: string }>) || [];

@@ -6,6 +6,7 @@ import { StatusBar } from './components/StatusBar';
 import { FindReplace } from './components/FindReplace';
 import { FormattingSettingsPanel } from './components/FormattingSettingsPanel';
 import { PromptPreviewPanel } from './components/PromptPreview';
+import { DebugPanel } from './components/DebugPanel';
 import { Toast, type ToastType } from './components/Toast';
 import { Toolbar } from './components/Toolbar';
 import { TabView, type TabItem } from './components/TabView';
@@ -26,7 +27,7 @@ import { novelLLMService } from './llm/NovelLLMService';
 import { useAgent } from './hooks/useAgent';
 import { usePipeline } from './hooks/usePipeline';
 import './App.css';
-import { LogOut, FileText, BookOpen, CheckCircle } from 'lucide-react';
+import { LogOut, FileText, BookOpen, CheckCircle, Bug } from 'lucide-react';
 
 type Theme = 'dark' | 'light' | 'eye-care';
 
@@ -70,6 +71,9 @@ function App() {
   const [lastSearchText, setLastSearchText] = useState('');
   const [showFormattingSettings, setShowFormattingSettings] = useState(false);
   const [showPromptPreview, setShowPromptPreview] = useState(false);
+  const [showDebugPanel, setShowDebugPanel] = useState(() => {
+    return localStorage.getItem('debugPanelOpen') === 'true';
+  });
   const [toast, setToast] = useState<{ message: string; type: ToastType } | null>(null);
   const [theme, setTheme] = useState<Theme>(() => {
     return (localStorage.getItem('theme') as Theme) || 'light';
@@ -2203,6 +2207,15 @@ ${chapterContents}
               />
             )}
           </div>
+
+          {/* 开发者 Debug 面板 */}
+          <DebugPanel
+            isOpen={showDebugPanel}
+            onClose={() => {
+              setShowDebugPanel(false);
+              localStorage.setItem('debugPanelOpen', 'false');
+            }}
+          />
         </div>
 
       <StatusBar
@@ -2293,6 +2306,40 @@ ${chapterContents}
           onClose={() => setToast(null)}
         />
       )}
+
+      {/* Debug 面板切换按钮 */}
+      <button
+        type="button"
+        onClick={() => {
+          const next = !showDebugPanel;
+          setShowDebugPanel(next);
+          localStorage.setItem('debugPanelOpen', String(next));
+        }}
+        style={{
+          position: 'fixed',
+          bottom: showDebugPanel ? 'auto' : '32px',
+          right: showDebugPanel ? '496px' : '12px',
+          top: showDebugPanel ? '50%' : 'auto',
+          transform: showDebugPanel ? 'translateY(-50%)' : 'none',
+          zIndex: 40,
+          width: '28px',
+          height: '28px',
+          borderRadius: '4px',
+          border: '1px solid var(--color-vscode-border)',
+          backgroundColor: showDebugPanel ? 'var(--color-vscode-active)' : 'var(--color-vscode-sidebar)',
+          color: showDebugPanel ? 'white' : 'var(--color-vscode-text)',
+          cursor: 'pointer',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          opacity: showDebugPanel ? 1 : 0.4,
+          transition: 'all 0.15s',
+          padding: 0,
+        }}
+        title={showDebugPanel ? '关闭 Debug 面板' : '打开 Debug 面板'}
+      >
+        <Bug size={14} />
+      </button>
     </div>
   );
 }

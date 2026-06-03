@@ -1,5 +1,6 @@
 import type { ChapterFacts, EntitySnapshot, StateChange, NarrativeEvent, TimelineEntry, HookEntry, ChapterStateCommit } from '../types/fact-extraction';
 import { db } from '../db';
+import { debugLogger } from './DebugLogger';
 
 interface RawExtractionResult {
   entities?: Array<{
@@ -55,6 +56,21 @@ export class FactExtractor {
       previousStateSummary,
     );
 
+    // Debug: 记录事实提取调用
+    debugLogger.log({
+      source: 'service',
+      category: 'fact-extract',
+      direction: `FactExtractor.extract → book:${bookId} ch:${chapterIndex}`,
+      userMessage: prompt,
+      metadata: {
+        bookId,
+        chapterIndex,
+        chapterTitle,
+        contentLength: chapterContent.length,
+        hasPrevState: !!prevState,
+      },
+    });
+
     const rawResult = await llmCall(prompt);
     const parsed = this.parseRawResult(rawResult);
 
@@ -67,6 +83,22 @@ export class FactExtractor {
       summary: parsed.summary || '',
       extractedAt: Date.now(),
     };
+
+    // Debug: 记录事实提取结果
+    debugLogger.log({
+      source: 'service',
+      category: 'fact-extract',
+      direction: `FactExtractor.extract ← book:${bookId} ch:${chapterIndex}`,
+      response: rawResult,
+      responseLength: rawResult.length,
+      metadata: {
+        bookId,
+        chapterIndex,
+        entityCount: facts.entities.length,
+        hookCount: facts.hooks.length,
+        eventCount: facts.events.length,
+      },
+    });
 
     return facts;
   }
