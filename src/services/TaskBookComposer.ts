@@ -2,6 +2,7 @@ import type { WritingTaskBook, TaskBookSources } from '../types/task-book';
 import type { EntitySnapshot, HookEntry, TimelineEntry, ChapterStateCommit, AntiPattern } from '../types';
 import type { Book, Material } from '../types';
 import { db } from '../db';
+import { debugLogger } from './DebugLogger';
 
 export class TaskBookComposer {
   async compose(
@@ -14,7 +15,7 @@ export class TaskBookComposer {
     const prevState = await this.loadStateCommit(bookId, chapterIndex - 1);
     const antiPatterns = await this.loadAntiPatterns(bookId);
 
-    return {
+    const taskBook = {
       meta: {
         bookId,
         chapterIndex,
@@ -27,6 +28,24 @@ export class TaskBookComposer {
       warnings: this.buildWarnings(antiPatterns, sources.reviewContract),
       style: this.buildStyleLayer(sources.step3Config),
     };
+
+    // Debug: 记录任务书组装
+    debugLogger.log({
+      source: 'service',
+      category: 'taskbook-compose',
+      direction: `TaskBookComposer.compose → book:${bookId} ch:${chapterIndex}`,
+      metadata: {
+        bookId,
+        chapterIndex,
+        chapterTitle: sources.chapterTitle,
+        hasPrevState: !!prevState,
+        antiPatternCount: antiPatterns.length,
+        materialCount: materials.length,
+        characterCount: materials.filter(m => m.type === 'character').length,
+      },
+    });
+
+    return taskBook;
   }
 
   render(taskBook: WritingTaskBook): string {
@@ -51,7 +70,23 @@ export class TaskBookComposer {
     const style = this.renderStyleLayer(taskBook.style);
     if (style) sections.push(style);
 
-    return sections.join('\n\n');
+    const rendered = sections.join('\n\n');
+
+    // Debug: 记录任务书渲染结果
+    debugLogger.log({
+      source: 'service',
+      category: 'taskbook-compose',
+      direction: `TaskBookComposer.render → ${taskBook.meta.chapterTitle}`,
+      systemPrompt: rendered,
+      metadata: {
+        bookId: taskBook.meta.bookId,
+        chapterIndex: taskBook.meta.chapterIndex,
+        renderedLength: rendered.length,
+        sectionCount: sections.length,
+      },
+    });
+
+    return rendered;
   }
 
   private buildLockedLayer(

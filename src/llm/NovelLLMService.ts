@@ -2,6 +2,7 @@ import type { WritingStage, WritingContext } from '../hooks';
 import { SmartPromptComposer, createComposer, setTaskBookText } from '../hooks';
 import type { PipelineStep1Config, PipelineStep2State, PipelineStep4State, PipelineStep5State, OutlineRound, DetailedOutlineRound, ChapterDraftRound } from '../types';
 import { taskBookComposer } from '../services/TaskBookComposer';
+import { debugLogger } from '../services/DebugLogger';
 
 export interface LLMConfig {
   apiKey: string;
@@ -107,6 +108,23 @@ export class NovelLLMService {
     
     const { messages, metadata } = this.composer.composeForLLM(stage, userMessage, context);
 
+    // Debug: 记录提示词组装详情
+    debugLogger.log({
+      source: 'manual-pipeline',
+      category: 'prompt-compose',
+      direction: `${metadata.stageName} → system prompt`,
+      systemPrompt: metadata.systemPrompt,
+      userMessage,
+      variables: context as Record<string, unknown>,
+      metadata: {
+        stage,
+        loadedPrompts: metadata.loadedPrompts,
+        promptMetadata: metadata.metadata,
+        model: this.config?.model,
+        baseUrl: this.config?.baseUrl,
+      },
+    });
+
     const finalMessages: Array<{ role: 'system' | 'user' | 'assistant'; content: string | Array<{ type: string; text: string; cache_control?: { type: string } }> }> = [];
 
     if (this.sessionPrefix) {
@@ -153,12 +171,42 @@ export class NovelLLMService {
       const data = await response.json();
       const content = data.choices?.[0]?.message?.content || '';
       
+      // Debug: 记录 LLM 调用结果
+      debugLogger.log({
+        source: 'manual-pipeline',
+        category: 'llm-call',
+        direction: `${stage} → ${this.config?.model}`,
+        systemPrompt: messages.find(m => m.role === 'system')?.content,
+        userMessage,
+        fullMessages: messages.map(m => ({ role: m.role, content: typeof m.content === 'string' ? m.content : JSON.stringify(m.content) })),
+        response: content,
+        responseLength: content.length,
+        usage: data.usage,
+        metadata: {
+          stage,
+          model: this.config?.model,
+          baseUrl: this.config?.baseUrl,
+        },
+      });
+
       return {
         content,
         usage: data.usage,
       };
     } catch (error) {
       console.error('[NovelLLMService] 生成失败:', error);
+
+      // Debug: 记录 LLM 调用失败
+      debugLogger.log({
+        source: 'manual-pipeline',
+        category: 'llm-call',
+        direction: `${stage} → ${this.config?.model}`,
+        systemPrompt: messages.find(m => m.role === 'system')?.content,
+        userMessage,
+        error: error instanceof Error ? error.message : String(error),
+        metadata: { stage, model: this.config?.model },
+      });
+
       throw error;
     }
   }
@@ -167,6 +215,15 @@ export class NovelLLMService {
     if (!this.config) {
       throw new Error('LLM服务未初始化');
     }
+
+    // Debug: 记录 generateRaw 调用
+    debugLogger.log({
+      source: 'service',
+      category: 'llm-call',
+      direction: `generateRaw → ${this.config.model}`,
+      userMessage: prompt,
+      metadata: { model: this.config.model, baseUrl: this.config.baseUrl },
+    });
 
     const messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [
       { role: 'user', content: prompt },
@@ -194,12 +251,34 @@ export class NovelLLMService {
       const data = await response.json();
       const content = data.choices?.[0]?.message?.content || '';
 
+      // Debug: 记录 generateRaw 结果
+      debugLogger.log({
+        source: 'service',
+        category: 'llm-call',
+        direction: `generateRaw ← ${this.config.model}`,
+        response: content,
+        responseLength: content.length,
+        usage: data.usage,
+        metadata: { model: this.config.model },
+      });
+
       return {
         content,
         usage: data.usage,
       };
     } catch (error) {
       console.error('[NovelLLMService] generateRaw失败:', error);
+
+      // Debug: 记录 generateRaw 失败
+      debugLogger.log({
+        source: 'service',
+        category: 'llm-call',
+        direction: `generateRaw → ${this.config.model}`,
+        userMessage: prompt,
+        error: error instanceof Error ? error.message : String(error),
+        metadata: { model: this.config.model },
+      });
+
       throw error;
     }
   }
@@ -218,12 +297,24 @@ async generateOutline(project: {
   }
 
   async generatePipelineOutline(config: PipelineStep1Config): Promise<string> {
-    const userMessage = await this.composer!.renderTemplate('outline-generate', {
+    const variables = {
       genres: config.genres.join('、'),
       plotType: config.plotType,
       protagonistIdentity: config.protagonistIdentity,
       tone: config.tone,
       customPrompt: config.customPrompt.trim(),
+    };
+    const userMessage = await this.composer!.renderTemplate('outline-generate', variables);
+
+    // Debug: 记录模板渲染
+    debugLogger.log({
+      source: 'manual-pipeline',
+      category: 'template-render',
+      direction: 'PLANNING → outline-generate',
+      templateId: 'outline-generate',
+      templateFile: './templates/pipeline/02-outline-generate.md',
+      variables,
+      userMessage,
     });
 
     const result = await this.generate('PLANNING', userMessage, {
@@ -257,6 +348,17 @@ async generateOutline(project: {
       modifications: currentRound.modifications.trim(),
     });
 
+    // Debug: 记录模板渲染
+    debugLogger.log({
+      source: 'manual-pipeline',
+      category: 'template-render',
+      direction: 'PLANNING → outline-refine',
+      templateId: 'outline-refine',
+      templateFile: './templates/pipeline/02-outline-refine.md',
+      variables: { roundAdditions: currentRound.additions, roundDeletions: currentRound.deletions, roundModifications: currentRound.modifications },
+      userMessage,
+    });
+
     const result = await this.generate('PLANNING', userMessage, {
       novelType: '',
       protagonistTypes: [],
@@ -275,9 +377,18 @@ async generateOutline(project: {
     outline: string,
     chapterCount: number,
   ): Promise<string> {
-    const userMessage = await this.composer!.renderTemplate('detailed-generate', {
-      outline,
-      chapterCount,
+    const variables = { outline, chapterCount };
+    const userMessage = await this.composer!.renderTemplate('detailed-generate', variables);
+
+    // Debug: 记录模板渲染
+    debugLogger.log({
+      source: 'manual-pipeline',
+      category: 'template-render',
+      direction: 'DETAILED_OUTLINE → detailed-generate',
+      templateId: 'detailed-generate',
+      templateFile: './templates/pipeline/04-detailed-generate.md',
+      variables,
+      userMessage,
     });
 
     const result = await this.generate('DETAILED_OUTLINE', userMessage, {
@@ -469,6 +580,25 @@ async generateOutline(project: {
       customRules: step3Config.customRules,
     });
 
+    // Debug: 记录模板渲染
+    debugLogger.log({
+      source: 'manual-pipeline',
+      category: 'template-render',
+      direction: 'CHAPTER_WRITING → chapter-generate',
+      templateId: 'chapter-generate',
+      templateFile: './templates/pipeline/05-chapter-generate.md',
+      variables: {
+        chapterIndex: chapterIndex + 1,
+        chapterTitle,
+        hasTaskBook: !!taskBookText,
+        hasPreviousChapter: !!previousChapterContent,
+        writingStyle: step3Config.writingStyle,
+        storyLength: step3Config.storyLength,
+      },
+      userMessage,
+      metadata: { bookId, chapterIndex },
+    });
+
     const result = await this.generate('CHAPTER_WRITING', userMessage, {
       novelType: '',
       protagonistTypes: [],
@@ -514,6 +644,23 @@ async generateOutline(project: {
       writingStyle: step3Config.writingStyle,
       storyLength: step3Config.storyLength,
       customRules: step3Config.customRules,
+    });
+
+    // Debug: 记录模板渲染
+    debugLogger.log({
+      source: 'manual-pipeline',
+      category: 'template-render',
+      direction: 'CHAPTER_WRITING → chapter-refine',
+      templateId: 'chapter-refine',
+      templateFile: './templates/pipeline/05-chapter-refine.md',
+      variables: {
+        chapterIndex: chapterIndex + 1,
+        chapterTitle: chapter.title,
+        writingStyle: step3Config.writingStyle,
+        storyLength: step3Config.storyLength,
+      },
+      userMessage,
+      metadata: { chapterIndex },
     });
 
     const result = await this.generate('CHAPTER_WRITING', userMessage, {
@@ -567,6 +714,23 @@ async generateOutline(project: {
       writingStyle: step3Config.writingStyle,
       storyLength: step3Config.storyLength,
       customRules: step3Config.customRules,
+    });
+
+    // Debug: 记录模板渲染
+    debugLogger.log({
+      source: 'manual-pipeline',
+      category: 'template-render',
+      direction: 'CHAPTER_WRITING → chapter-batch-generate',
+      templateId: 'chapter-batch-generate',
+      templateFile: './templates/pipeline/05-chapter-batch-generate.md',
+      variables: {
+        chapterCount: chapters.length,
+        hasTaskBook: !!taskBookText,
+        writingStyle: step3Config.writingStyle,
+        storyLength: step3Config.storyLength,
+      },
+      userMessage,
+      metadata: { bookId, chapterCount: chapters.length },
     });
 
     const result = await this.generate('CHAPTER_WRITING', userMessage, {

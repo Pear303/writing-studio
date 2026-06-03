@@ -1,5 +1,6 @@
 import type { ReviewIssue, ReviewSeverity, ReviewCategory, AntiPattern, ReviewContract } from '../types';
 import { db } from '../db';
+import { debugLogger } from './DebugLogger';
 
 interface RawReviewResult {
   issues?: Array<{
@@ -60,6 +61,23 @@ export class ReviewGate {
       fullContract,
     );
 
+    // Debug: 记录审查闸门调用
+    debugLogger.log({
+      source: 'service',
+      category: 'review-gate',
+      direction: `ReviewGate.review → book:${bookId} ch:${chapterIndex}`,
+      userMessage: prompt,
+      metadata: {
+        bookId,
+        chapterIndex,
+        chapterTitle,
+        contentLength: chapterContent.length,
+        hasPrevState: !!prevState,
+        antiPatternCount: existingAntiPatterns.length,
+        mustCheck: fullContract.mustCheck,
+      },
+    });
+
     const rawResult = await llmCall(prompt);
     const parsed = this.parseRawResult(rawResult);
 
@@ -70,7 +88,7 @@ export class ReviewGate {
 
     const passed = blockingIssues.length === 0 && score >= fullContract.thresholds.minScore;
 
-    return {
+    const result: ReviewGateResult = {
       issues,
       blockingIssues,
       score,
@@ -78,6 +96,26 @@ export class ReviewGate {
       summary: parsed.summary || '',
       newAntiPatterns,
     };
+
+    // Debug: 记录审查闸门结果
+    debugLogger.log({
+      source: 'service',
+      category: 'review-gate',
+      direction: `ReviewGate.review ← book:${bookId} ch:${chapterIndex}`,
+      response: rawResult,
+      responseLength: rawResult.length,
+      metadata: {
+        bookId,
+        chapterIndex,
+        score,
+        passed,
+        issueCount: issues.length,
+        blockingCount: blockingIssues.length,
+        newAntiPatternCount: newAntiPatterns.length,
+      },
+    });
+
+    return result;
   }
 
   async saveAntiPatterns(patterns: AntiPattern[]): Promise<void> {
