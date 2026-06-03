@@ -66,6 +66,12 @@ export const SettingsPanel = ({
   const [startupWindowMode, setStartupWindowMode] = useState<'maximized' | 'fullscreen'>(() => {
     return (localStorage.getItem('startupWindowMode') as 'maximized' | 'fullscreen') || 'maximized';
   });
+  const [chapterDetailDisplay, setChapterDetailDisplay] = useState<'nameOnly' | 'nameAndExcerpt' | 'nameAndWordCount' | 'full'>(() => {
+    return (localStorage.getItem('chapterDetailDisplay') as 'nameOnly' | 'nameAndExcerpt' | 'nameAndWordCount' | 'full') || 'nameOnly';
+  });
+  const [volumeDetailInfo, setVolumeDetailInfo] = useState<'none' | 'counts' | 'countsAndWords'>(() => {
+    return (localStorage.getItem('volumeDetailInfo') as 'none' | 'counts' | 'countsAndWords') || 'none';
+  });
   const [toast, setToast] = useState<{ message: string; type: ToastType } | null>(null);
   const [showNicknameModal, setShowNicknameModal] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
@@ -346,6 +352,41 @@ export const SettingsPanel = ({
                 <option value={16}>16px</option>
                 <option value={18}>18px</option>
                 <option value={20}>20px</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs mb-1" style={{ color: 'var(--color-vscode-text, #cccccc)', opacity: 0.6 }}>详细章节显示</label>
+              <select
+                value={chapterDetailDisplay}
+                onChange={(e) => {
+                  const val = e.target.value as 'nameOnly' | 'nameAndExcerpt' | 'nameAndWordCount' | 'full';
+                  setChapterDetailDisplay(val);
+                  localStorage.setItem('chapterDetailDisplay', val);
+                }}
+                className="w-full px-2 py-1.5 text-sm text-vscode-text focus:outline-none focus:border-vscode-active select-field"
+              >
+                <option value="nameOnly">仅章节名</option>
+                <option value="nameAndExcerpt">章节名 + 开头摘要</option>
+                <option value="nameAndWordCount">章节名 + 字数</option>
+                <option value="full">章节名 + 开头摘要 + 字数</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs mb-1" style={{ color: 'var(--color-vscode-text, #cccccc)', opacity: 0.6 }}>卷节点详细信息</label>
+              <select
+                value={volumeDetailInfo}
+                onChange={(e) => {
+                  const val = e.target.value as 'none' | 'counts' | 'countsAndWords';
+                  setVolumeDetailInfo(val);
+                  localStorage.setItem('volumeDetailInfo', val);
+                }}
+                className="w-full px-2 py-1.5 text-sm text-vscode-text focus:outline-none focus:border-vscode-active select-field"
+              >
+                <option value="none">不显示</option>
+                <option value="counts">子卷数 · 章节数</option>
+                <option value="countsAndWords">子卷数 · 章节数 · 字数</option>
               </select>
             </div>
 

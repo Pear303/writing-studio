@@ -78,9 +78,14 @@ export const PipelineWriting: React.FC<PipelineWritingProps> = ({
   const [step4State, setStep4State] = useState<PipelineStep4State | null>(null);
   const [step5State, setStep5State] = useState<PipelineStep5State | null>(null);
   const [volumes, setVolumes] = useState<Volume[]>([]);
-  const [selectedVolumeId, setSelectedVolumeId] = useState<string | null>(
-    currentOutlineVolume?.id || null,
-  );
+  const [selectedVolumeId, setSelectedVolumeId] = useState<string | null>(() => {
+    // 优先从 localStorage 恢复上次选择的卷，确保切换 activitybar 后能恢复
+    try {
+      const saved = localStorage.getItem('pipelineSelectedVolumeId');
+      if (saved) return saved;
+    } catch {}
+    return currentOutlineVolume?.id || null;
+  });
   const [creatingVolume, setCreatingVolume] = useState(false);
   const [newVolumeName, setNewVolumeName] = useState('');
   const [sessionLoaded, setSessionLoaded] = useState(false);
@@ -162,6 +167,7 @@ export const PipelineWriting: React.FC<PipelineWritingProps> = ({
   useEffect(() => {
     if (currentOutlineVolume?.id) {
       setSelectedVolumeId(currentOutlineVolume.id);
+      localStorage.setItem('pipelineSelectedVolumeId', currentOutlineVolume.id);
     }
   }, [currentOutlineVolume?.id]);
 
@@ -181,6 +187,34 @@ export const PipelineWriting: React.FC<PipelineWritingProps> = ({
       }
     };
   }, [step, step1Config, step3Config, step2State, step4State, step5State, sessionLoaded, selectedVolumeId, currentBook?.id, debouncedSave]);
+
+  // 组件卸载前同步保存 session，防止切换 activitybar 时丢失状态
+  useEffect(() => {
+    return () => {
+      // 使用同步方式保存：先清除 debounce timer，再直接调用
+      if (saveTimerRef.current) {
+        clearTimeout(saveTimerRef.current);
+        saveTimerRef.current = null;
+      }
+      // 直接同步写入（db.pipelineSessions.put 是 async，但至少触发写入）
+      const id = currentBook?.id && selectedVolumeId ? `${currentBook.id}_${selectedVolumeId}` : null;
+      if (id && currentBook?.id && selectedVolumeId) {
+        const session: PipelineSession = {
+          id,
+          bookId: currentBook.id,
+          volumeId: selectedVolumeId,
+          currentStep: step,
+          step1Config,
+          step3Config,
+          step2State,
+          step4State,
+          step5State,
+          updatedAt: Date.now(),
+        };
+        db.pipelineSessions.put(session).catch(() => {});
+      }
+    };
+  }, [currentBook?.id, selectedVolumeId, step, step1Config, step3Config, step2State, step4State, step5State]);
 
   const loadVolumes = async () => {
     if (!currentBook) return;
@@ -252,6 +286,7 @@ export const PipelineWriting: React.FC<PipelineWritingProps> = ({
 
   const handleVolumeSelect = (vol: Volume) => {
     setSelectedVolumeId(vol.id);
+    localStorage.setItem('pipelineSelectedVolumeId', vol.id);
     onVolumeSelect(vol);
   };
 
