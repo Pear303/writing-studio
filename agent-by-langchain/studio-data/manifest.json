@@ -1,13 +1,13 @@
 {
-  "exportedAt": 1780414901446,
+  "exportedAt": 1780445599163,
   "userId": "f996dbc8-701b-4027-ab7d-4aa7e992d2b6",
   "books": [
     {
       "id": "1780414896635-fqx2n9jmk",
       "name": "别动！我调一调概率",
       "status": "ongoing",
-      "totalWords": 147860,
-      "volumeCount": 1,
+      "totalWords": 152798,
+      "volumeCount": 3,
       "chapterCount": 78
     }
   ]

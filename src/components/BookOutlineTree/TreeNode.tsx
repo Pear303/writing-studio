@@ -20,6 +20,12 @@ interface TreeNodeProps {
   dragHandleProps?: Record<string, any>;
   dropPosition?: DropPosition | null;
   isDropTarget?: boolean;
+  /** 章节开头摘要（前几句） */
+  excerpt?: string;
+  /** 章节字数 */
+  chapterWordCount?: number;
+  /** 卷节点详细信息，如 "3子卷 · 5章 · 12000字" */
+  volumeDetail?: string;
 }
 
 export const TreeNode = forwardRef<HTMLDivElement, TreeNodeProps>(({
@@ -38,6 +44,9 @@ export const TreeNode = forwardRef<HTMLDivElement, TreeNodeProps>(({
   dragHandleProps,
   dropPosition = null,
   isDropTarget = false,
+  excerpt,
+  chapterWordCount,
+  volumeDetail,
 }, ref) => {
   const paddingLeft = level * 16 + 8;
 
@@ -50,7 +59,11 @@ export const TreeNode = forwardRef<HTMLDivElement, TreeNodeProps>(({
       : 'hover:bg-vscode-active/10';
 
   return (
-    <div className="relative w-full" ref={ref}>
+    <div className="relative w-full" ref={ref}
+      data-node-type={type}
+      data-node-id={data.id}
+      data-node-level={level}
+    >
       {level > 0 && (
         <>
           <div
@@ -81,9 +94,9 @@ export const TreeNode = forwardRef<HTMLDivElement, TreeNodeProps>(({
       )}
 
       <div
-        className={`flex items-center py-1.5 px-2 cursor-pointer transition-colors duration-150 relative group ${
+        className={`flex ${type === 'volume' ? 'items-center py-2' : 'items-start py-1.5'} px-2 cursor-pointer transition-colors duration-150 relative group ${
           isDragging ? 'opacity-30' : ''
-        } ${bgClass}`}
+        } ${bgClass} ${type === 'volume' ? 'border-b border-vscode-border/30' : ''}`}
         style={{ paddingLeft, paddingRight: '12px' }}
         onClick={onClick}
         onContextMenu={onContextMenu}
@@ -117,17 +130,50 @@ export const TreeNode = forwardRef<HTMLDivElement, TreeNodeProps>(({
 
         {type === 'volume' ? (
           level === 0 ? (
-            <FolderOpen size={16} className="mr-2 text-yellow-500 flex-shrink-0" />
+            <FolderOpen size={18} className="mr-2 text-yellow-500 flex-shrink-0" />
           ) : (
-            <Folder size={16} className="mr-2 text-yellow-600 flex-shrink-0" />
+            <Folder size={18} className="mr-2 text-yellow-600 flex-shrink-0" />
           )
         ) : (
-          <FileText size={16} className="mr-2 text-blue-400 flex-shrink-0" />
+          <FileText size={16} className="mr-2 text-blue-400 flex-shrink-0 mt-0.5" />
         )}
 
-        <span className="text-sm text-vscode-text truncate min-w-0 flex-1">
-          {nodeTitle}
-        </span>
+        {type === 'volume' ? (
+          <div className="min-w-0 flex-1">
+            <span className="text-[13px] font-semibold text-vscode-text truncate block">
+              {nodeTitle}
+              {volumeDetail && (
+                <span className="ml-2 text-xs text-vscode-text opacity-40 font-normal whitespace-nowrap">
+                  {volumeDetail}
+                </span>
+              )}
+            </span>
+          </div>
+        ) : (
+          <div className="min-w-0 flex-1">
+            <span className="text-sm text-vscode-text truncate block">
+              {nodeTitle}
+            </span>
+            {excerpt && (
+              <div
+                className="text-xs text-vscode-text opacity-40 line-clamp-2"
+                style={{
+                  display: '-webkit-box',
+                  WebkitLineClamp: 2,
+                  WebkitBoxOrient: 'vertical',
+                  overflow: 'hidden',
+                }}
+              >
+                {excerpt}
+              </div>
+            )}
+            {chapterWordCount !== undefined && (
+              <span className="text-xs text-vscode-text opacity-40">
+                {chapterWordCount}字
+              </span>
+            )}
+          </div>
+        )}
       </div>
 
       {dropPosition === 'after' && isDropTarget && (

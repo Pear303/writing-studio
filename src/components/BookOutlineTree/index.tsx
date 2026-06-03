@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { Plus, Edit, Trash2, Download, FolderPlus, FilePlus, ArrowRight, ArrowUp, ArrowDown, FileText, Clock, ArrowLeft, X, Move, ChevronRight, ChevronDown, BookOpen, Folder, FolderOpen, Hash } from 'lucide-react';
+import { Plus, Edit, Trash2, Download, FolderPlus, FilePlus, ArrowRight, ArrowUp, ArrowDown, FileText, Clock, ArrowLeft, X, Move, ChevronRight, ChevronDown, BookOpen, Folder, FolderOpen, Hash, CornerDownRight, CornerDownLeft } from 'lucide-react';
 import { DndContext, DragOverlay, closestCenter, PointerSensor, useSensor, useSensors, type DragStartEvent, type DragOverEvent, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { TreeNode, DragPreview, type DropPosition } from './TreeNode';
@@ -35,6 +35,9 @@ interface SortableTreeNodeProps {
   isLast?: boolean;
   displayTitle?: string;
   dropTarget?: { id: string; type: 'volume' | 'chapter'; position: DropPosition } | null;
+  excerpt?: string;
+  chapterWordCount?: number;
+  volumeDetail?: string;
 }
 
 const SortableTreeNode: React.FC<SortableTreeNodeProps> = ({
@@ -51,6 +54,9 @@ const SortableTreeNode: React.FC<SortableTreeNodeProps> = ({
   isLast,
   displayTitle,
   dropTarget,
+  excerpt,
+  chapterWordCount,
+  volumeDetail,
 }) => {
   const {
     attributes,
@@ -83,6 +89,9 @@ const SortableTreeNode: React.FC<SortableTreeNodeProps> = ({
       dragHandleProps={{ ...listeners, ...attributes }}
       dropPosition={dropPosition}
       isDropTarget={isDropTarget}
+      excerpt={excerpt}
+      chapterWordCount={chapterWordCount}
+      volumeDetail={volumeDetail}
     />
   );
 };
@@ -94,6 +103,22 @@ export const BookOutlineTree = ({ book, onChapterSelect, onBookDeselect, onVolum
   const [autoNumbering, setAutoNumbering] = useState(book.autoNumbering || false);
   const [numberingFormat, setNumberingFormat] = useState<'arabic' | 'chinese'>(book.numberingFormat || 'arabic');
   const [numberingScope, setNumberingScope] = useState<'global' | 'volume'>(book.numberingScope || 'global');
+  
+  // 从 localStorage 读取目录树显示设置
+  const chapterDetailDisplay = (() => {
+    try {
+      const saved = localStorage.getItem('chapterDetailDisplay');
+      if (saved === 'nameOnly' || saved === 'nameAndExcerpt' || saved === 'nameAndWordCount' || saved === 'full') return saved;
+    } catch {}
+    return 'nameOnly' as const;
+  })();
+  const volumeDetailInfo = (() => {
+    try {
+      const saved = localStorage.getItem('volumeDetailInfo');
+      if (saved === 'none' || saved === 'counts' || saved === 'countsAndWords') return saved;
+    } catch {}
+    return 'none' as const;
+  })();
   
   const [contextMenu, setContextMenu] = useState<{
     x: number;
@@ -155,6 +180,10 @@ export const BookOutlineTree = ({ book, onChapterSelect, onBookDeselect, onVolum
   const autoNumberPanelRef = useRef<HTMLDivElement>(null);
   const autoNumberBtnRef = useRef<HTMLButtonElement>(null);
 
+  // Sticky breadcrumb 状态
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const [stickyVolumes, setStickyVolumes] = useState<Array<{ id: string; name: string; level: number }>>([]);
+
   const openAutoNumberPanel = () => {
     if (autoNumberBtnRef.current) {
       const rect = autoNumberBtnRef.current.getBoundingClientRect();
@@ -162,6 +191,77 @@ export const BookOutlineTree = ({ book, onChapterSelect, onBookDeselect, onVolum
     }
     setShowAutoNumberPanel(true);
   };
+
+  // Sticky breadcrumb: 滚动时计算当前可见区域上方的卷节点链
+  const updateStickyBreadcrumb = useCallback(() => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
+
+    const scrollTop = container.scrollTop;
+    const containerRect = container.getBoundingClientRect();
+
+    // 找到所有卷节点 DOM 元素（按 DOM 顺序，即树的实际顺序）
+    const volumeNodes = container.querySelectorAll('[data-node-type="volume"]');
+    const volumeEntries: Array<{ id: string; name: string; level: number; relativeTop: number }> = [];
+
+    volumeNodes.forEach((node) => {
+      const el = node as HTMLElement;
+      const id = el.dataset.nodeId!;
+      const level = parseInt(el.dataset.nodeLevel || '0', 10);
+      const vol = volumes.find(v => v.id === id);
+      if (vol) {
+        const rect = el.getBoundingClientRect();
+        const relativeTop = rect.top - containerRect.top + scrollTop;
+        volumeEntries.push({
+          id,
+          name: vol.name,
+          level,
+          relativeTop,
+        });
+      }
+    });
+
+    // 找到所有已滚出视口上方的卷节点
+    const scrolledPast = volumeEntries.filter(v => v.relativeTop + 30 < scrollTop);
+
+    if (scrolledPast.length === 0) {
+      setStickyVolumes([]);
+      return;
+    }
+
+    // 取 DOM 顺序中最后一个已滚过的卷节点（即当前视口最接近的卷）
+    const lastScrolled = scrolledPast[scrolledPast.length - 1];
+
+    // 从该卷向上构建祖先链，确保父子关系正确
+    const chain: Array<{ id: string; name: string; level: number }> = [];
+    let current: Volume | undefined = volumes.find(v => v.id === lastScrolled.id);
+    while (current) {
+      let lvl = 0;
+      let ancestor = current;
+      while (ancestor.parentId) {
+        lvl++;
+        const parent = volumes.find(v => v.id === ancestor.parentId);
+        if (!parent) break;
+        ancestor = parent;
+      }
+      chain.unshift({ id: current.id, name: current.name, level: lvl });
+      current = current.parentId ? volumes.find(v => v.id === current.parentId) : undefined;
+    }
+
+    setStickyVolumes(chain);
+  }, [volumes]);
+
+  useEffect(() => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
+    container.addEventListener('scroll', updateStickyBreadcrumb, { passive: true });
+    return () => container.removeEventListener('scroll', updateStickyBreadcrumb);
+  }, [updateStickyBreadcrumb]);
+
+  // 展开/折叠卷时重新计算 breadcrumb
+  useEffect(() => {
+    updateStickyBreadcrumb();
+  }, [expandedVolumes, updateStickyBreadcrumb]);
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -274,6 +374,46 @@ export const BookOutlineTree = ({ book, onChapterSelect, onBookDeselect, onVolum
     return volumes.filter(v => v.parentId === parentId);
   };
 
+  // 获取章节开头摘要（前50字）
+  const getChapterExcerpt = (chapter: Chapter): string => {
+    if (!chapter.content) return '';
+    // 去除 HTML 标签
+    const text = chapter.content
+      .replace(/<[^>]+>/g, '')
+      .replace(/&nbsp;/g, ' ')
+      .replace(/&amp;/g, '&')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/\s+/g, ' ')
+      .trim();
+    return text.length > 80 ? text.slice(0, 80) + '...' : text;
+  };
+
+  // 递归计算卷下所有章节数和字数
+  const getVolumeStats = (volumeId: string): { childVolumeCount: number; chapterCount: number; totalWordCount: number } => {
+    const childVols = getChildVolumes(volumeId);
+    const directChapters = getVolumeChapters(volumeId);
+    let chapterCount = directChapters.length;
+    let totalWordCount = directChapters.reduce((sum, c) => sum + (c.wordCount || 0), 0);
+    for (const child of childVols) {
+      const childStats = getVolumeStats(child.id);
+      chapterCount += childStats.chapterCount;
+      totalWordCount += childStats.totalWordCount;
+    }
+    return { childVolumeCount: childVols.length, chapterCount, totalWordCount };
+  };
+
+  // 构建卷节点详细信息字符串
+  const buildVolumeDetail = (volumeId: string): string | undefined => {
+    if (volumeDetailInfo === 'none') return undefined;
+    const stats = getVolumeStats(volumeId);
+    const parts: string[] = [];
+    if (stats.childVolumeCount > 0) parts.push(`${stats.childVolumeCount}子卷`);
+    parts.push(`${stats.chapterCount}章`);
+    if (volumeDetailInfo === 'countsAndWords') parts.push(`${stats.totalWordCount}字`);
+    return parts.join(' · ');
+  };
+
   const renderVolumeTree = (volume: Volume, level: number = 0, isLast: boolean = false) => {
     const childVolumes = getChildVolumes(volume.id);
     const volumeChapters = getVolumeChapters(volume.id);
@@ -292,33 +432,42 @@ export const BookOutlineTree = ({ book, onChapterSelect, onBookDeselect, onVolum
           onToggle={() => toggleVolume(volume.id)}
           onContextMenu={(e) => handleContextMenu(e, 'volume', volume)}
           dropTarget={dropTarget}
+          volumeDetail={buildVolumeDetail(volume.id)}
         />
 
         {expandedVolumes.has(volume.id) && (
           <>
-            {childVolumes.map((childVolume, index) => 
-              renderVolumeTree(
-                childVolume, 
-                level + 1, 
-                index === childVolumes.length - 1 && volumeChapters.length === 0
-              )
-            )}
-            
-            {volumeChapters.map((chapter, index) => (
-              <SortableTreeNode
-                key={chapter.id}
-                id={chapter.id}
-                type="chapter"
-                data={chapter}
-                level={level + 1}
-                isActive={activeChapterId === chapter.id}
-                isLast={index === volumeChapters.length - 1}
-                onClick={() => onChapterSelect(chapter)}
-                onContextMenu={(e) => handleContextMenu(e, 'chapter', chapter)}
-                displayTitle={computeChapterDisplayTitle(chapter, chapters, { ...book, autoNumbering, numberingFormat, numberingScope })}
-                dropTarget={dropTarget}
-              />
-            ))}
+            {(() => {
+              // 将子卷和章节按 order 混合排序后渲染
+              const volumeItems = childVolumes.map(v => ({ type: 'volume' as const, data: v, order: v.order }));
+              const chapterItems = volumeChapters.map(c => ({ type: 'chapter' as const, data: c, order: c.order }));
+              const mixed = [...volumeItems, ...chapterItems].sort((a, b) => a.order - b.order);
+              const lastIndex = mixed.length - 1;
+              return mixed.map((item, index) => {
+                const isLastItem = index === lastIndex;
+                if (item.type === 'volume') {
+                  return renderVolumeTree(item.data, level + 1, isLastItem);
+                }
+                const chapter = item.data;
+                return (
+                  <SortableTreeNode
+                    key={chapter.id}
+                    id={chapter.id}
+                    type="chapter"
+                    data={chapter}
+                    level={level + 1}
+                    isActive={activeChapterId === chapter.id}
+                    isLast={isLastItem}
+                    onClick={() => onChapterSelect(chapter)}
+                    onContextMenu={(e) => handleContextMenu(e, 'chapter', chapter)}
+                    displayTitle={computeChapterDisplayTitle(chapter, chapters, { ...book, autoNumbering, numberingFormat, numberingScope })}
+                    dropTarget={dropTarget}
+                    excerpt={(chapterDetailDisplay === 'nameAndExcerpt' || chapterDetailDisplay === 'full') ? getChapterExcerpt(chapter) : undefined}
+                    chapterWordCount={(chapterDetailDisplay === 'nameAndWordCount' || chapterDetailDisplay === 'full') ? (chapter.wordCount || 0) : undefined}
+                  />
+                );
+              });
+            })()}
           </>
         )}
       </div>
@@ -360,6 +509,82 @@ export const BookOutlineTree = ({ book, onChapterSelect, onBookDeselect, onVolum
       if (parentVolumeId) {
         setExpandedVolumes((prev) => new Set(prev).add(parentVolumeId));
       }
+      loadData();
+      onVolumeChange?.();
+      showToast('卷创建成功', 'success');
+    } catch (error) {
+      console.error('创建卷失败:', error);
+      showToast('创建卷失败，请重试', 'error');
+    }
+  };
+
+  // 在章节附近新增卷节点（与章节点同级，即在同一父卷下插入）
+  const handleCreateVolumeNearChapter = async (chapter: Chapter, position: 'before' | 'after') => {
+    const name = prompt('请输入卷名:');
+    if (!name) return;
+
+    // 新卷与章节点同级，parentId 就是章节所属的 volumeId
+    const parentId = chapter.volumeId || null;
+
+    // 计算新卷的 order：需要考虑同一父卷下已有的卷和章节
+    const siblingVolumes = volumes.filter(v => v.parentId === parentId).sort((a, b) => a.order - b.order);
+    const siblingChapters = parentId ? getVolumeChapters(parentId) : [];
+
+    // 找到章节在父卷下的位置
+    const chapterIndex = siblingChapters.findIndex(c => c.id === chapter.id);
+    if (chapterIndex === -1) {
+      // 找不到章节，追加到末尾
+      const maxOrder = Math.max(
+        siblingVolumes.length > 0 ? siblingVolumes[siblingVolumes.length - 1].order : -1,
+        siblingChapters.length > 0 ? siblingChapters[siblingChapters.length - 1].order : -1,
+      ) + 1;
+      const newVolume: Volume = {
+        id: generateId(),
+        bookId: book.id,
+        parentId,
+        name,
+        order: maxOrder,
+      };
+      try {
+        await db.volumes.add(newVolume);
+        if (parentId) setExpandedVolumes((prev) => new Set(prev).add(parentId));
+        loadData();
+        onVolumeChange?.();
+        showToast('卷创建成功', 'success');
+      } catch (error) {
+        console.error('创建卷失败:', error);
+        showToast('创建卷失败，请重试', 'error');
+      }
+      return;
+    }
+
+    // 在章节之前/之后插入卷
+    // order 设为章节的 order（before）或章节的 order + 1（after）
+    const insertOrder = position === 'before' ? chapter.order : chapter.order + 1;
+
+    // 后续的卷和章节 order +1
+    for (const v of siblingVolumes) {
+      if (v.order >= insertOrder) {
+        await db.volumes.update(v.id, { order: v.order + 1 });
+      }
+    }
+    for (const c of siblingChapters) {
+      if (c.order >= insertOrder) {
+        await db.chapters.update(c.id, { order: c.order + 1 });
+      }
+    }
+
+    const newVolume: Volume = {
+      id: generateId(),
+      bookId: book.id,
+      parentId,
+      name,
+      order: insertOrder,
+    };
+
+    try {
+      await db.volumes.add(newVolume);
+      if (parentId) setExpandedVolumes((prev) => new Set(prev).add(parentId));
       loadData();
       onVolumeChange?.();
       showToast('卷创建成功', 'success');
@@ -414,6 +639,104 @@ export const BookOutlineTree = ({ book, onChapterSelect, onBookDeselect, onVolum
     } catch (error) {
       console.error('创建章节失败:', error);
       showToast('创建章节失败，请重试', 'error');
+    }
+  };
+
+  // 右进：将卷变为其前一个同级卷的子卷
+  const handleIndentVolume = async (volume: Volume) => {
+    const siblings = volumes
+      .filter(v => v.parentId === volume.parentId)
+      .sort((a, b) => a.order - b.order);
+    const currentIndex = siblings.findIndex(v => v.id === volume.id);
+    if (currentIndex <= 0) {
+      showToast('没有前一个同级卷，无法右进', 'warning');
+      return;
+    }
+    const prevSibling = siblings[currentIndex - 1];
+    // 检查不能移动到自身后代
+    const isDescendant = (checkId: string, ancestorId: string): boolean => {
+      const children = volumes.filter(v => v.parentId === ancestorId);
+      for (const child of children) {
+        if (child.id === checkId || isDescendant(checkId, child.id)) return true;
+      }
+      return false;
+    };
+    if (isDescendant(prevSibling.id, volume.id)) {
+      showToast('不能移动到自身后代卷内', 'warning');
+      return;
+    }
+    // 将卷变为前一个同级卷的最后一个子卷
+    const prevChildren = volumes.filter(v => v.parentId === prevSibling.id).sort((a, b) => a.order - b.order);
+    const newOrder = prevChildren.length > 0 ? prevChildren[prevChildren.length - 1].order + 1 : 0;
+    try {
+      await db.volumes.update(volume.id, {
+        parentId: prevSibling.id,
+        order: newOrder,
+      });
+      // 展开前一个同级卷
+      setExpandedVolumes((prev) => new Set(prev).add(prevSibling.id));
+      loadData();
+      onVolumeChange?.();
+      showToast(`卷「${volume.name}」已右进为「${prevSibling.name}」的子卷`, 'success');
+    } catch (error) {
+      console.error('右进卷失败:', error);
+      showToast('右进卷失败，请重试', 'error');
+    }
+  };
+
+  // 左进：将卷变为其父卷的同级（提升一层），并将原父卷下该卷之后的章节纳入该卷
+  const handleOutdentVolume = async (volume: Volume) => {
+    if (!volume.parentId) {
+      showToast('已经是根卷，无法左进', 'warning');
+      return;
+    }
+    const parentVolume = volumes.find(v => v.id === volume.parentId);
+    if (!parentVolume) {
+      showToast('找不到父卷', 'error');
+      return;
+    }
+
+    // 找到原父卷下，该卷之后的所有章节（order > volume.order）
+    const parentChapters = getVolumeChapters(parentVolume.id).sort((a, b) => a.order - b.order);
+    const subsequentChapters = parentChapters.filter(c => c.order > volume.order);
+
+    // 将卷变为父卷的同级，放在父卷之后
+    const parentSiblings = volumes
+      .filter(v => v.parentId === parentVolume.parentId)
+      .sort((a, b) => a.order - b.order);
+    const parentIndex = parentSiblings.findIndex(v => v.id === parentVolume.id);
+    const newOrder = parentIndex >= 0 ? parentSiblings[parentIndex].order + 1 : parentSiblings.length;
+    // 后续同级卷 order +1
+    for (const sibling of parentSiblings) {
+      if (sibling.order >= newOrder && sibling.id !== volume.id) {
+        await db.volumes.update(sibling.id, { order: sibling.order + 1 });
+      }
+    }
+
+    try {
+      // 更新卷的 parentId 和 order
+      await db.volumes.update(volume.id, {
+        parentId: parentVolume.parentId,
+        order: newOrder,
+      });
+
+      // 将后续章节移入该卷
+      for (let i = 0; i < subsequentChapters.length; i++) {
+        await db.chapters.update(subsequentChapters[i].id, {
+          volumeId: volume.id,
+          order: i,
+        });
+      }
+
+      loadData();
+      onVolumeChange?.();
+      const msg = subsequentChapters.length > 0
+        ? `卷「${volume.name}」已左进，${subsequentChapters.length}个章节已纳入`
+        : `卷「${volume.name}」已左进`;
+      showToast(msg, 'success');
+    } catch (error) {
+      console.error('左进卷失败:', error);
+      showToast('左进卷失败，请重试', 'error');
     }
   };
 
@@ -1296,8 +1619,23 @@ export const BookOutlineTree = ({ book, onChapterSelect, onBookDeselect, onVolum
           items={[...volumes.map(v => v.id), ...chapters.map(c => c.id)]}
           strategy={verticalListSortingStrategy}
         >
-          <div className="flex-1 overflow-auto py-2 px-2">
-            {draftChapters.length > 0 && (
+          <div className="flex-1 relative overflow-hidden">
+            {/* Sticky Breadcrumb */}
+            {stickyVolumes.length > 0 && (
+              <div className="absolute top-0 left-0 right-0 z-30 bg-vscode-sidebar/95 backdrop-blur-sm border-b border-vscode-border px-2 py-1 flex items-center">
+                {stickyVolumes.map((vol, idx) => (
+                  <React.Fragment key={vol.id}>
+                    {idx > 0 && <ChevronRight size={12} className="mx-1 text-vscode-text opacity-30 flex-shrink-0" />}
+                    <div className="flex items-center min-w-0">
+                      <Folder size={13} className="mr-1 text-yellow-500 flex-shrink-0" />
+                      <span className="text-xs text-vscode-text truncate">{vol.name}</span>
+                    </div>
+                  </React.Fragment>
+                ))}
+              </div>
+            )}
+            <div ref={scrollContainerRef} className="h-full overflow-auto py-2 px-2">
+              {draftChapters.length > 0 && (
               <div className="mb-2">
                 <div
                   className="px-3 py-1.5 text-xs font-semibold text-vscode-text opacity-60 uppercase tracking-wider"
@@ -1317,6 +1655,8 @@ export const BookOutlineTree = ({ book, onChapterSelect, onBookDeselect, onVolum
                     onContextMenu={(e) => handleContextMenu(e, 'chapter', chapter)}
                     displayTitle={computeChapterDisplayTitle(chapter, chapters, { ...book, autoNumbering, numberingFormat, numberingScope })}
                     dropTarget={dropTarget}
+                    excerpt={(chapterDetailDisplay === 'nameAndExcerpt' || chapterDetailDisplay === 'full') ? getChapterExcerpt(chapter) : undefined}
+                    chapterWordCount={(chapterDetailDisplay === 'nameAndWordCount' || chapterDetailDisplay === 'full') ? (chapter.wordCount || 0) : undefined}
                   />
                 ))}
               </div>
@@ -1332,6 +1672,7 @@ export const BookOutlineTree = ({ book, onChapterSelect, onBookDeselect, onVolum
                 <p className="text-xs">点击顶部按钮新建卷或章节</p>
               </div>
             )}
+            </div>
           </div>
         </SortableContext>
 
@@ -1407,6 +1748,16 @@ export const BookOutlineTree = ({ book, onChapterSelect, onBookDeselect, onVolum
                   onClick: () => handleMoveVolume(volume),
                 },
                 {
+                  label: '右进（变为前一个同级卷的子卷）',
+                  icon: <CornerDownRight size={16} />,
+                  onClick: () => handleIndentVolume(volume),
+                },
+                {
+                  label: '左进（提升为父卷的同级）',
+                  icon: <CornerDownLeft size={16} />,
+                  onClick: () => handleOutdentVolume(volume),
+                },
+                {
                   label: '删除卷',
                   icon: <Trash2 size={16} />,
                   onClick: () => handleDeleteVolume(volume),
@@ -1425,6 +1776,16 @@ export const BookOutlineTree = ({ book, onChapterSelect, onBookDeselect, onVolum
                   label: '在下方新建章节',
                   icon: <ArrowDown size={16} />,
                   onClick: () => handleCreateChapter(chapter.volumeId, 'after', chapter.id),
+                },
+                {
+                  label: '在此之上插入卷',
+                  icon: <FolderPlus size={16} />,
+                  onClick: () => handleCreateVolumeNearChapter(chapter, 'before'),
+                },
+                {
+                  label: '在此之下插入卷',
+                  icon: <FolderPlus size={16} />,
+                  onClick: () => handleCreateVolumeNearChapter(chapter, 'after'),
                 },
                 {
                   label: '重命名',

@@ -54,7 +54,18 @@ export const PipelineTabView: React.FC<PipelineTabViewProps> = ({
   onPipelineExtractFacts,
   showToast,
 }) => {
-  const [activeTab, setActiveTab] = useState<TabId>('vibe');
+  const [activeTab, setActiveTab] = useState<TabId>(() => {
+    try {
+      const saved = localStorage.getItem('pipelineActiveTab');
+      if (saved === 'vibe' || saved === 'manual') return saved;
+    } catch {}
+    return 'vibe';
+  });
+
+  const handleTabChange = (tab: TabId) => {
+    setActiveTab(tab);
+    localStorage.setItem('pipelineActiveTab', tab);
+  };
 
   return (
     <div className="flex flex-col h-full" style={{ backgroundColor: 'var(--color-vscode-bg)' }}>
@@ -67,7 +78,7 @@ export const PipelineTabView: React.FC<PipelineTabViewProps> = ({
             borderBottom: activeTab === 'vibe' ? '2px solid var(--color-vscode-active)' : '2px solid transparent',
             backgroundColor: activeTab === 'vibe' ? 'rgba(0, 122, 204, 0.08)' : 'transparent',
           }}
-          onClick={() => setActiveTab('vibe')}
+          onClick={() => handleTabChange('vibe')}
         >
           <Sparkles size={14} />
           Vibe Writing
@@ -79,7 +90,7 @@ export const PipelineTabView: React.FC<PipelineTabViewProps> = ({
             borderBottom: activeTab === 'manual' ? '2px solid var(--color-vscode-active)' : '2px solid transparent',
             backgroundColor: activeTab === 'manual' ? 'rgba(0, 122, 204, 0.08)' : 'transparent',
           }}
-          onClick={() => setActiveTab('manual')}
+          onClick={() => handleTabChange('manual')}
         >
           <ListChecks size={14} />
           手动流水线
