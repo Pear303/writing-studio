@@ -91,6 +91,25 @@
   --color-editor-placeholder: #6b7280;
   --color-editor-code-bg: #9ca3af;
   
+  /* Debug 面板分类颜色 */
+  --color-debug-llm-call: #3b82f6;
+  --color-debug-llm-call-bg: rgba(59, 130, 246, 0.15);
+  --color-debug-template-render: #8b5cf6;
+  --color-debug-template-render-bg: rgba(139, 92, 246, 0.15);
+  --color-debug-prompt-compose: #ec4899;
+  --color-debug-prompt-compose-bg: rgba(236, 72, 153, 0.15);
+  --color-debug-taskbook-compose: #f59e0b;
+  --color-debug-taskbook-compose-bg: rgba(245, 158, 11, 0.15);
+  --color-debug-fact-extract: #10b981;
+  --color-debug-fact-extract-bg: rgba(16, 185, 129, 0.15);
+  --color-debug-review-gate: #ef4444;
+  --color-debug-review-gate-bg: rgba(239, 68, 68, 0.15);
+  --color-debug-pipeline-event: #6366f1;
+  --color-debug-pipeline-event-bg: rgba(99, 102, 241, 0.15);
+  --color-debug-error: #ef4444;
+  --color-debug-error-bg: rgba(239, 68, 68, 0.08);
+  --color-debug-response: #10b981;
+  
   /* 登录注册页面颜色 */
   --color-auth-bg-start: #f8fafc;
   --color-auth-bg-end: #f1f5f9;
@@ -163,6 +182,25 @@
   --color-editor-placeholder: #cccccc;
   --color-editor-code-bg: #cccccc;
   
+  /* Debug 面板分类颜色 */
+  --color-debug-llm-call: #60a5fa;
+  --color-debug-llm-call-bg: rgba(96, 165, 250, 0.15);
+  --color-debug-template-render: #a78bfa;
+  --color-debug-template-render-bg: rgba(167, 139, 250, 0.15);
+  --color-debug-prompt-compose: #f472b6;
+  --color-debug-prompt-compose-bg: rgba(244, 114, 182, 0.15);
+  --color-debug-taskbook-compose: #fbbf24;
+  --color-debug-taskbook-compose-bg: rgba(251, 191, 36, 0.15);
+  --color-debug-fact-extract: #34d399;
+  --color-debug-fact-extract-bg: rgba(52, 211, 153, 0.15);
+  --color-debug-review-gate: #f87171;
+  --color-debug-review-gate-bg: rgba(248, 113, 113, 0.15);
+  --color-debug-pipeline-event: #818cf8;
+  --color-debug-pipeline-event-bg: rgba(129, 140, 248, 0.15);
+  --color-debug-error: #f87171;
+  --color-debug-error-bg: rgba(248, 113, 113, 0.08);
+  --color-debug-response: #34d399;
+  
   /* 登录注册页面颜色 */
   --color-auth-bg-start: #1e1e1e;
   --color-auth-bg-end: #1e1e1e;
@@ -234,6 +272,25 @@
   /* 编辑器占位符颜色 */
   --color-editor-placeholder: #666666;
   --color-editor-code-bg: #666666;
+  
+  /* Debug 面板分类颜色 */
+  --color-debug-llm-call: #2563eb;
+  --color-debug-llm-call-bg: rgba(37, 99, 235, 0.12);
+  --color-debug-template-render: #7c3aed;
+  --color-debug-template-render-bg: rgba(124, 58, 237, 0.12);
+  --color-debug-prompt-compose: #db2777;
+  --color-debug-prompt-compose-bg: rgba(219, 39, 119, 0.12);
+  --color-debug-taskbook-compose: #d97706;
+  --color-debug-taskbook-compose-bg: rgba(217, 119, 6, 0.12);
+  --color-debug-fact-extract: #059669;
+  --color-debug-fact-extract-bg: rgba(5, 150, 105, 0.12);
+  --color-debug-review-gate: #dc2626;
+  --color-debug-review-gate-bg: rgba(220, 38, 38, 0.12);
+  --color-debug-pipeline-event: #4f46e5;
+  --color-debug-pipeline-event-bg: rgba(79, 70, 229, 0.12);
+  --color-debug-error: #dc2626;
+  --color-debug-error-bg: rgba(220, 38, 38, 0.08);
+  --color-debug-response: #059669;
   
   /* 登录注册页面颜色 */
   --color-auth-bg-start: #f5f5dc;

@@ -15,6 +15,7 @@ import { writeTextFile } from '@tauri-apps/plugin-fs';
 interface BookOutlineTreeProps {
   book: Book;
   onChapterSelect: (chapter: Chapter) => void;
+  onChapterDeselect?: () => void;
   onBookDeselect?: () => void;
   onVolumeChange?: () => void;
   activeChapterId?: string | null;
@@ -96,7 +97,7 @@ const SortableTreeNode: React.FC<SortableTreeNodeProps> = ({
   );
 };
 
-export const BookOutlineTree = ({ book, onChapterSelect, onBookDeselect, onVolumeChange, activeChapterId, refreshTrigger }: BookOutlineTreeProps) => {
+export const BookOutlineTree = ({ book, onChapterSelect, onChapterDeselect, onBookDeselect, onVolumeChange, activeChapterId, refreshTrigger }: BookOutlineTreeProps) => {
   const [volumes, setVolumes] = useState<Volume[]>([]);
   const [chapters, setChapters] = useState<Chapter[]>([]);
   const [expandedVolumes, setExpandedVolumes] = useState<Set<string>>(new Set());
@@ -245,7 +246,7 @@ export const BookOutlineTree = ({ book, onChapterSelect, onBookDeselect, onVolum
         ancestor = parent;
       }
       chain.unshift({ id: current.id, name: current.name, level: lvl });
-      current = current.parentId ? volumes.find(v => v.id === current.parentId) : undefined;
+      current = current?.parentId ? volumes.find(v => v.id === current?.parentId) : undefined;
     }
 
     setStickyVolumes(chain);
@@ -740,41 +741,91 @@ export const BookOutlineTree = ({ book, onChapterSelect, onBookDeselect, onVolum
     }
   };
 
-  // 删除卷
+  // 重新计算并更新书籍总字数
+  const recalcBookTotalWords = async () => {
+    const allChapters = await db.chapters.where('bookId').equals(book.id).toArray();
+    const totalWords = allChapters.reduce((sum, ch) => sum + ch.wordCount, 0);
+    await db.books.update(book.id, { totalWords, updatedAt: Date.now() });
+  };
+
+  // 删除卷（移入回收站）
   const handleDeleteVolume = async (volume: Volume) => {
-    if (!confirm(`确定要删除卷"${volume.name}"吗？这将同时删除该卷下的所有章节。`)) {
+    if (!confirm(`确定要删除卷"${volume.name}"吗？该卷及其下所有章节将移入回收站。`)) {
       return;
     }
 
     try {
-      await db.transaction('rw', [db.volumes, db.chapters], async () => {
+      const volumeChapters = chapters.filter((c) => c.volumeId === volume.id);
+      const parentVol = volume.parentId ? volumes.find(v => v.id === volume.parentId) : null;
+
+      await db.transaction('rw', [db.volumes, db.chapters, db.recycleBin], async () => {
+        // 移入回收站
+        await db.recycleBin.add({
+          id: generateId(),
+          itemType: 'volume',
+          bookId: book.id,
+          bookName: book.name,
+          volumeName: parentVol?.name,
+          data: volume,
+          childChapters: volumeChapters,
+          deletedAt: Date.now(),
+        });
+
         // 删除该卷下的所有章节
-        const volumeChapters = chapters.filter((c) => c.volumeId === volume.id);
         await db.chapters.bulkDelete(volumeChapters.map((c) => c.id));
 
         // 删除卷
         await db.volumes.delete(volume.id);
       });
 
+      await recalcBookTotalWords();
       loadData();
       onVolumeChange?.();
-      showToast('卷已删除', 'success');
+      // 如果当前正在编辑的章节在被删除的卷中，清除编辑器
+      if (activeChapterId && volumeChapters.some(c => c.id === activeChapterId)) {
+        onChapterDeselect?.();
+      }
+      showToast('卷已移入回收站', 'success');
     } catch (error) {
       console.error('删除卷失败:', error);
       showToast('删除卷失败，请重试', 'error');
     }
   };
 
-  // 删除章节
+  // 删除章节（移入回收站）
   const handleDeleteChapter = async (chapter: Chapter) => {
-    if (!confirm(`确定要删除章节"${chapter.title}"吗？此操作不可恢复。`)) {
+    if (!confirm(`确定要删除章节"${chapter.title}"吗？该章节将移入回收站。`)) {
       return;
     }
 
     try {
-      await db.chapters.delete(chapter.id);
+      const parentVol = chapter.volumeId ? volumes.find(v => v.id === chapter.volumeId) : null;
+
+      await db.transaction('rw', [db.chapters, db.recycleBin], async () => {
+        // 移入回收站
+        await db.recycleBin.add({
+          id: generateId(),
+          itemType: 'chapter',
+          bookId: book.id,
+          bookName: book.name,
+          volumeId: chapter.volumeId,
+          volumeName: parentVol?.name,
+          data: chapter,
+          deletedAt: Date.now(),
+        });
+
+        // 删除章节
+        await db.chapters.delete(chapter.id);
+      });
+
+      await recalcBookTotalWords();
       loadData();
-      showToast('章节已删除', 'success');
+      onVolumeChange?.();
+      // 如果删除的是当前正在编辑的章节，清除编辑器
+      if (activeChapterId === chapter.id) {
+        onChapterDeselect?.();
+      }
+      showToast('章节已移入回收站', 'success');
     } catch (error) {
       console.error('删除章节失败:', error);
       showToast('删除章节失败，请重试', 'error');

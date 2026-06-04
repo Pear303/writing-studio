@@ -53,6 +53,11 @@ class _RunCollector(BaseCallbackHandler):
         self.ai_messages = []
         self.tool_calls = []
         self.token_usage = {"input": 0, "output": 0, "total": 0}
+        self._correlation_counter = 0
+
+    def _next_correlation_id(self) -> str:
+        self._correlation_counter += 1
+        return f"agent_{int(time.time() * 1000)}_{self._correlation_counter}"
 
     def _push_event(self, event_type, data):
         with _state_lock:
@@ -61,11 +66,36 @@ class _RunCollector(BaseCallbackHandler):
 
     def on_llm_start(self, serialized, prompts, **kwargs):
         # 每次 LLM 调用开始：递增 generation，重置流式文本
+        self._current_llm_correlation_id = self._next_correlation_id()
         with _state_lock:
             _execution_state["stream_gen"] += 1
             _execution_state["stream_text"] = ""
             _execution_state["stream_sent"] = 0
-        self._push_event("thinking_start", {})
+        # 推送结构化提示词供前端 Debug 面板追踪
+        # 尝试从 kwargs 中提取 messages（ChatModel 会传入）
+        structured_messages = []
+        messages = kwargs.get("messages") or []
+        for msg in messages:
+            role = getattr(msg, "type", None) or "unknown"
+            content = getattr(msg, "content", "")
+            if isinstance(content, list):
+                # 多模态内容，提取文本部分
+                content = "\n".join(
+                    block.get("text", "") if isinstance(block, dict) else str(block)
+                    for block in content
+                )
+            structured_messages.append({"role": role, "content": content})
+
+        # 兼容：如果 kwargs 没有 messages，回退到 prompts
+        if not structured_messages and prompts:
+            structured_messages = [{"role": "prompt", "content": p} for p in prompts]
+
+        model_name = kwargs.get("invocation_params", {}).get("model_name", "")
+        self._push_event("thinking_start", {
+            "messages": structured_messages,
+            "model": model_name,
+            "correlation_id": self._current_llm_correlation_id,
+        })
 
     def on_llm_new_token(self, token: str, **kwargs):
         # 增量追加到当前 generation 的流式文本
@@ -73,6 +103,7 @@ class _RunCollector(BaseCallbackHandler):
             _execution_state["stream_text"] += token
 
     def on_llm_end(self, response, **kwargs):
+        response_preview = ""
         try:
             for gen_list in response.generations:
                 for gen in gen_list:
@@ -85,29 +116,38 @@ class _RunCollector(BaseCallbackHandler):
                                 "output": usage.get("output_tokens", 0),
                                 "total": usage.get("total_tokens", 0),
                             }
+                        # 提取响应预览
+                        if gen.message.content and not response_preview:
+                            response_preview = gen.message.content[:5000]
         except Exception:
             pass
-        self._push_event("thinking_end", {})
+        self._push_event("thinking_end", {
+            "response_preview": response_preview,
+            "usage": self.token_usage,
+            "correlation_id": getattr(self, "_current_llm_correlation_id", None),
+        })
 
     def on_tool_start(self, serialized, input_str, **kwargs):
         tool_name = serialized.get("name", "unknown")
+        correlation_id = self._next_correlation_id()
         self.tool_calls.append({
             "tool": tool_name,
-            "input": input_str[:500],
+            "input": input_str[:2000],
             "status": "running",
         })
         self._push_event("tool_start", {
             "tool": tool_name,
-            "input": input_str[:500],
+            "input": input_str[:2000],
+            "correlation_id": correlation_id,
         })
 
     def on_tool_end(self, output, **kwargs):
         if self.tool_calls:
             self.tool_calls[-1]["status"] = "completed"
-            self.tool_calls[-1]["output"] = output[:500]
+            self.tool_calls[-1]["output"] = output[:2000]
             self._push_event("tool_end", {
                 "tool": self.tool_calls[-1]["tool"],
-                "output": output[:500],
+                "output": output[:2000],
             })
 
     def on_tool_error(self, error, **kwargs):

@@ -84,7 +84,7 @@ export const PromptTemplateManager: React.FC<PromptTemplateManagerProps> = ({ on
     description: '',
     builtInId: '',
     content: '',
-    stage: 'CHAPTER_WRITING' as 'PLANNING' | 'DETAILED_OUTLINE' | 'CHAPTER_WRITING',
+    stage: 'CHAPTER_WRITING' as 'PLANNING' | 'DETAILED_OUTLINE' | 'CHAPTER_WRITING' | 'CONTINUATION',
   });
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 

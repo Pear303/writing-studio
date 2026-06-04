@@ -3,7 +3,7 @@ export interface PromptTemplate {
   name: string;
   description: string;
   file: string;
-  stage: 'PLANNING' | 'DETAILED_OUTLINE' | 'CHAPTER_WRITING';
+  stage: 'PLANNING' | 'DETAILED_OUTLINE' | 'CHAPTER_WRITING' | 'CONTINUATION';
   variables: string[];
   version: string;
 }
@@ -80,5 +80,14 @@ export const PROMPT_TEMPLATES: Record<string, PromptTemplate> = {
     stage: 'CHAPTER_WRITING',
     variables: ['outlineSummary', 'chapterContent', 'historyLines', 'additions', 'deletions', 'modifications', 'writingStyle', 'storyLength', 'customRules'],
     version: '1.1.0',
+  },
+  'continuation': {
+    id: 'continuation',
+    name: '续写',
+    description: '基于光标位置的前文内容续写故事',
+    file: './templates/pipeline/06-continuation.md',
+    stage: 'CONTINUATION',
+    variables: ['previousText', 'taskBook', 'customInstruction', 'wordCountTarget'],
+    version: '1.0.0',
   },
 };

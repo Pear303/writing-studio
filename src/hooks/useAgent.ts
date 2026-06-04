@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef } from 'react';
 import type { AgentState, AgentMessage, AgentToolCall, AgentActivityItem, AgentTokenUsage, AgentSession } from '../types';
+import { debugLogger } from '../services/DebugLogger';
 
 const DEFAULT_API_URL = 'http://localhost:8000';
 
@@ -314,6 +315,17 @@ export function useAgent() {
         input: evt.input as string,
         status: 'running',
       };
+
+      // Debug: 记录 Agent 工具调用开始
+      debugLogger.log({
+        source: 'vibe-writing',
+        category: 'llm-call',
+        direction: `Agent → tool:${evt.tool}`,
+        correlationId: evt.correlation_id as string | undefined,
+        userMessage: evt.input as string,
+        metadata: { tool: evt.tool, subagent: evt.subagent },
+      });
+
       pendingToolCallsRef.current = [...pendingToolCallsRef.current, toolCall];
 
       setState(prev => ({
@@ -339,6 +351,15 @@ export function useAgent() {
     if (eventType === 'tool_end') {
       const toolName = evt.tool as string;
       const output = evt.output as string;
+
+      // Debug: 记录 Agent 工具调用完成
+      debugLogger.log({
+        source: 'vibe-writing',
+        category: 'llm-call',
+        direction: `Agent ← tool:${toolName}`,
+        response: output,
+        metadata: { tool: toolName },
+      });
 
       pendingToolCallsRef.current = pendingToolCallsRef.current.map(tc =>
         tc.tool === toolName && tc.status === 'running'
@@ -408,6 +429,16 @@ export function useAgent() {
       const reply = evt.reply as string;
       const tokens = evt.tokens as AgentTokenUsage;
 
+      // Debug: 记录 Agent 完成响应
+      debugLogger.log({
+        source: 'vibe-writing',
+        category: 'llm-call',
+        direction: 'Agent ← done',
+        response: reply,
+        responseLength: reply?.length,
+        metadata: { tokens },
+      });
+
       setState(prev => ({
         ...prev,
         tokenUsage: tokens || prev.tokenUsage,
@@ -429,7 +460,28 @@ export function useAgent() {
       return;
     }
 
-    if (eventType === 'thinking_start' || eventType === 'thinking_end') {
+    if (eventType === 'thinking_start') {
+      // 解析结构化消息（新版后端推送 messages 数组）
+      const rawMessages = evt.messages as Array<{ role: string; content: string }> | undefined;
+      const systemPrompt = rawMessages?.find(m => m.role === 'system')?.content;
+      const userMessage = rawMessages?.find(m => m.role === 'human' || m.role === 'user')?.content;
+      const fullMessages = rawMessages?.map(m => ({ role: m.role, content: m.content }));
+
+      // 兼容旧版后端（prompts 字段）
+      const fallbackPrompts = evt.prompts as string[] | undefined;
+
+      // Debug: 记录 Agent LLM 思考开始
+      debugLogger.log({
+        source: 'vibe-writing',
+        category: 'llm-call',
+        direction: 'Agent → LLM (thinking)',
+        correlationId: evt.correlation_id as string | undefined,
+        systemPrompt: systemPrompt || (fallbackPrompts?.join('\n')),
+        userMessage,
+        fullMessages: fullMessages || fallbackPrompts?.map(p => ({ role: 'prompt', content: p })),
+        metadata: { model: evt.model, subagent: evt.subagent },
+      });
+
       setState(prev => ({
         ...prev,
         activityLog: [
@@ -437,7 +489,33 @@ export function useAgent() {
           {
             type: eventType,
             icon: ACTIVITY_ICONS[eventType] || '💭',
-            text: eventType === 'thinking_start' ? '思考中...' : '思考完成',
+            text: '思考中...',
+            level: ACTIVITY_LEVELS[eventType] || 'info',
+          },
+        ],
+      }));
+      return;
+    }
+
+    if (eventType === 'thinking_end') {
+      // Debug: 记录 Agent LLM 思考结束
+      debugLogger.log({
+        source: 'vibe-writing',
+        category: 'llm-call',
+        direction: 'Agent ← LLM (thinking_end)',
+        correlationId: evt.correlation_id as string | undefined,
+        response: (evt.response_preview as string) || undefined,
+        metadata: { usage: evt.usage, subagent: evt.subagent },
+      });
+
+      setState(prev => ({
+        ...prev,
+        activityLog: [
+          ...prev.activityLog,
+          {
+            type: eventType,
+            icon: ACTIVITY_ICONS[eventType] || '💭',
+            text: '思考完成',
             level: ACTIVITY_LEVELS[eventType] || 'info',
           },
         ],

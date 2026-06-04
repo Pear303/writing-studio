@@ -47,6 +47,7 @@ export class ReviewGate {
     chapterContent: string,
     llmCall: (prompt: string) => Promise<string>,
     contract?: Partial<ReviewContract>,
+    correlationId?: string,
   ): Promise<ReviewGateResult> {
     const fullContract = { ...DEFAULT_CONTRACT, ...contract };
     const existingAntiPatterns = await this.loadAntiPatterns(bookId);
@@ -66,6 +67,7 @@ export class ReviewGate {
       source: 'service',
       category: 'review-gate',
       direction: `ReviewGate.review → book:${bookId} ch:${chapterIndex}`,
+      correlationId,
       userMessage: prompt,
       metadata: {
         bookId,
@@ -102,6 +104,7 @@ export class ReviewGate {
       source: 'service',
       category: 'review-gate',
       direction: `ReviewGate.review ← book:${bookId} ch:${chapterIndex}`,
+      correlationId,
       response: rawResult,
       responseLength: rawResult.length,
       metadata: {

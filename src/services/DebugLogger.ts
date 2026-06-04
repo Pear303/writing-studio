@@ -29,6 +29,9 @@ export interface DebugEvent {
   /** 调用方向，如 "PLANNING → outline-generate" 或 "pipeline_step_start" */
   direction: string;
 
+  /** 关联 ID，同一业务流程的事件共享同一 ID（如一次 generate 调用的 prompt-compose + llm-call） */
+  correlationId?: string;
+
   /** 模板 ID，如 "outline-generate"、"chapter-generate" */
   templateId?: string;
   /** 模板文件路径，如 "./templates/pipeline/02-outline-generate.md" */
@@ -58,8 +61,8 @@ export interface DebugEvent {
 
 // ── 常量 ──
 
-const MAX_EVENTS = 200;
-const RESPONSE_TRUNCATE_LENGTH = 2000;
+const MAX_EVENTS = 500;
+const RESPONSE_TRUNCATE_LENGTH = 5000;
 
 // ── 订阅者类型 ──
 
@@ -78,19 +81,13 @@ class DebugLoggerImpl {
     return this.enabled;
   }
 
-  /** 设置启用状态 */
+  /** 设置启用状态（关闭时只暂停记录，不清空已有事件） */
   setEnabled(enabled: boolean): void {
     this.enabled = enabled;
-    if (!enabled) {
-      this.events = [];
-      this.notify();
-    }
   }
 
-  /** 记录一条调试事件 */
+  /** 记录一条调试事件（始终记录，面板关闭时仅跳过 UI 通知以节省性能） */
   log(event: Omit<DebugEvent, 'id' | 'timestamp'>): void {
-    if (!this.enabled) return;
-
     const fullEvent: DebugEvent = {
       ...event,
       id: `dbg_${++this.idCounter}_${Date.now()}`,
@@ -110,7 +107,10 @@ class DebugLoggerImpl {
       this.events = this.events.slice(-MAX_EVENTS);
     }
 
-    this.notify();
+    // 面板关闭时跳过 UI 通知，但事件仍保留在内存中
+    if (this.enabled) {
+      this.notify();
+    }
   }
 
   /** 获取所有事件 */

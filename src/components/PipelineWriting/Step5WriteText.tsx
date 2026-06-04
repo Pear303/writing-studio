@@ -1,20 +1,22 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Copy, Loader2, RefreshCw, Play, Pause, Check, ExternalLink, BookOpen, Zap } from 'lucide-react';
+import { Copy, Loader2, RefreshCw, Play, Pause, Check, ExternalLink, BookOpen, Zap, XCircle } from 'lucide-react';
 import type { PipelineStep2State, PipelineStep4State, PipelineStep5State, PipelineStep3Config, ChapterDraft, ChapterDraftRound } from '../../types';
 import type { ChapterFacts } from '../../types/fact-extraction';
 
 interface Step5WriteTextProps {
+  volumeId: string | null;
   step2State: PipelineStep2State | null;
   step4State: PipelineStep4State | null;
   step3Config: PipelineStep3Config;
   step5State: PipelineStep5State | null;
   onStep5StateChange: (state: PipelineStep5State) => void;
-  onGenerateChapter: (chapterIndex: number) => Promise<string>;
-  onRefineChapter: (step5State: PipelineStep5State, chapterIndex: number, round: ChapterDraftRound) => Promise<string>;
-  onBatchGenerateChapters?: (chapters: Array<{ index: number; title: string; outline: string }>) => Promise<Array<{ index: number; title: string; content: string }>>;
-  onAddChapterToVolume: (title: string, content: string, detailedOutline?: string) => void;
+  onGenerateChapter: (chapterIndex: number, context?: { step4State: PipelineStep4State; step2State: PipelineStep2State | null; step3Config: PipelineStep3Config; step5State: PipelineStep5State | null }) => Promise<string>;
+  onRefineChapter: (step5State: PipelineStep5State, chapterIndex: number, round: ChapterDraftRound, context?: { step2State: PipelineStep2State | null; step3Config: PipelineStep3Config }) => Promise<string>;
+  onBatchGenerateChapters?: (chapters: Array<{ index: number; title: string; outline: string }>, context?: { step2State: PipelineStep2State | null; step3Config: PipelineStep3Config }) => Promise<Array<{ index: number; title: string; content: string }>>;
+  onAddChapterToVolume: (title: string, content: string, detailedOutline?: string, volumeId?: string) => void;
   onPreviewInEditor?: (title: string, content: string, onChange: (content: string) => void) => void;
   onExtractFacts?: (chapterIndex: number, chapterTitle: string, chapterContent: string) => Promise<ChapterFacts | null>;
+  onCancelGeneration?: () => void;
 }
 
 const btnStyle = (variant: 'primary' | 'secondary' | 'danger' | 'warning' | 'success'): React.CSSProperties => {
@@ -61,6 +63,7 @@ const compactInputStyle: React.CSSProperties = {
 };
 
 export const Step5WriteText: React.FC<Step5WriteTextProps> = ({
+  volumeId,
   step2State,
   step4State,
   step3Config,
@@ -72,6 +75,7 @@ export const Step5WriteText: React.FC<Step5WriteTextProps> = ({
   onAddChapterToVolume,
   onPreviewInEditor,
   onExtractFacts,
+  onCancelGeneration,
 }) => {
   const [isWorking, setIsWorking] = useState(false);
   const [isBatchGenerating, setIsBatchGenerating] = useState(false);
@@ -148,7 +152,7 @@ export const Step5WriteText: React.FC<Step5WriteTextProps> = ({
     setGeneratingIndex(currentIdx);
     setError(null);
     try {
-      const content = await onGenerateChapter(currentIdx);
+      const content = await onGenerateChapter(currentIdx, step4State ? { step4State, step2State, step3Config, step5State } : undefined);
       const state = ensureStep5State();
       const existingIdx = state.chapters.findIndex(ch => ch.index === currentIdx);
       const newDraft: ChapterDraft = {
@@ -178,7 +182,12 @@ export const Step5WriteText: React.FC<Step5WriteTextProps> = ({
         }
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : '生成章节失败');
+      // 用户主动取消不报错
+      if (err instanceof Error && (err.message === 'Request aborted' || err.name === 'AbortError')) {
+        // silently ignore
+      } else {
+        setError(err instanceof Error ? err.message : '生成章节失败');
+      }
       setAutoMode(false);
     } finally {
       setIsWorking(false);
@@ -196,13 +205,17 @@ export const Step5WriteText: React.FC<Step5WriteTextProps> = ({
 
     if (!hasInput) {
       try {
-        const content = await onGenerateChapter(currentIdx);
+        const content = await onGenerateChapter(currentIdx, step4State ? { step4State, step2State, step3Config, step5State } : undefined);
         const newChapters = step5State.chapters.map(ch =>
           ch.index === currentIdx ? { ...ch, content, rounds: [] } : ch
         );
         onStep5StateChange({ ...step5State, chapters: newChapters });
       } catch (err) {
-        setError(err instanceof Error ? err.message : '回炉重造失败');
+        if (err instanceof Error && (err.message === 'Request aborted' || err.name === 'AbortError')) {
+          // silently ignore
+        } else {
+          setError(err instanceof Error ? err.message : '回炉重造失败');
+        }
       } finally {
         setIsWorking(false);
       }
@@ -216,7 +229,7 @@ export const Step5WriteText: React.FC<Step5WriteTextProps> = ({
     };
 
     try {
-      const content = await onRefineChapter(step5State, currentIdx, currentRound);
+      const content = await onRefineChapter(step5State, currentIdx, currentRound, { step2State, step3Config });
       const newChapters = step5State.chapters.map(ch =>
         ch.index === currentIdx
           ? { ...ch, content, rounds: [...ch.rounds, currentRound] }
@@ -227,7 +240,11 @@ export const Step5WriteText: React.FC<Step5WriteTextProps> = ({
       setDeletions('');
       setModifications('');
     } catch (err) {
-      setError(err instanceof Error ? err.message : '回炉重造失败');
+      if (err instanceof Error && (err.message === 'Request aborted' || err.name === 'AbortError')) {
+        // silently ignore
+      } else {
+        setError(err instanceof Error ? err.message : '回炉重造失败');
+      }
     } finally {
       setIsWorking(false);
       setGeneratingIndex(null);
@@ -269,7 +286,7 @@ export const Step5WriteText: React.FC<Step5WriteTextProps> = ({
   };
 
   const handleAddToVolume = (title: string, content: string, detailedOutline?: string) => {
-    onAddChapterToVolume(title, content, detailedOutline);
+    onAddChapterToVolume(title, content, detailedOutline, volumeId || undefined);
   };
 
   const handlePreviewInEditor = () => {
@@ -315,7 +332,7 @@ export const Step5WriteText: React.FC<Step5WriteTextProps> = ({
         return;
       }
 
-      const results = await onBatchGenerateChapters(ungeneratedChapters);
+      const results = await onBatchGenerateChapters(ungeneratedChapters, { step2State, step3Config });
       const state = ensureStep5State();
       const newChapters = [...state.chapters];
 
@@ -341,7 +358,11 @@ export const Step5WriteText: React.FC<Step5WriteTextProps> = ({
         currentChapterIndex: results.length > 0 ? results[0].index : state.currentChapterIndex,
       });
     } catch (err) {
-      setError(err instanceof Error ? err.message : '批量生成失败');
+      if (err instanceof Error && (err.message === 'Request aborted' || err.name === 'AbortError')) {
+        // silently ignore
+      } else {
+        setError(err instanceof Error ? err.message : '批量生成失败');
+      }
     } finally {
       setIsBatchGenerating(false);
       setIsWorking(false);
@@ -511,6 +532,19 @@ export const Step5WriteText: React.FC<Step5WriteTextProps> = ({
           <p style={{ fontSize: '13px', color: 'var(--color-vscode-text)', opacity: 0.7 }}>
             正在生成第{(generatingIndex ?? currentIdx) + 1}章正文，请稍候...
           </p>
+          {onCancelGeneration && (
+            <button
+              type="button"
+              style={{ ...btnStyle('danger'), marginTop: '12px' }}
+              onClick={() => {
+                onCancelGeneration();
+                setAutoMode(false);
+              }}
+            >
+              <XCircle size={13} />
+              取消生成
+            </button>
+          )}
           <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
         </div>
       )}

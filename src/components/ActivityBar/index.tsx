@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { BookOpen, Package, Bot, Settings, Workflow } from 'lucide-react';
+import { BookOpen, Package, Bot, Settings, Workflow, PenLine, Trash2 } from 'lucide-react';
 import type { ActivityId } from '../../types';
 
 interface ActivityBarProps {
@@ -12,6 +12,8 @@ const activities: Array<{ id: ActivityId; label: string }> = [
   { id: 'materials', label: '素材箱' },
   { id: 'agent', label: 'Agent' },
   { id: 'pipeline', label: '流水线写作' },
+  { id: 'continue', label: '续写' },
+  { id: 'recycleBin', label: '回收站' },
   { id: 'settings', label: '设置' },
 ];
 
@@ -25,6 +27,10 @@ const getActivityIcon = (id: ActivityId) => {
       return <Bot size={22} />;
     case 'pipeline':
       return <Workflow size={22} />;
+    case 'continue':
+      return <PenLine size={22} />;
+    case 'recycleBin':
+      return <Trash2 size={22} />;
     case 'settings':
       return <Settings size={22} />;
     default:
@@ -35,8 +41,8 @@ const getActivityIcon = (id: ActivityId) => {
 export const ActivityBar = ({ activeActivity, onActivityClick }: ActivityBarProps) => {
   const [hoveredActivity, setHoveredActivity] = useState<string | null>(null);
 
-  const mainActivities = activities.filter(a => a.id !== 'settings');
-  const bottomActivities = activities.filter(a => a.id === 'settings');
+  const mainActivities = activities.filter(a => a.id !== 'settings' && a.id !== 'recycleBin');
+  const bottomActivities = activities.filter(a => a.id === 'settings' || a.id === 'recycleBin');
 
   return (
     <div 

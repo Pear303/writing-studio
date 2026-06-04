@@ -1,5 +1,5 @@
 import React, { useState, useRef, useCallback } from 'react';
-import { Copy, Upload, Loader2, RefreshCw, ExternalLink } from 'lucide-react';
+import { Copy, Upload, Loader2, RefreshCw, ExternalLink, XCircle } from 'lucide-react';
 import type { PipelineStep1Config, Volume, PipelineStep2State, OutlineRound } from '../../types';
 import { ConfirmDialog } from '../ConfirmDialog';
 
@@ -12,6 +12,7 @@ interface Step2OutlineProps {
   onRefineOutline: (step2State: PipelineStep2State, round: OutlineRound) => Promise<string>;
   onOverwriteOutline: (markdown: string) => void;
   onPreviewInEditor?: (title: string, content: string, onChange: (content: string) => void) => void;
+  onCancelGeneration?: () => void;
 }
 
 const btnStyle = (variant: 'primary' | 'secondary' | 'danger' | 'warning'): React.CSSProperties => {
@@ -63,6 +64,7 @@ export const Step2Outline: React.FC<Step2OutlineProps> = ({
   onRefineOutline,
   onOverwriteOutline,
   onPreviewInEditor,
+  onCancelGeneration,
 }) => {
   const [isWorking, setIsWorking] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -90,7 +92,11 @@ export const Step2Outline: React.FC<Step2OutlineProps> = ({
         rounds: [],
       });
     } catch (err) {
-      setError(err instanceof Error ? err.message : '生成大纲失败');
+      if (err instanceof Error && (err.message === 'Request aborted' || err.name === 'AbortError')) {
+        // 用户主动取消
+      } else {
+        setError(err instanceof Error ? err.message : '生成大纲失败');
+      }
     } finally {
       setIsWorking(false);
     }
@@ -111,7 +117,11 @@ export const Step2Outline: React.FC<Step2OutlineProps> = ({
           rounds: [],
         });
       } catch (err) {
-        setError(err instanceof Error ? err.message : '生成大纲失败');
+        if (err instanceof Error && (err.message === 'Request aborted' || err.name === 'AbortError')) {
+          // 用户主动取消
+        } else {
+          setError(err instanceof Error ? err.message : '生成大纲失败');
+        }
       } finally {
         setIsWorking(false);
       }
@@ -134,7 +144,11 @@ export const Step2Outline: React.FC<Step2OutlineProps> = ({
       setDeletions('');
       setModifications('');
     } catch (err) {
-      setError(err instanceof Error ? err.message : '回炉重造失败');
+      if (err instanceof Error && (err.message === 'Request aborted' || err.name === 'AbortError')) {
+        // 用户主动取消
+      } else {
+        setError(err instanceof Error ? err.message : '回炉重造失败');
+      }
     } finally {
       setIsWorking(false);
     }
@@ -227,6 +241,16 @@ export const Step2Outline: React.FC<Step2OutlineProps> = ({
           <p style={{ fontSize: '13px', color: 'var(--color-vscode-text)', opacity: 0.7 }}>
             正在回炉重造，请稍候...
           </p>
+          {onCancelGeneration && (
+            <button
+              type="button"
+              style={{ ...btnStyle('danger'), marginTop: '12px' }}
+              onClick={onCancelGeneration}
+            >
+              <XCircle size={13} />
+              取消生成
+            </button>
+          )}
           <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
         </div>
       )}

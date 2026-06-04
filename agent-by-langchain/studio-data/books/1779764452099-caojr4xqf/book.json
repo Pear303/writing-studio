@@ -3,11 +3,11 @@
   "userId": "f996dbc8-701b-4027-ab7d-4aa7e992d2b6",
   "name": "1",
   "description": "",
-  "totalWords": 6784,
+  "totalWords": 25138,
   "status": "ongoing",
   "createdAt": 1779764452099,
-  "updatedAt": 1780383216279,
+  "updatedAt": 1780534225759,
   "autoNumbering": true,
   "numberingFormat": "arabic",
-  "numberingScope": "global"
+  "numberingScope": "volume"
 }

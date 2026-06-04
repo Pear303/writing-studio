@@ -1,5 +1,18 @@
 import type { ChapterFacts, ChapterStateCommit } from './fact-extraction';
 
+// 回收站条目类型
+export interface RecycleBinItem {
+  id: string;                // 新生成的 ID
+  itemType: 'chapter' | 'volume';
+  bookId: string;
+  bookName: string;          // 冗余存储书名，方便显示
+  volumeId?: string | null;  // 原卷 ID（章节才有）
+  volumeName?: string;       // 原卷名（方便显示）
+  data: Chapter | Volume;    // 完整的原始数据
+  childChapters?: Chapter[]; // 卷节点时，包含其下所有章节
+  deletedAt: number;
+}
+
 // 章节版本相关类型
 export interface ChapterVersion {
   id: string; // 格式: chapterId_timestamp
@@ -96,7 +109,7 @@ export interface AIConversation {
 }
 
 // 活动栏类型
-export type ActivityId = 'books' | 'materials' | 'agent' | 'pipeline' | 'settings';
+export type ActivityId = 'books' | 'materials' | 'agent' | 'pipeline' | 'continue' | 'settings' | 'recycleBin';
 
 export interface ActivityItem {
   id: ActivityId;
@@ -504,6 +517,8 @@ export interface FullExportData {
   qaRecords: QARecord[];
   chapterStateCommits: ChapterStateCommit[];
   antiPatterns: AntiPattern[];
+  vibePipelineHistory: VibePipelineHistory[];
+  recycleBinItems: RecycleBinItem[];
   users: any[];
   userSettings: any[];
   formattingSettings: Record<string, FormattingSettings>;
@@ -637,6 +652,22 @@ export const DEFAULT_VIBE_PRESETS: Omit<VibePreset, 'id' | 'userId' | 'enabled' 
   { name: '注重可读性', content: '注意：语言简明易懂，句子不宜过长，段落结构清晰。', builtIn: true, order: 7 },
 ];
 
+// Vibe Writing 历史记录
+export interface VibePipelineHistory {
+  id: string;                // 与 PipelineAutoState.id 相同
+  bookId: string;
+  volumeId: string;
+  bookName?: string;         // 冗余存储书名，方便历史列表显示
+  volumeName?: string;       // 冗余存储卷名
+  userRequest: string;
+  steps: PipelineAutoStep[];
+  currentStepIndex: number;
+  status: PipelineAutoState['status'];
+  createdAt: number;
+  updatedAt: number;
+  finishedAt: number;        // 完成时间（completed/failed/cancelled）
+}
+
 export interface PipelinePromptTemplate {
   id: string;
   userId: string;
@@ -644,7 +675,7 @@ export interface PipelinePromptTemplate {
   description: string;
   builtInId: string;
   content: string;
-  stage: 'PLANNING' | 'DETAILED_OUTLINE' | 'CHAPTER_WRITING';
+  stage: 'PLANNING' | 'DETAILED_OUTLINE' | 'CHAPTER_WRITING' | 'CONTINUATION';
   variables: string[];
   builtIn: boolean;
   order: number;

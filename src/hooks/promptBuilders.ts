@@ -3,10 +3,12 @@ import { STAGE_TO_PROMPTS, STAGE_NAMES } from './prompts-index';
 
 let cachedTaskBookText: string | null = null;
 
+/** @deprecated 使用 ctx.taskBookText 代替，全局变量存在并发安全问题 */
 export function setTaskBookText(text: string | null): void {
   cachedTaskBookText = text;
 }
 
+/** @deprecated 使用 ctx.taskBookText 代替 */
 export function getTaskBookText(): string | null {
   return cachedTaskBookText;
 }
@@ -69,8 +71,10 @@ function buildContextSection(ctx: Partial<WritingContext>, stage: WritingStage):
   }
   
   if (stage === 'CHAPTER_WRITING') {
-    if (cachedTaskBookText) {
-      sections.push(cachedTaskBookText);
+    // 优先使用 ctx 传递的 taskBookText（请求级），回退到全局变量（兼容旧调用）
+    const taskBookText = ctx.taskBookText ?? cachedTaskBookText;
+    if (taskBookText) {
+      sections.push(taskBookText);
     } else {
       if (ctx.chapterNumber) 
         sections.push(`章节序号：第${ctx.chapterNumber}章`);
@@ -201,6 +205,18 @@ function buildContextSection(ctx: Partial<WritingContext>, stage: WritingStage):
     if ((ctx as any).strictMode) 
       sections.push(`评分模式：严格模式`);
   }
+
+  if (stage === 'CONTINUATION') {
+    // 优先使用 ctx 传递的 taskBookText（请求级），回退到全局变量（兼容旧调用）
+    const taskBookText = ctx.taskBookText ?? cachedTaskBookText;
+    if (taskBookText) {
+      sections.push(taskBookText);
+    }
+    if (ctx.wordCountTarget) 
+      sections.push(`续写目标字数：约${ctx.wordCountTarget}字`);
+    if ((ctx as any).customInstruction) 
+      sections.push(`用户指令：${(ctx as any).customInstruction}`);
+  }
   
   return sections.length > 0 ? sections.join('\n') : '';
 }
@@ -251,6 +267,12 @@ function buildOutputRequirements(stage: WritingStage): string[] {
       '检查前后伏笔是否有呼应',
       '检查时间线是否连贯',
       '检查悬念线是否延续',
+    ],
+    'CONTINUATION': [
+      '与前文自然衔接，保持风格和语气一致',
+      '续写内容推进剧情，不要原地踏步',
+      '如果前文有未完成的动作或悬念，优先回应',
+      '结尾自然，不一定要设置悬念钩子（除非是章节末尾续写）',
     ],
     'IDLE': [],
   };
