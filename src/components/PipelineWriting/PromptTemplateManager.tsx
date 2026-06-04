@@ -84,7 +84,7 @@ export const PromptTemplateManager: React.FC<PromptTemplateManagerProps> = ({ on
     description: '',
     builtInId: '',
     content: '',
-    stage: 'CHAPTER_WRITING' as 'PLANNING' | 'DETAILED_OUTLINE' | 'CHAPTER_WRITING',
+    stage: 'CHAPTER_WRITING' as 'PLANNING' | 'DETAILED_OUTLINE' | 'CHAPTER_WRITING' | 'CONTINUATION',
   });
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
@@ -288,7 +288,7 @@ export const PromptTemplateManager: React.FC<PromptTemplateManagerProps> = ({ on
             alignItems: 'center',
             gap: '6px',
             cursor: 'pointer',
-            backgroundColor: isExpanded ? 'rgba(0, 122, 204, 0.06)' : 'transparent',
+            backgroundColor: isExpanded ? 'var(--color-vscode-active-light, rgba(0, 122, 204, 0.06))' : 'transparent',
           }}
           onClick={() => setExpandedId(isExpanded ? null : template.id)}
         >
@@ -313,8 +313,8 @@ export const PromptTemplateManager: React.FC<PromptTemplateManagerProps> = ({ on
                   fontSize: '10px',
                   padding: '1px 4px',
                   borderRadius: '2px',
-                  backgroundColor: 'rgba(240, 173, 78, 0.2)',
-                  color: '#f0ad4e',
+                  backgroundColor: 'var(--color-warning-light, rgba(240, 173, 78, 0.2))',
+                  color: 'var(--color-warning, #f0ad4e)',
                   flexShrink: 0,
                 }}>
                   已自定义

@@ -24,9 +24,9 @@ interface VibeWritingPanelProps {
 const STATUS_ICONS: Record<string, React.ReactNode> = {
   pending: <div className="w-4 h-4 rounded-full border-2" style={{ borderColor: 'var(--color-vscode-text)', opacity: 0.4 }} />,
   running: <Loader2 size={16} className="animate-spin" style={{ color: 'var(--color-vscode-active)' }} />,
-  checking: <Loader2 size={16} className="animate-spin" style={{ color: '#f0ad4e' }} />,
-  completed: <CheckCircle size={16} style={{ color: '#5cb85c' }} />,
-  failed: <AlertCircle size={16} style={{ color: '#d9534f' }} />,
+  checking: <Loader2 size={16} className="animate-spin" style={{ color: 'var(--color-warning, #f0ad4e)' }} />,
+  completed: <CheckCircle size={16} style={{ color: 'var(--color-success, #5cb85c)' }} />,
+  failed: <AlertCircle size={16} style={{ color: 'var(--color-danger, #d9534f)' }} />,
   skipped: <SkipForward size={16} style={{ color: 'var(--color-vscode-text)', opacity: 0.5 }} />,
 };
 
@@ -46,7 +46,7 @@ const StepRow: React.FC<{
       className="mb-1 rounded"
       style={{
         borderLeft: isCurrent ? '3px solid var(--color-vscode-active)' : '3px solid transparent',
-        backgroundColor: isCurrent ? 'rgba(0, 122, 204, 0.08)' : 'transparent',
+        backgroundColor: isCurrent ? 'var(--color-vscode-active-light, rgba(0, 122, 204, 0.08))' : 'transparent',
       }}
     >
       <div
@@ -58,7 +58,7 @@ const StepRow: React.FC<{
           {step.name}
         </span>
         {step.retryCount > 0 && (
-          <span className="text-xs px-1 rounded" style={{ backgroundColor: 'rgba(240, 173, 78, 0.2)', color: '#f0ad4e' }}>
+          <span className="text-xs px-1 rounded" style={{ backgroundColor: 'var(--color-warning-light, rgba(240, 173, 78, 0.2))', color: 'var(--color-warning, #f0ad4e)' }}>
             重试×{step.retryCount}
           </span>
         )}
@@ -76,14 +76,14 @@ const StepRow: React.FC<{
             <div className="flex gap-1 mt-1">
               <button
                 className="text-xs px-2 py-0.5 rounded"
-                style={{ backgroundColor: 'rgba(240, 173, 78, 0.2)', color: '#f0ad4e' }}
+                style={{ backgroundColor: 'var(--color-warning-light, rgba(240, 173, 78, 0.2))', color: 'var(--color-warning, #f0ad4e)' }}
                 onClick={(e) => { e.stopPropagation(); onSkip?.(); }}
               >
                 跳过
               </button>
               <button
                 className="text-xs px-2 py-0.5 rounded"
-                style={{ backgroundColor: 'rgba(0, 122, 204, 0.2)', color: 'var(--color-vscode-active)' }}
+                style={{ backgroundColor: 'var(--color-vscode-active-light, rgba(0, 122, 204, 0.2))', color: 'var(--color-vscode-active)' }}
                 onClick={(e) => { e.stopPropagation(); setShowRedirect(!showRedirect); }}
               >
                 修改方向
@@ -276,7 +276,7 @@ export const VibeWritingPanel: React.FC<VibeWritingPanelProps> = ({
             </button>
           </div>
           {!currentBook && (
-            <p className="text-xs mt-1" style={{ color: '#d9534f' }}>请先在左侧选择一本书</p>
+            <p className="text-xs mt-1" style={{ color: 'var(--color-danger, #d9534f)' }}>请先在左侧选择一本书</p>
           )}
 
           <div className="mt-2">
@@ -449,7 +449,7 @@ export const VibeWritingPanel: React.FC<VibeWritingPanelProps> = ({
 
       {/* Error */}
       {error && (
-        <div className="mx-4 mb-2 px-3 py-2 rounded text-xs" style={{ backgroundColor: 'rgba(217, 83, 79, 0.15)', color: '#d9534f' }}>
+        <div className="mx-4 mb-2 px-3 py-2 rounded text-xs" style={{ backgroundColor: 'var(--color-danger-light, rgba(217, 83, 79, 0.15))', color: 'var(--color-danger, #d9534f)' }}>
           {error}
         </div>
       )}
@@ -464,16 +464,16 @@ export const VibeWritingPanel: React.FC<VibeWritingPanelProps> = ({
                 className="text-xs px-2 py-0.5 rounded-full font-medium"
                 style={{
                   backgroundColor:
-                    isRunning ? 'rgba(0, 122, 204, 0.2)' :
-                    isPaused ? 'rgba(240, 173, 78, 0.2)' :
-                    isCompleted ? 'rgba(92, 184, 92, 0.2)' :
-                    isFailed ? 'rgba(217, 83, 79, 0.2)' :
-                    'rgba(255,255,255,0.1)',
+                    isRunning ? 'var(--color-vscode-active-light, rgba(0, 122, 204, 0.2))' :
+                    isPaused ? 'var(--color-warning-light, rgba(240, 173, 78, 0.2))' :
+                    isCompleted ? 'var(--color-success-light, rgba(92, 184, 92, 0.2))' :
+                    isFailed ? 'var(--color-danger-light, rgba(217, 83, 79, 0.2))' :
+                    'var(--color-hover-bg, rgba(255,255,255,0.1))',
                   color:
                     isRunning ? 'var(--color-vscode-active)' :
-                    isPaused ? '#f0ad4e' :
-                    isCompleted ? '#5cb85c' :
-                    isFailed ? '#d9534f' :
+                    isPaused ? 'var(--color-warning, #f0ad4e)' :
+                    isCompleted ? 'var(--color-success, #5cb85c)' :
+                    isFailed ? 'var(--color-danger, #d9534f)' :
                     'var(--color-vscode-text)',
                 }}
               >
@@ -489,7 +489,7 @@ export const VibeWritingPanel: React.FC<VibeWritingPanelProps> = ({
               {isRunning && (
                 <button
                   className="p-1 rounded"
-                  style={{ backgroundColor: 'rgba(240, 173, 78, 0.2)', color: '#f0ad4e' }}
+                  style={{ backgroundColor: 'var(--color-warning-light, rgba(240, 173, 78, 0.2))', color: 'var(--color-warning, #f0ad4e)' }}
                   onClick={() => onIntervene('pause')}
                   title="暂停"
                 >
@@ -499,7 +499,7 @@ export const VibeWritingPanel: React.FC<VibeWritingPanelProps> = ({
               {isPaused && (
                 <button
                   className="p-1 rounded"
-                  style={{ backgroundColor: 'rgba(92, 184, 92, 0.2)', color: '#5cb85c' }}
+                  style={{ backgroundColor: 'var(--color-success-light, rgba(92, 184, 92, 0.2))', color: 'var(--color-success, #5cb85c)' }}
                   onClick={() => onIntervene('resume')}
                   title="继续"
                 >
@@ -509,7 +509,7 @@ export const VibeWritingPanel: React.FC<VibeWritingPanelProps> = ({
               {(isRunning || isPaused) && (
                 <button
                   className="p-1 rounded"
-                  style={{ backgroundColor: 'rgba(217, 83, 79, 0.2)', color: '#d9534f' }}
+                  style={{ backgroundColor: 'var(--color-danger-light, rgba(217, 83, 79, 0.2))', color: 'var(--color-danger, #d9534f)' }}
                   onClick={() => onIntervene('cancel')}
                   title="取消"
                 >
@@ -519,7 +519,7 @@ export const VibeWritingPanel: React.FC<VibeWritingPanelProps> = ({
               {(isCompleted || isFailed || isCancelled) && (
                 <button
                   className="p-1 rounded"
-                  style={{ backgroundColor: 'rgba(255,255,255,0.1)', color: 'var(--color-vscode-text)' }}
+                  style={{ backgroundColor: 'var(--color-hover-bg, rgba(255,255,255,0.1))', color: 'var(--color-vscode-text)' }}
                   onClick={onClearPipeline}
                   title="清除"
                 >
@@ -530,7 +530,7 @@ export const VibeWritingPanel: React.FC<VibeWritingPanelProps> = ({
           </div>
 
           {/* User Request */}
-          <div className="mb-3 px-3 py-2 rounded text-xs" style={{ backgroundColor: 'rgba(0, 122, 204, 0.08)', border: '1px solid var(--color-vscode-border)' }}>
+          <div className="mb-3 px-3 py-2 rounded text-xs" style={{ backgroundColor: 'var(--color-vscode-active-light, rgba(0, 122, 204, 0.08))', border: '1px solid var(--color-vscode-border)' }}>
             <span style={{ color: 'var(--color-vscode-active)' }}>需求：</span>
             <span style={{ color: 'var(--color-vscode-text)' }}>{pipelineState.userRequest}</span>
           </div>
@@ -551,10 +551,10 @@ export const VibeWritingPanel: React.FC<VibeWritingPanelProps> = ({
 
           {/* Intervention Alert */}
           {pipelineState.intervention && (
-            <div className="mt-3 px-3 py-2 rounded text-xs" style={{ backgroundColor: 'rgba(240, 173, 78, 0.15)', border: '1px solid rgba(240, 173, 78, 0.3)' }}>
+            <div className="mt-3 px-3 py-2 rounded text-xs" style={{ backgroundColor: 'var(--color-warning-light, rgba(240, 173, 78, 0.15))', border: '1px solid var(--color-warning, rgba(240, 173, 78, 0.3))' }}>
               <div className="flex items-center gap-1 mb-1">
-                <MessageSquare size={12} style={{ color: '#f0ad4e' }} />
-                <span style={{ color: '#f0ad4e', fontWeight: 600 }}>干预信号</span>
+                <MessageSquare size={12} style={{ color: 'var(--color-warning, #f0ad4e)' }} />
+                <span style={{ color: 'var(--color-warning, #f0ad4e)', fontWeight: 600 }}>干预信号</span>
               </div>
               <p style={{ color: 'var(--color-vscode-text)' }}>
                 类型: {pipelineState.intervention.type}

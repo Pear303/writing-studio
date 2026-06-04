@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
-import type { PipelineAutoState, PipelineAutoStep, PipelineIntervention } from '../types';
+import type { PipelineAutoState, PipelineAutoStep, PipelineIntervention, VibePipelineHistory } from '../types';
+import { db } from '../db';
 import { debugLogger } from '../services/DebugLogger';
 
 const DEFAULT_API_URL = 'http://localhost:8000';
@@ -29,6 +30,41 @@ export function usePipeline() {
   const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const PIPELINE_START_TIMEOUT_MS = 5 * 60 * 1000;
+
+  // 保存 Vibe Writing 历史记录到 IndexedDB
+  const saveHistory = useCallback(async (pipeline: PipelineAutoState) => {
+    try {
+      // 获取书名和卷名
+      let bookName: string | undefined;
+      let volumeName: string | undefined;
+      if (pipeline.bookId) {
+        const book = await db.books.get(pipeline.bookId);
+        bookName = book?.name;
+      }
+      if (pipeline.volumeId) {
+        const vol = await db.volumes.get(pipeline.volumeId);
+        volumeName = vol?.name;
+      }
+
+      const history: VibePipelineHistory = {
+        id: pipeline.id,
+        bookId: pipeline.bookId,
+        volumeId: pipeline.volumeId,
+        bookName,
+        volumeName,
+        userRequest: pipeline.userRequest,
+        steps: pipeline.steps,
+        currentStepIndex: pipeline.currentStepIndex,
+        status: pipeline.status,
+        createdAt: pipeline.createdAt,
+        updatedAt: pipeline.updatedAt,
+        finishedAt: Date.now(),
+      };
+      await db.vibePipelineHistory.put(history);
+    } catch (err) {
+      console.error('保存 Vibe Writing 历史记录失败:', err);
+    }
+  }, []);
 
   const startPipeline = useCallback(async (
     bookId: string,
@@ -153,7 +189,14 @@ export function usePipeline() {
       source: 'vibe-writing',
       category: 'pipeline-event',
       direction: `SSE → ${eventType}`,
-      metadata: { ...evt },
+      templateId: (evt.step_name as string) || undefined,
+      metadata: {
+        step_name: evt.step_name,
+        step_index: evt.step_index,
+        pipeline_id: evt.pipeline_id,
+        status: evt.status,
+        message: evt.message,
+      },
     });
 
     if (eventType === 'pipeline_started') {
@@ -209,13 +252,18 @@ export function usePipeline() {
             result: (evt.result as string) || '',
           };
         }
+        const updated = {
+          ...prev.pipeline,
+          steps,
+          updatedAt: Date.now(),
+        };
+        // 如果步骤失败，保存历史记录
+        if ((evt.status as string) === 'failed') {
+          saveHistory({ ...updated, status: 'failed' });
+        }
         return {
           ...prev,
-          pipeline: {
-            ...prev.pipeline,
-            steps,
-            updatedAt: Date.now(),
-          },
+          pipeline: updated,
         };
       });
     } else if (eventType === 'pipeline_check_result') {
@@ -223,13 +271,16 @@ export function usePipeline() {
     } else if (eventType === 'pipeline_completed') {
       setState(prev => {
         if (!prev.pipeline) return prev;
+        const updated = {
+          ...prev.pipeline,
+          status: 'completed' as const,
+          updatedAt: Date.now(),
+        };
+        // 异步保存历史记录
+        saveHistory(updated);
         return {
           ...prev,
-          pipeline: {
-            ...prev.pipeline,
-            status: 'completed',
-            updatedAt: Date.now(),
-          },
+          pipeline: updated,
         };
       });
     }
@@ -294,11 +345,20 @@ export function usePipeline() {
         body: JSON.stringify({ type, message, target_step_index: targetStepIndex }),
       });
       await fetchStatus();
+      // 取消时保存历史记录
+      if (type === 'cancel') {
+        setState(prev => {
+          if (prev.pipeline) {
+            saveHistory({ ...prev.pipeline, status: 'cancelled' });
+          }
+          return prev;
+        });
+      }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       setState(prev => ({ ...prev, error: msg }));
     }
-  }, [fetchStatus]);
+  }, [fetchStatus, saveHistory]);
 
   const clearPipeline = useCallback(async () => {
     try {

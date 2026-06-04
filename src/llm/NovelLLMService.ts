@@ -1,5 +1,5 @@
 import type { WritingStage, WritingContext } from '../hooks';
-import { SmartPromptComposer, createComposer, setTaskBookText } from '../hooks';
+import { SmartPromptComposer, createComposer } from '../hooks';
 import type { PipelineStep1Config, PipelineStep2State, PipelineStep4State, PipelineStep5State, OutlineRound, DetailedOutlineRound, ChapterDraftRound } from '../types';
 import { taskBookComposer } from '../services/TaskBookComposer';
 import { debugLogger } from '../services/DebugLogger';
@@ -29,6 +29,15 @@ export class NovelLLMService {
   private composer: SmartPromptComposer | null = null;
   private config: LLMConfig | null = null;
   private sessionPrefix: string | null = null;
+  private currentAbortController: AbortController | null = null;
+
+  /** 中止当前正在进行的 LLM 请求 */
+  abort(): void {
+    if (this.currentAbortController) {
+      this.currentAbortController.abort();
+      this.currentAbortController = null;
+    }
+  }
 
   setSessionPrefix(prefix: string | null): void {
     this.sessionPrefix = prefix;
@@ -106,6 +115,7 @@ export class NovelLLMService {
       throw new Error('LLM服务未初始化');
     }
     
+    const correlationId = `gen_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
     const { messages, metadata } = this.composer.composeForLLM(stage, userMessage, context);
 
     // Debug: 记录提示词组装详情
@@ -113,6 +123,7 @@ export class NovelLLMService {
       source: 'manual-pipeline',
       category: 'prompt-compose',
       direction: `${metadata.stageName} → system prompt`,
+      correlationId,
       systemPrompt: metadata.systemPrompt,
       userMessage,
       variables: context as Record<string, unknown>,
@@ -150,6 +161,7 @@ export class NovelLLMService {
     }
     
     try {
+      this.currentAbortController = new AbortController();
       const response = await fetch(`${this.config.baseUrl}/chat/completions`, {
         method: 'POST',
         headers: {
@@ -162,6 +174,7 @@ export class NovelLLMService {
           temperature: 0.7,
           max_tokens: 4000,
         }),
+        signal: this.currentAbortController.signal,
       });
       
       if (!response.ok) {
@@ -176,6 +189,7 @@ export class NovelLLMService {
         source: 'manual-pipeline',
         category: 'llm-call',
         direction: `${stage} → ${this.config?.model}`,
+        correlationId,
         systemPrompt: messages.find(m => m.role === 'system')?.content,
         userMessage,
         fullMessages: messages.map(m => ({ role: m.role, content: typeof m.content === 'string' ? m.content : JSON.stringify(m.content) })),
@@ -201,6 +215,7 @@ export class NovelLLMService {
         source: 'manual-pipeline',
         category: 'llm-call',
         direction: `${stage} → ${this.config?.model}`,
+        correlationId,
         systemPrompt: messages.find(m => m.role === 'system')?.content,
         userMessage,
         error: error instanceof Error ? error.message : String(error),
@@ -208,10 +223,12 @@ export class NovelLLMService {
       });
 
       throw error;
+    } finally {
+      this.currentAbortController = null;
     }
   }
   
-  async generateRaw(prompt: string): Promise<LLMResponse> {
+  async generateRaw(prompt: string, correlationId?: string): Promise<LLMResponse> {
     if (!this.config) {
       throw new Error('LLM服务未初始化');
     }
@@ -221,6 +238,7 @@ export class NovelLLMService {
       source: 'service',
       category: 'llm-call',
       direction: `generateRaw → ${this.config.model}`,
+      correlationId,
       userMessage: prompt,
       metadata: { model: this.config.model, baseUrl: this.config.baseUrl },
     });
@@ -256,6 +274,7 @@ export class NovelLLMService {
         source: 'service',
         category: 'llm-call',
         direction: `generateRaw ← ${this.config.model}`,
+        correlationId,
         response: content,
         responseLength: content.length,
         usage: data.usage,
@@ -274,9 +293,178 @@ export class NovelLLMService {
         source: 'service',
         category: 'llm-call',
         direction: `generateRaw → ${this.config.model}`,
+        correlationId,
         userMessage: prompt,
         error: error instanceof Error ? error.message : String(error),
         metadata: { model: this.config.model },
+      });
+
+      throw error;
+    }
+  }
+
+  /**
+   * 流式生成方法，复用 generate 的消息构建逻辑，但使用 SSE 流式输出
+   */
+  async generateStream(
+    stage: WritingStage,
+    userMessage: string,
+    onChunk: (chunk: string) => void,
+    signal: AbortSignal,
+    context?: Partial<WritingContext>
+  ): Promise<void> {
+    if (!this.composer || !this.config) {
+      throw new Error('LLM服务未初始化');
+    }
+
+    const correlationId = `stream_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const { messages, metadata } = this.composer.composeForLLM(stage, userMessage, context);
+
+    const finalMessages: Array<{ role: 'system' | 'user' | 'assistant'; content: string | Array<{ type: string; text: string; cache_control?: { type: string } }> }> = [];
+
+    if (this.sessionPrefix) {
+      finalMessages.push({
+        role: 'system',
+        content: [
+          { type: 'text', text: this.sessionPrefix, cache_control: { type: 'ephemeral' } },
+        ],
+      });
+    }
+
+    for (const msg of messages) {
+      if (msg.role === 'system') {
+        finalMessages.push({
+          role: 'system',
+          content: [
+            { type: 'text', text: msg.content, cache_control: { type: 'ephemeral' } },
+          ],
+        });
+      } else {
+        finalMessages.push(msg);
+      }
+    }
+
+    debugLogger.log({
+      source: 'manual-pipeline',
+      category: 'prompt-compose',
+      direction: `${metadata.stageName} → system prompt (stream)`,
+      correlationId,
+      systemPrompt: metadata.systemPrompt,
+      userMessage,
+      variables: context as Record<string, unknown>,
+      metadata: {
+        stage,
+        loadedPrompts: metadata.loadedPrompts,
+        model: this.config?.model,
+        baseUrl: this.config?.baseUrl,
+      },
+    });
+
+    // 累积流式响应用于 debug 记录
+    let accumulatedResponse = '';
+
+    try {
+      const response = await fetch(`${this.config.baseUrl}/chat/completions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${this.config.apiKey}`,
+        },
+        body: JSON.stringify({
+          model: this.config.model,
+          messages: finalMessages,
+          temperature: 0.7,
+          max_tokens: 4000,
+          stream: true,
+        }),
+        signal,
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text().catch(() => '');
+        throw new Error(`API请求失败: ${response.status} ${response.statusText} - ${errorText}`);
+      }
+
+      if (!response.body) {
+        throw new Error('Response body is null');
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      while (true) {
+        if (signal.aborted) {
+          reader.cancel();
+          throw new Error('Request aborted');
+        }
+
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed || !trimmed.startsWith('data:')) continue;
+
+          const data = trimmed.slice(5).trim();
+          if (data === '[DONE]') {
+            // 流结束，记录完整响应
+            debugLogger.log({
+              source: 'manual-pipeline',
+              category: 'llm-call',
+              direction: `${stage} ← ${this.config?.model} (stream)`,
+              correlationId,
+              systemPrompt: messages.find(m => m.role === 'system')?.content,
+              userMessage,
+              response: accumulatedResponse,
+              responseLength: accumulatedResponse.length,
+              metadata: { stage, model: this.config?.model, baseUrl: this.config?.baseUrl },
+            });
+            return;
+          }
+
+          try {
+            const parsed = JSON.parse(data);
+            const content = parsed.choices?.[0]?.delta?.content;
+            if (content) {
+              onChunk(content);
+              accumulatedResponse += content;
+            }
+          } catch {}
+        }
+      }
+
+      // 流正常结束（未收到 [DONE]），也记录响应
+      if (accumulatedResponse) {
+        debugLogger.log({
+          source: 'manual-pipeline',
+          category: 'llm-call',
+          direction: `${stage} ← ${this.config?.model} (stream)`,
+          correlationId,
+          systemPrompt: messages.find(m => m.role === 'system')?.content,
+          userMessage,
+          response: accumulatedResponse,
+          responseLength: accumulatedResponse.length,
+          metadata: { stage, model: this.config?.model, baseUrl: this.config?.baseUrl },
+        });
+      }
+    } catch (error) {
+      if (signal.aborted) throw error;
+      console.error('[NovelLLMService] 流式生成失败:', error);
+
+      debugLogger.log({
+        source: 'manual-pipeline',
+        category: 'llm-call',
+        direction: `${stage} → ${this.config?.model} (stream)`,
+        correlationId,
+        systemPrompt: messages.find(m => m.role === 'system')?.content,
+        userMessage,
+        error: error instanceof Error ? error.message : String(error),
+        metadata: { stage, model: this.config?.model },
       });
 
       throw error;
@@ -427,6 +615,17 @@ async generateOutline(project: {
       modifications: currentRound.modifications.trim(),
     });
 
+    // Debug: 记录模板渲染
+    debugLogger.log({
+      source: 'manual-pipeline',
+      category: 'template-render',
+      direction: 'DETAILED_OUTLINE → detailed-refine',
+      templateId: 'detailed-refine',
+      templateFile: './templates/pipeline/04-detailed-refine.md',
+      variables: { roundAdditions: currentRound.additions, roundDeletions: currentRound.deletions, roundModifications: currentRound.modifications },
+      userMessage,
+    });
+
     const result = await this.generate('DETAILED_OUTLINE', userMessage, {
       novelType: '',
       protagonistTypes: [],
@@ -461,6 +660,17 @@ async generateOutline(project: {
       additions: currentRound.additions.trim(),
       deletions: currentRound.deletions.trim(),
       modifications: currentRound.modifications.trim(),
+    });
+
+    // Debug: 记录模板渲染
+    debugLogger.log({
+      source: 'manual-pipeline',
+      category: 'template-render',
+      direction: 'DETAILED_OUTLINE → detailed-refine-chapter',
+      templateId: 'detailed-refine-chapter',
+      templateFile: './templates/pipeline/04-detailed-refine-chapter.md',
+      variables: { chapterIndices, roundAdditions: currentRound.additions, roundDeletions: currentRound.deletions, roundModifications: currentRound.modifications },
+      userMessage,
     });
 
     const result = await this.generate('DETAILED_OUTLINE', userMessage, {
@@ -562,9 +772,8 @@ async generateOutline(project: {
           step3Config,
         });
         taskBookText = taskBookComposer.render(taskBook);
-        setTaskBookText(taskBookText);
       } catch {
-        setTaskBookText(null);
+        // 无任务书也可继续
       }
     }
 
@@ -606,9 +815,9 @@ async generateOutline(project: {
       coreIdea: `撰写第${chapterIndex + 1}章：${chapterTitle}`,
       chapterNumber: chapterIndex + 1,
       chapterTitle,
-    });
+      taskBookText: taskBookText || undefined,
+    } as Partial<WritingContext>);
 
-    setTaskBookText(null);
     return result.content;
   }
 
@@ -697,9 +906,8 @@ async generateOutline(project: {
           step3Config,
         });
         taskBookText = taskBookComposer.render(taskBook);
-        setTaskBookText(taskBookText);
       } catch {
-        setTaskBookText(null);
+        // 无任务书也可继续
       }
     }
 
@@ -738,9 +946,9 @@ async generateOutline(project: {
       protagonistTypes: [],
       plotTypes: [],
       coreIdea: `批量撰写${chapters.length}章正文`,
-    });
+      taskBookText: taskBookText || undefined,
+    } as Partial<WritingContext>);
 
-    setTaskBookText(null);
     return this.parseBatchChapters(result.content, chapters);
   }
 
@@ -789,6 +997,111 @@ async generateOutline(project: {
     }
 
     return results;
+  }
+
+  /** 续写预处理：组装任务书 + 渲染模板 + 记录 Debug */
+  private async prepareContinuation(
+    params: {
+      previousText: string;
+      bookId?: string;
+      chapterIndex?: number;
+      chapterTitle?: string;
+      chapterOutline?: string;
+      wordCountTarget?: number;
+      customInstruction?: string;
+      step3Config?: { writingStyle: string; storyLength: string; customRules: string };
+    },
+    streamLabel = '',
+  ): Promise<{ userMessage: string; taskBookText: string }> {
+    // 1. 尝试组装任务书
+    let taskBookText = '';
+    if (params.bookId && params.chapterIndex !== undefined) {
+      try {
+        const taskBook = await taskBookComposer.compose(params.bookId, params.chapterIndex, {
+          chapterTitle: params.chapterTitle || '',
+          chapterOutline: params.chapterOutline || '',
+          step3Config: params.step3Config,
+        });
+        taskBookText = taskBookComposer.render(taskBook);
+      } catch {
+        // 无任务书也可续写
+      }
+    }
+
+    // 2. 渲染模板
+    const userMessage = await this.composer!.renderTemplate('continuation', {
+      previousText: params.previousText.slice(-6000),
+      taskBook: taskBookText || '',
+      customInstruction: params.customInstruction || '',
+      wordCountTarget: String(params.wordCountTarget || 1000),
+    });
+
+    // 3. Debug 记录
+    debugLogger.log({
+      source: 'manual-pipeline',
+      category: 'template-render',
+      direction: `CONTINUATION → continuation${streamLabel}`,
+      templateId: 'continuation',
+      templateFile: './templates/pipeline/06-continuation.md',
+      variables: {
+        previousTextLength: params.previousText.length,
+        hasTaskBook: !!taskBookText,
+        hasCustomInstruction: !!params.customInstruction,
+        wordCountTarget: params.wordCountTarget || 1000,
+      },
+      userMessage,
+    });
+
+    return { userMessage, taskBookText };
+  }
+
+  /** 续写公共 context */
+  private buildContinuationContext(params: { customInstruction?: string; wordCountTarget?: number }, taskBookText: string): Partial<WritingContext> {
+    return {
+      novelType: '',
+      protagonistTypes: [],
+      plotTypes: [],
+      coreIdea: params.customInstruction,
+      wordCountTarget: params.wordCountTarget,
+      customInstruction: params.customInstruction,
+      taskBookText: taskBookText || undefined,
+    } as Partial<WritingContext>;
+  }
+
+  async continueWriting(params: {
+    previousText: string;
+    bookId?: string;
+    chapterIndex?: number;
+    chapterTitle?: string;
+    chapterOutline?: string;
+    wordCountTarget?: number;
+    customInstruction?: string;
+    step3Config?: { writingStyle: string; storyLength: string; customRules: string };
+  }): Promise<string> {
+    const { userMessage, taskBookText } = await this.prepareContinuation(params);
+    const result = await this.generate('CONTINUATION', userMessage, this.buildContinuationContext(params, taskBookText));
+    return result.content;
+  }
+
+  /**
+   * 流式续写：边生成边回调，支持取消
+   */
+  async continueWritingStream(
+    params: {
+      previousText: string;
+      bookId?: string;
+      chapterIndex?: number;
+      chapterTitle?: string;
+      chapterOutline?: string;
+      wordCountTarget?: number;
+      customInstruction?: string;
+      step3Config?: { writingStyle: string; storyLength: string; customRules: string };
+    },
+    onChunk: (chunk: string) => void,
+    signal: AbortSignal
+  ): Promise<void> {
+    const { userMessage, taskBookText } = await this.prepareContinuation(params, ' (stream)');
+    await this.generateStream('CONTINUATION', userMessage, onChunk, signal, this.buildContinuationContext(params, taskBookText));
   }
 }
 

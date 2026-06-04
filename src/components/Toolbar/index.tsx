@@ -42,7 +42,7 @@ export const Toolbar = ({
   onLineHeightChange,
   onParagraphSpacingChange,
 }: ToolbarProps) => {
-  const [fontSize, setFontSize] = useState('16');
+  const [fontSize, setFontSize] = useState(() => localStorage.getItem('editorFontSize') || '16');
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [showFontPanel, setShowFontPanel] = useState(false);
   const [showFontSizeDropdown, setShowFontSizeDropdown] = useState(false);
@@ -192,6 +192,7 @@ export const Toolbar = ({
   // 处理字体大小变化
   const handleFontSizeChange = (size: string) => {
     setFontSize(size);
+    localStorage.setItem('editorFontSize', size);
     if (editor) {
       editor.chain().focus().setMark('textStyle', { fontSize: `${size}px` }).run();
     }

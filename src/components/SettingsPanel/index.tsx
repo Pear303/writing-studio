@@ -234,6 +234,7 @@ export const SettingsPanel = ({
       await db.chapters.clear();
       await db.materials.clear();
       await db.aiConversations.clear();
+      await db.recycleBin.clear();
       showToast('数据已清空！页面将刷新...', 'success');
       setTimeout(() => window.location.reload(), 1000);
     } catch (error) {

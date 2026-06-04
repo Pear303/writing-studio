@@ -1,7 +1,7 @@
 import Dexie, { Table } from 'dexie';
 import bcrypt from 'bcryptjs';
 import { v4 as uuidv4 } from 'uuid';
-import type { Book, Volume, Chapter, Material, AIConversation, ChapterVersion, LLMConfig, QARecord, FullExportData, ImportResult, FormattingSettings, WritingGoal, PomodoroState, Theme, PipelineSession, VibePreset, PipelinePromptTemplate } from '../types';
+import type { Book, Volume, Chapter, Material, AIConversation, ChapterVersion, LLMConfig, QARecord, FullExportData, ImportResult, FormattingSettings, WritingGoal, PomodoroState, Theme, PipelineSession, VibePreset, PipelinePromptTemplate, VibePipelineHistory, RecycleBinItem } from '../types';
 import { DEFAULT_VIBE_PRESETS } from '../types';
 export type { LLMConfig };
 
@@ -81,6 +81,8 @@ export class NovelIDEDatabase extends Dexie {
   pipelinePromptTemplates!: Table<PipelinePromptTemplate>;
   chapterStateCommits!: Table<import('../types/fact-extraction').ChapterStateCommit>;
   antiPatterns!: Table<import('../types').AntiPattern>;
+  vibePipelineHistory!: Table<VibePipelineHistory>;
+  recycleBin!: Table<RecycleBinItem>;
 
   constructor() {
     super('NovelIDE');
@@ -148,6 +150,14 @@ export class NovelIDEDatabase extends Dexie {
     this.version(14).stores({
       chapterStateCommits: 'id, bookId, chapterIndex, committedAt',
       antiPatterns: 'id, bookId, category, frequency, lastSeen',
+    });
+
+    this.version(15).stores({
+      vibePipelineHistory: 'id, bookId, status, finishedAt',
+    });
+
+    this.version(16).stores({
+      recycleBin: 'id, bookId, itemType, deletedAt',
     });
 
     /*
@@ -320,6 +330,8 @@ export const exportAllData = async (): Promise<string> => {
     qaRecords,
     chapterStateCommits: await db.chapterStateCommits.toArray(),
     antiPatterns: await db.antiPatterns.toArray(),
+    vibePipelineHistory: await db.vibePipelineHistory.toArray(),
+    recycleBinItems: await db.recycleBin.toArray(),
     users,
     userSettings,
     formattingSettings,
@@ -344,7 +356,7 @@ export const importAllData = async (jsonData: string, mergeMode: boolean = true)
 
   if (!mergeMode) {
     await db.transaction('rw', 
-      [db.books, db.volumes, db.chapters, db.materials, db.aiConversations, db.chapterVersions, db.llmConfigs, db.qaRecords, db.users, db.userSettings, db.chapterStateCommits, db.antiPatterns],
+      [db.books, db.volumes, db.chapters, db.materials, db.aiConversations, db.chapterVersions, db.llmConfigs, db.qaRecords, db.users, db.userSettings, db.chapterStateCommits, db.antiPatterns, db.vibePipelineHistory, db.recycleBin],
       async () => {
         await db.books.clear();
         await db.volumes.clear();
@@ -358,6 +370,8 @@ export const importAllData = async (jsonData: string, mergeMode: boolean = true)
         await db.userSettings.clear();
         await db.chapterStateCommits.clear();
         await db.antiPatterns.clear();
+        await db.vibePipelineHistory.clear();
+        await db.recycleBin.clear();
         
         if (data.books?.length) {
           await db.books.bulkAdd(data.books.map(b => ({ ...b, userId: b.userId || importUserId })));
@@ -375,6 +389,8 @@ export const importAllData = async (jsonData: string, mergeMode: boolean = true)
         if (data.userSettings?.length) await db.userSettings.bulkAdd(data.userSettings);
         if (data.chapterStateCommits?.length) await db.chapterStateCommits.bulkAdd(data.chapterStateCommits);
         if (data.antiPatterns?.length) await db.antiPatterns.bulkAdd(data.antiPatterns);
+        if (data.vibePipelineHistory?.length) await db.vibePipelineHistory.bulkAdd(data.vibePipelineHistory);
+        if (data.recycleBinItems?.length) await db.recycleBin.bulkAdd(data.recycleBinItems);
       }
     );
     
@@ -391,7 +407,7 @@ export const importAllData = async (jsonData: string, mergeMode: boolean = true)
   }
   
   await db.transaction('rw', 
-    [db.books, db.volumes, db.chapters, db.materials, db.aiConversations, db.chapterVersions, db.llmConfigs, db.qaRecords, db.users, db.userSettings, db.chapterStateCommits, db.antiPatterns],
+    [db.books, db.volumes, db.chapters, db.materials, db.aiConversations, db.chapterVersions, db.llmConfigs, db.qaRecords, db.users, db.userSettings, db.chapterStateCommits, db.antiPatterns, db.vibePipelineHistory, db.recycleBin],
     async () => {
       const existingBookIds = new Set((await db.books.toArray()).map(b => b.id));
       const existingVolumeIds = new Set((await db.volumes.toArray()).map(v => v.id));
@@ -484,6 +500,16 @@ export const importAllData = async (jsonData: string, mergeMode: boolean = true)
       
       for (const record of data.qaRecords || []) {
         await db.qaRecords.put(record);
+        result.added++;
+      }
+      
+      for (const h of data.vibePipelineHistory || []) {
+        await db.vibePipelineHistory.put(h);
+        result.added++;
+      }
+      
+      for (const item of data.recycleBinItems || []) {
+        await db.recycleBin.put(item);
         result.added++;
       }
     }
@@ -900,7 +926,7 @@ export const addPipelinePromptTemplate = async (
     description: string;
     builtInId: string;
     content: string;
-    stage: 'PLANNING' | 'DETAILED_OUTLINE' | 'CHAPTER_WRITING';
+    stage: 'PLANNING' | 'DETAILED_OUTLINE' | 'CHAPTER_WRITING' | 'CONTINUATION';
     variables: string[];
   },
 ): Promise<string> => {

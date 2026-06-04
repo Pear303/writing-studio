@@ -119,12 +119,16 @@ export const BookCardList = ({ books, onBookSelect, onRefresh }: BookCardListPro
     setDeleteConfirmStep({ step: 1, bookId: '', bookName: '' });
 
     try {
-      await db.transaction('rw', [db.books, db.volumes, db.chapters], async () => {
+      await db.transaction('rw', [db.books, db.volumes, db.chapters, db.recycleBin], async () => {
         const chapters = await db.chapters.where('bookId').equals(bookId).toArray();
         await db.chapters.bulkDelete(chapters.map((c) => c.id));
 
         const volumes = await db.volumes.where('bookId').equals(bookId).toArray();
         await db.volumes.bulkDelete(volumes.map((v) => v.id));
+
+        // 清理该书的回收站项目
+        const recycleItems = await db.recycleBin.where('bookId').equals(bookId).toArray();
+        await db.recycleBin.bulkDelete(recycleItems.map((r) => r.id));
 
         await db.books.delete(bookId);
       });
