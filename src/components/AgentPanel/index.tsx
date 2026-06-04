@@ -132,9 +132,9 @@ export const AgentPanel: React.FC<AgentPanelProps> = ({
             <Bot size={16} style={{ color: 'var(--color-vscode-active)' }} />
             <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--color-vscode-text)' }}>Agent</span>
             {state.connected ? (
-              <Wifi size={12} style={{ color: '#16a34a' }} />
+              <Wifi size={12} style={{ color: 'var(--color-success, #16a34a)' }} />
             ) : (
-              <WifiOff size={12} style={{ color: '#dc2626' }} />
+              <WifiOff size={12} style={{ color: 'var(--color-danger, #dc2626)' }} />
             )}
           </div>
           <div className="flex items-center gap-1">
@@ -249,38 +249,7 @@ export const AgentPanel: React.FC<AgentPanelProps> = ({
           )}
 
           {state.error && (
-            <div className="mb-2 p-2 rounded" style={{ backgroundColor: '#dc262620', color: '#dc2626', fontSize: '12px' }}>
-              {state.error}
-            </div>
-          )}
-
-          {state.messages.map(msg => (
-            <MessageBubble key={msg.id} message={msg} />
-          ))}
-
-          {state.running && state.currentStreamContent && (
-            <div className="mb-2" style={{ fontSize: '13px', color: 'var(--color-vscode-text)' }}>
-              <span style={{ color: 'var(--color-vscode-active)', fontSize: '11px', fontWeight: 600 }}>Agent</span>
-              <div className="mt-1" style={{ lineHeight: '1.5' }}>
-                {state.currentStreamContent}
-                <span className="animate-pulse">▎</span>
-              </div>
-            </div>
-          )}
-
-          {state.running && !state.currentStreamContent && state.activityLog.length > 0 && (
-            <div className="mb-2 flex items-center gap-2" style={{ color: 'var(--color-vscode-text)', fontSize: '12px', opacity: 0.7 }}>
-              <Loader2 size={12} className="animate-spin" />
-              <span>Agent 正在工作...</span>
-            </div>
-          )}
-
-          {state.activityLog.length > 0 && (
-            <ActivityLogView items={state.activityLog} running={state.running} />
-          )}
-
-          {state.error && (
-            <div className="mb-2 p-2 rounded" style={{ backgroundColor: '#dc262620', color: '#dc2626', fontSize: '12px' }}>
+            <div className="mb-2 p-2 rounded" style={{ backgroundColor: 'var(--color-danger-light, rgba(220, 38, 38, 0.15))', color: 'var(--color-danger, #dc2626)', fontSize: '12px' }}>
               {state.error}
             </div>
           )}
@@ -325,81 +294,6 @@ export const AgentPanel: React.FC<AgentPanelProps> = ({
                 padding: '6px 10px',
                 fontSize: '13px',
                 border: '1px solid var(--color-vscode-border)',
-                borderRadius: '4px',
-                backgroundColor: 'var(--color-vscode-bg)',
-                color: 'var(--color-vscode-text)',
-                outline: 'none',
-                resize: 'none',
-                fontFamily: 'inherit',
-                lineHeight: '1.4',
-                minHeight: '34px',
-                maxHeight: '120px',
-              }}
-            />
-            {state.running ? (
-              <button
-                onClick={onStopGeneration}
-                style={{
-                  padding: '6px 12px',
-                  border: '1px solid #dc2626',
-                  borderRadius: '4px',
-                  backgroundColor: '#dc2626',
-                  color: 'white',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '4px',
-                  fontSize: '12px',
-                }}
-                title="停止生成"
-              >
-                <Square size={12} />
-              </button>
-            ) : (
-              <button
-                onClick={handleSend}
-                disabled={!inputMessage.trim() || !state.connected}
-                style={{
-                  padding: '6px 12px',
-                  border: '1px solid var(--color-vscode-active)',
-                  borderRadius: '4px',
-                  backgroundColor: inputMessage.trim() && state.connected ? 'var(--color-vscode-active)' : 'transparent',
-                  color: inputMessage.trim() && state.connected ? 'white' : 'var(--color-vscode-text)',
-                  cursor: inputMessage.trim() && state.connected ? 'pointer' : 'not-allowed',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '4px',
-                  fontSize: '12px',
-                  opacity: inputMessage.trim() && state.connected ? 1 : 0.5,
-                }}
-                title="发送"
-              >
-                <Send size={12} />
-              </button>
-            )}
-          </div>
-        </div>
-
-        {state.tokenUsage.total > 0 && (
-          <div className="px-3 py-1 border-t flex items-center gap-3" style={{ borderColor: 'var(--color-vscode-border)', fontSize: '10px', color: 'var(--color-vscode-text)', opacity: 0.5 }}>
-            <span>Tokens: {state.tokenUsage.input} in / {state.tokenUsage.output} out</span>
-          </div>
-        )}
-
-        <div className="px-3 py-2 border-t" style={{ borderColor: 'var(--color-vscode-border)' }}>
-          <div className="flex gap-1">
-            <textarea
-              value={inputMessage}
-              onChange={e => setInputMessage(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder={state.connected ? '输入消息... (Enter 发送)' : 'Agent 未连接，请检查设置'}
-              disabled={state.running || !state.connected}
-              rows={1}
-              style={{
-                flex: 1,
-                padding: '6px 10px',
-                fontSize: '13px',
-                border: '1px solid var(--color-vscode-border)',
                 borderRadius: '6px',
                 backgroundColor: 'var(--color-vscode-bg)',
                 color: 'var(--color-vscode-text)',
@@ -425,9 +319,9 @@ export const AgentPanel: React.FC<AgentPanelProps> = ({
                 onClick={onStopGeneration}
                 style={{
                   padding: '6px 12px',
-                  border: '1px solid #dc2626',
+                  border: '1px solid var(--color-danger, #dc2626)',
                   borderRadius: '6px',
-                  backgroundColor: '#dc2626',
+                  backgroundColor: 'var(--color-danger, #dc2626)',
                   color: 'white',
                   cursor: 'pointer',
                   display: 'flex',
@@ -482,7 +376,7 @@ const SessionItem: React.FC<{
     <div
       className="flex items-center gap-1 px-2 py-1.5 cursor-pointer group"
       style={{
-        backgroundColor: isActive ? 'rgba(59, 130, 246, 0.1)' : hovering ? 'rgba(255,255,255,0.04)' : 'transparent',
+        backgroundColor: isActive ? 'var(--color-vscode-active-light, rgba(0, 122, 204, 0.1))' : hovering ? 'var(--color-hover-bg, rgba(255,255,255,0.04))' : 'transparent',
         borderLeft: isActive ? '2px solid var(--color-vscode-active)' : '2px solid transparent',
         transition: 'background-color 0.15s ease, border-color 0.15s ease',
       }}
@@ -510,7 +404,7 @@ const SessionItem: React.FC<{
         <button
           onClick={e => { e.stopPropagation(); onDelete(); }}
           className="p-0.5 rounded hover:bg-red-500/20"
-          style={{ color: '#dc2626', flexShrink: 0 }}
+          style={{ color: 'var(--color-danger, #dc2626)', flexShrink: 0 }}
           title="删除会话"
         >
           <Trash2 size={11} />
@@ -620,7 +514,7 @@ const ActivityLogView: React.FC<{ items: AgentActivityItem[]; running: boolean }
         style={{ color: 'var(--color-vscode-text)', cursor: 'pointer', background: 'none', border: 'none' }}
       >
         {expanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
-        {running && <Loader2 size={11} className="animate-spin" style={{ color: '#d97706' }} />}
+        {running && <Loader2 size={11} className="animate-spin" style={{ color: 'var(--color-warning, #d97706)' }} />}
         <span style={{ opacity: 0.7 }}>
           活动日志 {parts.length > 0 && `(${parts.join(' ')})`}
         </span>
@@ -635,7 +529,7 @@ const ActivityLogView: React.FC<{ items: AgentActivityItem[]; running: boolean }
             <div key={i} className="flex items-center gap-1 py-0.5" style={{ opacity: 0.7 }}>
               <span>{item.icon}</span>
               <span style={{
-                color: item.level === 'error' ? '#dc2626' : item.level === 'running' ? '#d97706' : 'var(--color-vscode-text)',
+                color: item.level === 'error' ? 'var(--color-danger, #dc2626)' : item.level === 'running' ? 'var(--color-warning, #d97706)' : 'var(--color-vscode-text)',
               }}>
                 {item.text}
               </span>

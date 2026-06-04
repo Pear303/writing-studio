@@ -12,11 +12,11 @@ export const AgentToolCallView: React.FC<ToolCallViewProps> = ({ toolCall }) => 
   const statusIcon = () => {
     switch (toolCall.status) {
       case 'running':
-        return <Loader2 size={12} className="animate-spin" style={{ color: '#d97706' }} />;
+        return <Loader2 size={12} className="animate-spin" style={{ color: 'var(--color-warning, #d97706)' }} />;
       case 'completed':
-        return <CheckCircle size={12} style={{ color: '#16a34a' }} />;
+        return <CheckCircle size={12} style={{ color: 'var(--color-success, #16a34a)' }} />;
       case 'error':
-        return <XCircle size={12} style={{ color: '#dc2626' }} />;
+        return <XCircle size={12} style={{ color: 'var(--color-danger, #dc2626)' }} />;
     }
   };
 
@@ -89,7 +89,7 @@ export const AgentToolCallView: React.FC<ToolCallViewProps> = ({ toolCall }) => 
           )}
           {toolCall.error && (
             <div className="mt-1">
-              <div style={{ color: '#dc2626', fontSize: '10px', marginBottom: '2px' }}>错误</div>
+              <div style={{ color: 'var(--color-danger, #dc2626)', fontSize: '10px', marginBottom: '2px' }}>错误</div>
               <pre
                 style={{
                   fontSize: '11px',

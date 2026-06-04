@@ -9,6 +9,7 @@ import type { Chapter, ReviewIssue, ReviewSeverity } from '../../types';
 import { db, getDefaultLLMConfig, decodeApiKey } from '../../db';
 import { LlmProviderFactory } from '../../llm';
 import { generateId } from '../../utils/helpers';
+import { debugLogger } from '../../services/DebugLogger';
 
 /** AI 质检返回的单一维度评分 */
 interface AIDimensionScore {
@@ -434,7 +435,28 @@ ${rawContent}
         throw new Error('LLM 配置验证失败，请检查 API Key 和 API URL');
       }
 
+      const correlationId = `qc_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+      debugLogger.log({
+        source: 'service',
+        category: 'llm-call',
+        direction: `QualityCheck → ${config.provider}/${config.model}`,
+        correlationId,
+        systemPrompt,
+        userMessage,
+        metadata: { provider: config.provider, model: config.model, chapterId: currentChapter?.id },
+      });
+
       const responseText = await provider.callApi(userMessage, [], systemPrompt);
+
+      debugLogger.log({
+        source: 'service',
+        category: 'llm-call',
+        direction: `QualityCheck ← ${config.provider}/${config.model}`,
+        correlationId,
+        response: responseText,
+        responseLength: responseText.length,
+        metadata: { provider: config.provider, model: config.model },
+      });
 
       const result = parseAIQualityResponse(responseText);
       if (!result) {
@@ -511,9 +533,9 @@ ${rawContent}
   /** 获取颜色类名 */
   const getScoreColor = (score: number, max: number) => {
     const pct = (score / max) * 100;
-    if (pct >= 80) return { text: 'text-green-500', bg: '#22c55e' };
-    if (pct >= 60) return { text: 'text-yellow-500', bg: '#eab308' };
-    return { text: 'text-red-500', bg: '#ef4444' };
+    if (pct >= 80) return { text: 'text-green-500', bg: 'var(--color-success, #22c55e)' };
+    if (pct >= 60) return { text: 'text-yellow-500', bg: 'var(--color-warning, #eab308)' };
+    return { text: 'text-red-500', bg: 'var(--color-danger, #ef4444)' };
   };
 
   /** 获取总评等级 */
@@ -545,12 +567,12 @@ ${rawContent}
       {hasBlockingIssues && !skipConfirmed && (
         <div style={{
           padding: '10px 12px',
-          backgroundColor: 'rgba(220, 38, 38, 0.15)',
-          borderBottom: '2px solid rgba(220, 38, 38, 0.6)',
+          backgroundColor: 'var(--color-danger-light, rgba(220, 38, 38, 0.15))',
+          borderBottom: '2px solid var(--color-danger, rgba(220, 38, 38, 0.6))',
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px' }}>
-            <Shield size={16} style={{ color: '#dc2626' }} />
-            <span style={{ fontSize: '13px', fontWeight: 600, color: '#dc2626' }}>
+            <Shield size={16} style={{ color: 'var(--color-danger, #dc2626)' }} />
+            <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--color-danger, #dc2626)' }}>
               审查硬闸门：{blockingIssues.length} 个阻断性问题
             </span>
           </div>
@@ -560,7 +582,7 @@ ${rawContent}
                 padding: '4px 8px',
                 marginBottom: '4px',
                 borderRadius: '3px',
-                backgroundColor: 'rgba(220, 38, 38, 0.1)',
+                backgroundColor: 'var(--color-danger-light, rgba(220, 38, 38, 0.1))',
                 fontSize: '11px',
                 color: 'var(--color-vscode-text)',
               }}>
@@ -570,7 +592,7 @@ ${rawContent}
                   borderRadius: '2px',
                   fontSize: '10px',
                   fontWeight: 600,
-                  backgroundColor: issue.severity === 'critical' ? '#dc2626' : '#d97706',
+                  backgroundColor: issue.severity === 'critical' ? 'var(--color-danger, #dc2626)' : 'var(--color-warning, #d97706)',
                   color: 'white',
                   marginRight: '6px',
                 }}>
@@ -622,14 +644,14 @@ ${rawContent}
       {skipConfirmed && (
         <div style={{
           padding: '6px 12px',
-          backgroundColor: 'rgba(217, 119, 6, 0.15)',
-          borderBottom: '1px solid rgba(217, 119, 6, 0.4)',
+          backgroundColor: 'var(--color-warning-light, rgba(217, 119, 6, 0.15))',
+          borderBottom: '1px solid var(--color-warning, rgba(217, 119, 6, 0.4))',
           display: 'flex',
           alignItems: 'center',
           gap: '6px',
         }}>
-          <ShieldOff size={14} style={{ color: '#d97706' }} />
-          <span style={{ fontSize: '11px', color: '#d97706' }}>
+          <ShieldOff size={14} style={{ color: 'var(--color-warning, #d97706)' }} />
+          <span style={{ fontSize: '11px', color: 'var(--color-warning, #d97706)' }}>
             闸门已跳过 — 存在未修复的阻断性问题
           </span>
         </div>
@@ -638,14 +660,14 @@ ${rawContent}
       {reviewIssues && reviewIssues.length > 0 && !hasBlockingIssues && (
         <div style={{
           padding: '6px 12px',
-          backgroundColor: 'rgba(22, 163, 74, 0.1)',
-          borderBottom: '1px solid rgba(22, 163, 74, 0.3)',
+          backgroundColor: 'var(--color-success-light, rgba(22, 163, 74, 0.1))',
+          borderBottom: '1px solid var(--color-success, rgba(22, 163, 74, 0.3))',
           display: 'flex',
           alignItems: 'center',
           gap: '6px',
         }}>
-          <CheckCircle size={14} style={{ color: '#16a34a' }} />
-          <span style={{ fontSize: '11px', color: '#16a34a' }}>
+          <CheckCircle size={14} style={{ color: 'var(--color-success, #16a34a)' }} />
+          <span style={{ fontSize: '11px', color: 'var(--color-success, #16a34a)' }}>
             审查通过 — {reviewIssues.length} 个问题（无阻断性）
           </span>
         </div>
@@ -893,7 +915,7 @@ ${rawContent}
                         className="h-full transition-all"
                         style={{
                           width: `${pct}%`,
-                          backgroundColor: pct >= 80 ? '#22c55e' : pct >= 60 ? '#eab308' : '#ef4444',
+                          backgroundColor: pct >= 80 ? 'var(--color-success, #22c55e)' : pct >= 60 ? 'var(--color-warning, #eab308)' : 'var(--color-danger, #ef4444)',
                         }}
                       />
                     </div>

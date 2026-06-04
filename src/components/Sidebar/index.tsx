@@ -8,8 +8,10 @@ import { PipelineWriting } from '../PipelineWriting';
 import { AgentPanel } from '../AgentPanel';
 import { VibeWritingPanel } from '../VibeWritingPanel';
 import { PipelineTabView } from '../PipelineTabView';
+import { ContinueWritingPanel } from '../ContinueWritingPanel';
+import { RecycleBinPanel } from '../RecycleBinPanel';
 import { ImportNovelModal } from '../ImportNovelModal';
-import type { ActivityId, Book, Chapter, Material, FormattingSettings, WordCountSettings, PipelineStep1Config, PipelineStep2State, PipelineStep4State, PipelineStep5State, OutlineRound, DetailedOutlineRound, ChapterDraftRound, Volume, AgentState, PipelineAutoState } from '../../types';
+import type { ActivityId, Book, Chapter, Material, FormattingSettings, WordCountSettings, PipelineStep1Config, PipelineStep2State, PipelineStep3Config, PipelineStep4State, PipelineStep5State, OutlineRound, DetailedOutlineRound, ChapterDraftRound, Volume, AgentState, PipelineAutoState, PipelineSession, VibePipelineHistory } from '../../types';
 import { db } from '../../db';
 import { useUser } from '../../auth/UserContext';
 
@@ -22,6 +24,7 @@ interface SidebarProps {
   onBookSelect?: (book: Book) => void;
   onBookDeselect?: () => void;
   onChapterSelect?: (chapter: Chapter) => void;
+  onChapterDeselect?: () => void;
   onVolumeChange?: () => void;
   activeChapterId?: string | null;
   onInsertMaterial?: (material: Material) => void;
@@ -47,11 +50,12 @@ interface SidebarProps {
   onPipelineRefineDetailedOutline?: (step4State: PipelineStep4State, round: DetailedOutlineRound, outline: string) => Promise<string>;
   onPipelineRefineDetailedOutlineChapter?: (step4State: PipelineStep4State, chapterIndices: number[], round: DetailedOutlineRound, outline: string) => Promise<string>;
   onPipelinePreviewInEditor?: (title: string, content: string, onChange: (content: string) => void) => void;
-  onPipelineGenerateChapter?: (chapterIndex: number) => Promise<string>;
-  onPipelineRefineChapter?: (step5State: PipelineStep5State, chapterIndex: number, round: ChapterDraftRound) => Promise<string>;
-  onPipelineBatchGenerateChapters?: (chapters: Array<{ index: number; title: string; outline: string }>) => Promise<Array<{ index: number; title: string; content: string }>>;
-  onPipelineAddChapterToVolume?: (title: string, content: string, detailedOutline?: string) => void;
+  onPipelineGenerateChapter?: (chapterIndex: number, context?: { step4State: PipelineStep4State; step2State: PipelineStep2State | null; step3Config: PipelineStep3Config; step5State: PipelineStep5State | null }) => Promise<string>;
+  onPipelineRefineChapter?: (step5State: PipelineStep5State, chapterIndex: number, round: ChapterDraftRound, context?: { step2State: PipelineStep2State | null; step3Config: PipelineStep3Config }) => Promise<string>;
+  onPipelineBatchGenerateChapters?: (chapters: Array<{ index: number; title: string; outline: string }>, context?: { step2State: PipelineStep2State | null; step3Config: PipelineStep3Config }) => Promise<Array<{ index: number; title: string; content: string }>>;
+  onPipelineAddChapterToVolume?: (title: string, content: string, detailedOutline?: string, volumeId?: string) => void;
   onPipelineExtractFacts?: (chapterIndex: number, chapterTitle: string, chapterContent: string) => Promise<import('../../types/fact-extraction').ChapterFacts | null>;
+  onPipelineCancelGeneration?: () => void;
   showToast?: (message: string, type: 'info' | 'success' | 'error' | 'warning') => void;
   agentState?: AgentState;
   onAgentSendMessage?: (message: string) => void;
@@ -70,6 +74,20 @@ interface SidebarProps {
   onVibeStartPipeline?: (bookId: string, volumeId: string, userRequest: string) => void;
   onVibeIntervene?: (type: 'pause' | 'resume' | 'cancel' | 'redirect' | 'skip', message?: string, targetStepIndex?: number) => void;
   onVibeClearPipeline?: () => void;
+  onRestoreManualSession?: (session: PipelineSession) => void;
+  onRestoreVibeHistory?: (history: VibePipelineHistory) => void;
+  forceReloadSessionId?: string;
+  // 续写相关
+  currentChapter?: Chapter | null;
+  editorContent?: string;
+  onContinueWriting?: (params: {
+    previousText: string;
+    customInstruction: string;
+    wordCountTarget: number;
+    selectedMaterialIds: string[];
+  }, onChunk: (chunk: string) => void, signal: AbortSignal) => Promise<void>;
+  onAppendToEditor?: (content: string) => void;
+  onGenerateOutline?: (volumeId: string, volumeName: string) => Promise<string>;
 }
 
 export const Sidebar = ({
@@ -79,6 +97,7 @@ export const Sidebar = ({
   onBookSelect,
   onBookDeselect,
   onChapterSelect,
+  onChapterDeselect,
   onVolumeChange,
   activeChapterId,
   onInsertMaterial,
@@ -109,6 +128,7 @@ export const Sidebar = ({
   onPipelineBatchGenerateChapters,
   onPipelineAddChapterToVolume,
   onPipelineExtractFacts,
+  onPipelineCancelGeneration,
   showToast,
   agentState,
   onAgentSendMessage,
@@ -127,6 +147,14 @@ export const Sidebar = ({
   onVibeStartPipeline,
   onVibeIntervene,
   onVibeClearPipeline,
+  onRestoreManualSession,
+  onRestoreVibeHistory,
+  forceReloadSessionId,
+  currentChapter,
+  editorContent,
+  onContinueWriting,
+  onAppendToEditor,
+  onGenerateOutline,
 }: SidebarProps) => {
   const { user } = useUser();
   
@@ -183,6 +211,7 @@ export const Sidebar = ({
                   }
                 }}
                 onBookDeselect={onBookDeselect}
+                onChapterDeselect={onChapterDeselect}
                 onVolumeChange={onVolumeChange}
                 activeChapterId={activeChapterId}
                 refreshTrigger={outlineRefreshTrigger}
@@ -261,7 +290,26 @@ export const Sidebar = ({
               onPipelineAddChapterToVolume={onPipelineAddChapterToVolume}
               onPipelinePreviewInEditor={onPipelinePreviewInEditor}
               onPipelineExtractFacts={onPipelineExtractFacts}
+              onPipelineCancelGeneration={onPipelineCancelGeneration}
               showToast={showToast}
+              onRestoreManualSession={onRestoreManualSession}
+              onRestoreVibeHistory={onRestoreVibeHistory}
+              forceReloadSessionId={forceReloadSessionId}
+            />
+          ) : activeActivity === 'continue' ? (
+            <ContinueWritingPanel
+              currentBook={currentBook}
+              currentChapter={currentChapter ?? null}
+              editorContent={editorContent || ''}
+              currentOutlineVolume={currentOutlineVolume ?? null}
+              onContinueWriting={onContinueWriting || (async () => {})}
+              onAppendToEditor={onAppendToEditor}
+              onGenerateOutline={onGenerateOutline}
+              showToast={showToast}
+            />
+          ) : activeActivity === 'recycleBin' ? (
+            <RecycleBinPanel
+              onRestore={onVolumeChange}
             />
           ) : (
             <div className="p-4 text-vscode-text">

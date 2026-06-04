@@ -8,7 +8,8 @@ export class TaskBookComposer {
   async compose(
     bookId: string,
     chapterIndex: number,
-    sources: TaskBookSources
+    sources: TaskBookSources,
+    correlationId?: string
   ): Promise<WritingTaskBook> {
     const book = await db.books.get(bookId);
     const materials = await db.materials.where({ bookId }).toArray();
@@ -34,6 +35,7 @@ export class TaskBookComposer {
       source: 'service',
       category: 'taskbook-compose',
       direction: `TaskBookComposer.compose → book:${bookId} ch:${chapterIndex}`,
+      correlationId,
       metadata: {
         bookId,
         chapterIndex,
@@ -48,7 +50,7 @@ export class TaskBookComposer {
     return taskBook;
   }
 
-  render(taskBook: WritingTaskBook): string {
+  render(taskBook: WritingTaskBook, correlationId?: string): string {
     const sections: string[] = [];
 
     const locked = this.renderLockedLayer(taskBook.locked);
@@ -77,6 +79,7 @@ export class TaskBookComposer {
       source: 'service',
       category: 'taskbook-compose',
       direction: `TaskBookComposer.render → ${taskBook.meta.chapterTitle}`,
+      correlationId,
       systemPrompt: rendered,
       metadata: {
         bookId: taskBook.meta.bookId,

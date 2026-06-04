@@ -1,5 +1,5 @@
 import React, { forwardRef } from 'react';
-import { RichTextEditor, type RichTextEditorRef } from '../RichTextEditor';
+import { RichTextEditor, type RichTextEditorRef, type ContinuationParams } from '../RichTextEditor';
 import type { Chapter, Book } from '../../types';
 
 interface EditorAreaProps {
@@ -16,6 +16,7 @@ interface EditorAreaProps {
   wordCount?: number;
   currentChapter?: Chapter | null;
   currentBook?: Book | null;
+  onContinueWriting?: (params: ContinuationParams, onChunk: (chunk: string) => void, signal: AbortSignal) => Promise<void>;
 }
 
 export const EditorArea = forwardRef<RichTextEditorRef, EditorAreaProps>(({
@@ -32,6 +33,7 @@ export const EditorArea = forwardRef<RichTextEditorRef, EditorAreaProps>(({
   wordCount,
   currentChapter,
   currentBook,
+  onContinueWriting,
 }, ref) => {
   return (
     <div className="flex-1 h-full flex flex-col bg-vscode-bg overflow-hidden">
@@ -58,6 +60,7 @@ export const EditorArea = forwardRef<RichTextEditorRef, EditorAreaProps>(({
         paragraphSpacing={paragraphSpacing}
         paragraphIndent={paragraphIndent}
         lineHeight={lineHeight}
+        onContinueWriting={onContinueWriting}
       />
     </div>
   );

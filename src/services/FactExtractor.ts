@@ -43,6 +43,7 @@ export class FactExtractor {
     chapterTitle: string,
     chapterContent: string,
     llmCall: (prompt: string) => Promise<string>,
+    correlationId?: string,
   ): Promise<ChapterFacts> {
     const prevState = await this.loadStateCommit(bookId, chapterIndex - 1);
     const previousStateSummary = prevState
@@ -61,6 +62,7 @@ export class FactExtractor {
       source: 'service',
       category: 'fact-extract',
       direction: `FactExtractor.extract → book:${bookId} ch:${chapterIndex}`,
+      correlationId,
       userMessage: prompt,
       metadata: {
         bookId,
@@ -89,6 +91,7 @@ export class FactExtractor {
       source: 'service',
       category: 'fact-extract',
       direction: `FactExtractor.extract ← book:${bookId} ch:${chapterIndex}`,
+      correlationId,
       response: rawResult,
       responseLength: rawResult.length,
       metadata: {

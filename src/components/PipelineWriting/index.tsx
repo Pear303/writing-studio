@@ -20,12 +20,14 @@ interface PipelineWritingProps {
   onGenerateDetailedOutline: (outline: string, chapterCount: number) => Promise<string>;
   onRefineDetailedOutline: (step4State: PipelineStep4State, round: DetailedOutlineRound, outline: string) => Promise<string>;
   onRefineDetailedOutlineChapter: (step4State: PipelineStep4State, chapterIndices: number[], round: DetailedOutlineRound, outline: string) => Promise<string>;
-  onGenerateChapter: (chapterIndex: number) => Promise<string>;
-  onRefineChapter: (step5State: PipelineStep5State, chapterIndex: number, round: ChapterDraftRound) => Promise<string>;
-  onBatchGenerateChapters?: (chapters: Array<{ index: number; title: string; outline: string }>) => Promise<Array<{ index: number; title: string; content: string }>>;
-  onAddChapterToVolume: (title: string, content: string, detailedOutline?: string) => void;
+  onGenerateChapter: (chapterIndex: number, context?: { step4State: PipelineStep4State; step2State: PipelineStep2State | null; step3Config: PipelineStep3Config; step5State: PipelineStep5State | null }) => Promise<string>;
+  onRefineChapter: (step5State: PipelineStep5State, chapterIndex: number, round: ChapterDraftRound, context?: { step2State: PipelineStep2State | null; step3Config: PipelineStep3Config }) => Promise<string>;
+  onBatchGenerateChapters?: (chapters: Array<{ index: number; title: string; outline: string }>, context?: { step2State: PipelineStep2State | null; step3Config: PipelineStep3Config }) => Promise<Array<{ index: number; title: string; content: string }>>;
+  onAddChapterToVolume: (title: string, content: string, detailedOutline?: string, volumeId?: string) => void;
   onPreviewInEditor?: (title: string, content: string, onChange: (content: string) => void) => void;
   onExtractFacts?: (chapterIndex: number, chapterTitle: string, chapterContent: string) => Promise<ChapterFacts | null>;
+  onCancelGeneration?: () => void;
+  forceReloadSessionId?: string;
   showToast: (message: string, type: 'info' | 'success' | 'error' | 'warning') => void;
 }
 
@@ -69,6 +71,8 @@ export const PipelineWriting: React.FC<PipelineWritingProps> = ({
   onAddChapterToVolume,
   onPreviewInEditor,
   onExtractFacts,
+  onCancelGeneration,
+  forceReloadSessionId,
   showToast,
 }) => {
   const [step, setStep] = useState<PipelineStep>('step1');
@@ -92,6 +96,10 @@ export const PipelineWriting: React.FC<PipelineWritingProps> = ({
   const [showTemplateManager, setShowTemplateManager] = useState(false);
 
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const loadingSessionIdRef = useRef<string | null>(null);
+  // 用 ref 跟踪最新状态，确保卸载保存时使用最新值，避免 useEffect cleanup 用旧值覆盖
+  const latestStateRef = useRef({ currentBook, selectedVolumeId, step, step1Config, step3Config, step2State, step4State, step5State });
+  latestStateRef.current = { currentBook, selectedVolumeId, step, step1Config, step3Config, step2State, step4State, step5State };
 
   const getSessionId = useCallback(() => {
     if (!currentBook?.id || !selectedVolumeId) return null;
@@ -135,8 +143,13 @@ export const PipelineWriting: React.FC<PipelineWritingProps> = ({
       setSessionLoaded(true);
       return;
     }
+    // 防止重复加载同一会话
+    if (loadingSessionIdRef.current === id) return;
+    loadingSessionIdRef.current = id;
     try {
       const session = await db.pipelineSessions.get(id);
+      // 确保加载的仍然是当前会话（防止竞态）
+      if (loadingSessionIdRef.current !== id) return;
       if (session) {
         setStep(session.currentStep);
         setStep1Config(session.step1Config);
@@ -156,6 +169,7 @@ export const PipelineWriting: React.FC<PipelineWritingProps> = ({
       console.error('加载流水线会话失败:', err);
     }
     setSessionLoaded(true);
+    loadingSessionIdRef.current = null;
   }, [getSessionId]);
 
   useEffect(() => {
@@ -170,6 +184,15 @@ export const PipelineWriting: React.FC<PipelineWritingProps> = ({
       localStorage.setItem('pipelineSelectedVolumeId', currentOutlineVolume.id);
     }
   }, [currentOutlineVolume?.id]);
+
+  // 当 forceReloadSessionId 变化时，强制重新加载指定会话
+  useEffect(() => {
+    if (forceReloadSessionId) {
+      loadingSessionIdRef.current = null; // 重置防重复加载守卫
+      setSessionLoaded(false);
+      loadSession();
+    }
+  }, [forceReloadSessionId, loadSession]);
 
   useEffect(() => {
     if (selectedVolumeId && currentBook?.id) {
@@ -188,15 +211,15 @@ export const PipelineWriting: React.FC<PipelineWritingProps> = ({
     };
   }, [step, step1Config, step3Config, step2State, step4State, step5State, sessionLoaded, selectedVolumeId, currentBook?.id, debouncedSave]);
 
-  // 组件卸载前同步保存 session，防止切换 activitybar 时丢失状态
+  // 组件卸载前保存 session，防止切换 activitybar 时丢失状态
+  // 使用 ref 获取最新状态，避免 useEffect cleanup 用旧闭包值覆盖 DB 数据
   useEffect(() => {
     return () => {
-      // 使用同步方式保存：先清除 debounce timer，再直接调用
       if (saveTimerRef.current) {
         clearTimeout(saveTimerRef.current);
         saveTimerRef.current = null;
       }
-      // 直接同步写入（db.pipelineSessions.put 是 async，但至少触发写入）
+      const { currentBook, selectedVolumeId, step, step1Config, step3Config, step2State, step4State, step5State } = latestStateRef.current;
       const id = currentBook?.id && selectedVolumeId ? `${currentBook.id}_${selectedVolumeId}` : null;
       if (id && currentBook?.id && selectedVolumeId) {
         const session: PipelineSession = {
@@ -211,10 +234,12 @@ export const PipelineWriting: React.FC<PipelineWritingProps> = ({
           step5State,
           updatedAt: Date.now(),
         };
-        db.pipelineSessions.put(session).catch(() => {});
+        db.pipelineSessions.put(session).catch((err) => {
+          console.error('卸载保存流水线会话失败:', err);
+        });
       }
     };
-  }, [currentBook?.id, selectedVolumeId, step, step1Config, step3Config, step2State, step4State, step5State]);
+  }, []);
 
   const loadVolumes = async () => {
     if (!currentBook) return;
@@ -546,6 +571,7 @@ export const PipelineWriting: React.FC<PipelineWritingProps> = ({
             onRefineOutline={onRefineOutline}
             onOverwriteOutline={onOverwriteOutline}
             onPreviewInEditor={onPreviewInEditor}
+            onCancelGeneration={onCancelGeneration}
           />
         )}
         {step === 'step3' && (
@@ -561,10 +587,12 @@ export const PipelineWriting: React.FC<PipelineWritingProps> = ({
             onRefineDetailedOutlineChapter={onRefineDetailedOutlineChapter}
             onOverwriteOutline={onOverwriteOutline}
             onPreviewInEditor={onPreviewInEditor}
+            onCancelGeneration={onCancelGeneration}
           />
         )}
         {step === 'step5' && (
           <Step5WriteText
+            volumeId={selectedVolumeId}
             step2State={step2State}
             step4State={step4State}
             step3Config={step3Config}
@@ -576,6 +604,7 @@ export const PipelineWriting: React.FC<PipelineWritingProps> = ({
             onAddChapterToVolume={onAddChapterToVolume}
             onPreviewInEditor={onPreviewInEditor}
             onExtractFacts={onExtractFacts}
+            onCancelGeneration={onCancelGeneration}
           />
         )}
       </div>

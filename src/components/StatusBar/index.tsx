@@ -104,11 +104,11 @@ export const StatusBar = ({
   const getSaveStatusColor = () => {
     switch (saveStatus) {
       case 'saved':
-        return '#16a34a';
+        return 'var(--color-success, #16a34a)';
       case 'saving':
-        return '#ca8a04';
+        return 'var(--color-warning, #ca8a04)';
       case 'unsaved':
-        return '#dc2626';
+        return 'var(--color-danger, #dc2626)';
       default:
         return 'inherit';
     }

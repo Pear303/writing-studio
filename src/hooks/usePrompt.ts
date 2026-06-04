@@ -42,6 +42,9 @@ export interface WritingContext {
   selectedText?: string;
   scene?: string;
   emotion?: string;
+  customInstruction?: string;
+  /** 任务书文本（请求级传递，替代全局变量 setTaskBookText） */
+  taskBookText?: string;
 }
 
 const initialState: PromptResourcesState = {
