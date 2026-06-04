@@ -1,5 +1,5 @@
 import React, { useState, useRef, useCallback } from 'react';
-import { Copy, Upload, Loader2, RefreshCw, CheckSquare, Square, ExternalLink } from 'lucide-react';
+import { Copy, Upload, Loader2, RefreshCw, CheckSquare, Square, ExternalLink, XCircle } from 'lucide-react';
 import type { PipelineStep2State, PipelineStep4State, DetailedOutlineChapter, DetailedOutlineRound } from '../../types';
 import { ConfirmDialog } from '../ConfirmDialog';
 
@@ -12,6 +12,7 @@ interface Step4DetailedOutlineProps {
   onRefineDetailedOutlineChapter: (step4State: PipelineStep4State, chapterIndices: number[], round: DetailedOutlineRound, outline: string) => Promise<string>;
   onOverwriteOutline: (markdown: string) => void;
   onPreviewInEditor?: (title: string, content: string, onChange: (content: string) => void) => void;
+  onCancelGeneration?: () => void;
 }
 
 const btnStyle = (variant: 'primary' | 'secondary' | 'danger' | 'warning'): React.CSSProperties => {
@@ -88,6 +89,7 @@ export const Step4DetailedOutline: React.FC<Step4DetailedOutlineProps> = ({
   onRefineDetailedOutlineChapter,
   onOverwriteOutline,
   onPreviewInEditor,
+  onCancelGeneration,
 }) => {
   const [isWorking, setIsWorking] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -123,7 +125,11 @@ export const Step4DetailedOutline: React.FC<Step4DetailedOutlineProps> = ({
         rounds: [],
       });
     } catch (err) {
-      setError(err instanceof Error ? err.message : '生成细纲失败');
+      if (err instanceof Error && (err.message === 'Request aborted' || err.name === 'AbortError')) {
+        // 用户主动取消
+      } else {
+        setError(err instanceof Error ? err.message : '生成细纲失败');
+      }
     } finally {
       setIsWorking(false);
     }
@@ -146,7 +152,11 @@ export const Step4DetailedOutline: React.FC<Step4DetailedOutlineProps> = ({
           rounds: [],
         });
       } catch (err) {
-        setError(err instanceof Error ? err.message : '回炉重造失败');
+        if (err instanceof Error && (err.message === 'Request aborted' || err.name === 'AbortError')) {
+          // 用户主动取消
+        } else {
+          setError(err instanceof Error ? err.message : '回炉重造失败');
+        }
       } finally {
         setIsWorking(false);
       }
@@ -190,7 +200,11 @@ export const Step4DetailedOutline: React.FC<Step4DetailedOutlineProps> = ({
       setModifications('');
       setSelectedChapterIndices([]);
     } catch (err) {
-      setError(err instanceof Error ? err.message : '回炉重造失败');
+      if (err instanceof Error && (err.message === 'Request aborted' || err.name === 'AbortError')) {
+        // 用户主动取消
+      } else {
+        setError(err instanceof Error ? err.message : '回炉重造失败');
+      }
     } finally {
       setIsWorking(false);
     }
@@ -371,6 +385,16 @@ export const Step4DetailedOutline: React.FC<Step4DetailedOutlineProps> = ({
           <p style={{ fontSize: '13px', color: 'var(--color-vscode-text)', opacity: 0.7 }}>
             正在{roundCount > 0 ? '回炉重造' : '生成细纲'}，请稍候...
           </p>
+          {onCancelGeneration && (
+            <button
+              type="button"
+              style={{ ...btnStyle('danger'), marginTop: '12px' }}
+              onClick={onCancelGeneration}
+            >
+              <XCircle size={13} />
+              取消生成
+            </button>
+          )}
           <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
         </div>
       )}
@@ -555,34 +579,28 @@ export const Step4DetailedOutline: React.FC<Step4DetailedOutlineProps> = ({
               )}
             </div>
 
-            <div style={{ display: 'flex', gap: '6px', marginBottom: '6px' }}>
-              <div style={{ flex: 1 }}>
-                <textarea
-                  style={compactInputStyle}
-                  placeholder="新增..."
-                  value={additions}
-                  onChange={e => setAdditions(e.target.value)}
-                  rows={1}
-                />
-              </div>
-              <div style={{ flex: 1 }}>
-                <textarea
-                  style={compactInputStyle}
-                  placeholder="删除..."
-                  value={deletions}
-                  onChange={e => setDeletions(e.target.value)}
-                  rows={1}
-                />
-              </div>
-              <div style={{ flex: 1 }}>
-                <textarea
-                  style={compactInputStyle}
-                  placeholder="修改..."
-                  value={modifications}
-                  onChange={e => setModifications(e.target.value)}
-                  rows={1}
-                />
-              </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginBottom: '6px' }}>
+              <textarea
+                style={{ ...compactInputStyle, resize: 'vertical', minHeight: '28px' }}
+                placeholder="新增..."
+                value={additions}
+                onChange={e => setAdditions(e.target.value)}
+                rows={1}
+              />
+              <textarea
+                style={{ ...compactInputStyle, resize: 'vertical', minHeight: '28px' }}
+                placeholder="删除..."
+                value={deletions}
+                onChange={e => setDeletions(e.target.value)}
+                rows={1}
+              />
+              <textarea
+                style={{ ...compactInputStyle, resize: 'vertical', minHeight: '28px' }}
+                placeholder="修改..."
+                value={modifications}
+                onChange={e => setModifications(e.target.value)}
+                rows={1}
+              />
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>

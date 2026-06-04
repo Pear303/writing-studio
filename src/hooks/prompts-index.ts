@@ -126,6 +126,7 @@ export type WritingStage =
   | 'CHARACTER'      
   | 'DETAILED_OUTLINE'
   | 'CHAPTER_WRITING'
+  | 'CONTINUATION'
   | 'DIALOGUE'
   | 'CONTENT_EXPANSION'
   | 'QUALITY_CHECK'
@@ -149,6 +150,7 @@ export const STAGE_TO_PROMPTS: Record<WritingStage, string[]> = {
   'CHARACTER': ['character-template.md', 'character-building.md'],
   'DETAILED_OUTLINE': ['plot-structures.md', 'chapter-template.md'],
   'CHAPTER_WRITING': ['start-chapter-guide.md', 'hook-techniques.md', 'consistency.md'],
+  'CONTINUATION': ['consistency.md', 'hook-techniques.md'],
   'DIALOGUE': ['dialogue-writing.md'],
   'CONTENT_EXPANSION': ['content-expansion.md'],
   'QUALITY_CHECK': ['quality-checklist.md'],
@@ -161,6 +163,7 @@ export const STAGE_NAMES: Record<WritingStage,string> = {
   'CHARACTER': '角色创建',
   'DETAILED_OUTLINE': '细纲生成',
   'CHAPTER_WRITING': '章节写作',
+  'CONTINUATION': '续写',
   'DIALOGUE': '对话优化',
   'CONTENT_EXPANSION': '内容扩充',
   'QUALITY_CHECK': '质量检查',

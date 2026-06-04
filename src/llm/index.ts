@@ -10,6 +10,7 @@ import {
   CustomProvider,
   MiniMaxProvider
 } from './provider';
+import { debugLogger } from '../services/DebugLogger';
 
 export type { LLMProvider, DialogueEntry };
 
@@ -139,10 +140,50 @@ export async function callLLM(
   config: LLMConfig,
   userMessage: string,
   systemPrompt: string = '',
-  dialogueHistory: DialogueEntry[] = []
+  dialogueHistory: DialogueEntry[] = [],
+  correlationId?: string
 ): Promise<string> {
-  const provider = LlmProviderFactory.createProvider(config);
-  return await provider.callApi(userMessage, dialogueHistory, systemPrompt);
+  // Debug: 记录 Provider 层 LLM 调用
+  debugLogger.log({
+    source: 'service',
+    category: 'llm-call',
+    direction: `callLLM → ${config.provider}/${config.model}`,
+    correlationId,
+    systemPrompt,
+    userMessage,
+    metadata: { provider: config.provider, model: config.model, apiUrl: config.apiUrl },
+  });
+
+  try {
+    const provider = LlmProviderFactory.createProvider(config);
+    const result = await provider.callApi(userMessage, dialogueHistory, systemPrompt);
+
+    // Debug: 记录 Provider 层 LLM 响应
+    debugLogger.log({
+      source: 'service',
+      category: 'llm-call',
+      direction: `callLLM ← ${config.provider}/${config.model}`,
+      correlationId,
+      response: result,
+      responseLength: result.length,
+      metadata: { provider: config.provider, model: config.model },
+    });
+
+    return result;
+  } catch (error) {
+    // Debug: 记录 Provider 层 LLM 调用失败
+    debugLogger.log({
+      source: 'service',
+      category: 'llm-call',
+      direction: `callLLM → ${config.provider}/${config.model}`,
+      correlationId,
+      systemPrompt,
+      userMessage,
+      error: error instanceof Error ? error.message : String(error),
+      metadata: { provider: config.provider, model: config.model },
+    });
+    throw error;
+  }
 }
 
 export async function testConnection(

@@ -8,6 +8,7 @@ import json
 import os
 import re
 import subprocess
+import time
 import urllib.request
 from html.parser import HTMLParser
 from pathlib import Path
@@ -102,6 +103,11 @@ class _SubagentEventForwarder(BaseCallbackHandler):
 
     def __init__(self, agent_type: str):
         self.agent_type = agent_type
+        self._correlation_counter = 0
+
+    def _next_correlation_id(self) -> str:
+        self._correlation_counter += 1
+        return f"sub_{self.agent_type}_{int(time.time() * 1000)}_{self._correlation_counter}"
 
     def _push_event(self, event_type, data):
         if _chat_state_ref is None:
@@ -114,12 +120,34 @@ class _SubagentEventForwarder(BaseCallbackHandler):
     def on_llm_start(self, serialized, prompts, **kwargs):
         if _chat_state_ref is None:
             return
+        self._current_llm_correlation_id = self._next_correlation_id()
         state, lock = _chat_state_ref
         with lock:
             state["stream_gen"] += 1
             state["stream_text"] = ""
             state["stream_sent"] = 0
-        self._push_event("thinking_start", {})
+        # 推送结构化提示词供前端 Debug 面板追踪
+        structured_messages = []
+        messages = kwargs.get("messages") or []
+        for msg in messages:
+            role = getattr(msg, "type", None) or "unknown"
+            content = getattr(msg, "content", "")
+            if isinstance(content, list):
+                content = "\n".join(
+                    block.get("text", "") if isinstance(block, dict) else str(block)
+                    for block in content
+                )
+            structured_messages.append({"role": role, "content": content})
+
+        if not structured_messages and prompts:
+            structured_messages = [{"role": "prompt", "content": p} for p in prompts]
+
+        model_name = kwargs.get("invocation_params", {}).get("model_name", "")
+        self._push_event("thinking_start", {
+            "messages": structured_messages,
+            "model": model_name,
+            "correlation_id": self._current_llm_correlation_id,
+        })
 
     def on_llm_new_token(self, token: str, **kwargs):
         if _chat_state_ref is None:
@@ -129,19 +157,33 @@ class _SubagentEventForwarder(BaseCallbackHandler):
             state["stream_text"] += token
 
     def on_llm_end(self, response, **kwargs):
-        self._push_event("thinking_end", {})
+        response_preview = ""
+        try:
+            for gen_list in response.generations:
+                for gen in gen_list:
+                    if isinstance(gen.message, AIMessage):
+                        if gen.message.content and not response_preview:
+                            response_preview = gen.message.content[:5000]
+        except Exception:
+            pass
+        self._push_event("thinking_end", {
+            "response_preview": response_preview,
+            "correlation_id": getattr(self, "_current_llm_correlation_id", None),
+        })
 
     def on_tool_start(self, serialized, input_str, **kwargs):
         tool_name = serialized.get("name", "unknown")
+        correlation_id = self._next_correlation_id()
         self._push_event("tool_start", {
             "tool": tool_name,
-            "input": input_str[:500],
+            "input": input_str[:2000],
+            "correlation_id": correlation_id,
         })
 
     def on_tool_end(self, output, **kwargs):
         self._push_event("tool_end", {
             "tool": "",
-            "output": output[:500],
+            "output": output[:2000],
         })
 
 

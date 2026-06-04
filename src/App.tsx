@@ -17,7 +17,7 @@ import { DetailedOutlineEditor } from './components/DetailedOutlineEditor';
 import { MaterialEditor } from './components/MaterialEditor';
 import { QAPanel } from './components/QAPanel';
 import type { RichTextEditorRef } from './components/RichTextEditor';
-import type { ActivityId, Book, Chapter, Volume, FormattingSettings, Material, OutlineItemData, WordCountSettings, PipelineStep1Config, PipelineStep2State, PipelineStep4State, PipelineStep5State, OutlineRound, DetailedOutlineRound, ChapterDraftRound } from './types';
+import type { ActivityId, Book, Chapter, Volume, FormattingSettings, Material, OutlineItemData, WordCountSettings, PipelineStep1Config, PipelineStep2State, PipelineStep3Config, PipelineStep4State, PipelineStep5State, OutlineRound, DetailedOutlineRound, ChapterDraftRound } from './types';
 import { db, saveChapterVersion, cleanupOldVersions, exportAllData, importAllData, getDefaultLLMConfig, decodeApiKey, getCurrentUserId, getPipelinePromptTemplates, ensureDefaultPipelinePromptTemplates } from './db';
 import { countWords, clearExtraBlankLines, clearExtraSpaces, convertFullWidthToHalfWidth, markdownToOutline } from './utils/helpers';
 import { getSearchReplaceCommands } from './extensions/searchReplace';
@@ -50,7 +50,7 @@ interface PomodoroState {
 
 // 侧边栏宽度配置
 const SIDEBAR_MIN_WIDTH = 80;  // 拖动隐藏阈值
-const SIDEBAR_DEFAULT_WIDTH = 330;  // 默认宽度
+const SIDEBAR_DEFAULT_WIDTH = 360;  // 默认宽度
 const EDITOR_MIN_WIDTH = 400;    // 编辑器最小宽度
 
 function App() {
@@ -67,6 +67,7 @@ function App() {
   const [currentOutlineChapter, setCurrentOutlineChapter] = useState<Chapter | null>(null);
   const [currentMaterial, setCurrentMaterial] = useState<Material | null>(null);
   const [pipelinePreview, setPipelinePreview] = useState<{ title: string; content: string; onChange: (content: string) => void } | null>(null);
+  const [forceReloadSessionId, setForceReloadSessionId] = useState<string | undefined>(undefined);
   const [showFindReplace, setShowFindReplace] = useState(false);
   const [lastSearchText, setLastSearchText] = useState('');
   const [showFormattingSettings, setShowFormattingSettings] = useState(false);
@@ -990,24 +991,43 @@ ${chapterContents}
     setPipelinePreview(null);
   };
 
-  const handlePipelineGenerateChapter = async (chapterIndex: number): Promise<string> => {
+  const handlePipelineGenerateChapter = async (
+    chapterIndex: number,
+    context?: { step4State: PipelineStep4State; step2State: PipelineStep2State | null; step3Config: PipelineStep3Config; step5State: PipelineStep5State | null },
+  ): Promise<string> => {
     try {
       await initPipelineLLM();
 
-      const pipelineSessionId = `${currentBook?.id}_${currentOutlineVolume?.id}`;
-      const session = await db.pipelineSessions.get(pipelineSessionId);
-      const step4State = session?.step4State;
-      const step2State = session?.step2State;
-      const step3Config = session?.step3Config;
+      let step4State: PipelineStep4State | null | undefined;
+      let step2State: PipelineStep2State | null | undefined;
+      let step3Config: PipelineStep3Config | undefined;
+      let step5State: PipelineStep5State | null | undefined;
 
-      if (!step4State || !step4State.chapters[chapterIndex]) {
+      // 优先使用调用方传入的上下文，避免 session ID 不匹配导致查不到数据
+      if (context) {
+        step4State = context.step4State;
+        step2State = context.step2State;
+        step3Config = context.step3Config;
+        step5State = context.step5State;
+      } else {
+        const pipelineSessionId = `${currentBook?.id}_${currentOutlineVolume?.id}`;
+        const session = await db.pipelineSessions.get(pipelineSessionId);
+        step4State = session?.step4State;
+        step2State = session?.step2State;
+        step3Config = session?.step3Config;
+        step5State = session?.step5State;
+      }
+
+      if (!step4State) {
         throw new Error('未找到章节细纲，请先完成第4步');
       }
 
-      const chapter = step4State.chapters[chapterIndex];
+      const chapter = step4State.chapters.find(ch => ch.index === chapterIndex);
+      if (!chapter) {
+        throw new Error(`未找到第${chapterIndex + 1}章的细纲，请先完成第4步`);
+      }
       let previousContent: string | null = null;
 
-      const step5State = session?.step5State;
       if (step5State && chapterIndex > 0) {
         const prevDraft = step5State.chapters.find(ch => ch.index === chapterIndex - 1);
         if (prevDraft?.content) {
@@ -1026,19 +1046,31 @@ ${chapterContents}
       );
       return result;
     } catch (error) {
+      // 用户主动取消不记录为错误
+      if (error instanceof Error && (error.message === 'Request aborted' || error.name === 'AbortError')) {
+        throw error;
+      }
       console.error('流水线生成章节失败:', error);
       throw error;
     }
   };
 
-  const handlePipelineRefineChapter = async (step5State: PipelineStep5State, chapterIndex: number, round: ChapterDraftRound): Promise<string> => {
+  const handlePipelineRefineChapter = async (step5State: PipelineStep5State, chapterIndex: number, round: ChapterDraftRound, context?: { step2State: PipelineStep2State | null; step3Config: PipelineStep3Config }): Promise<string> => {
     try {
       await initPipelineLLM();
 
-      const pipelineSessionId = `${currentBook?.id}_${currentOutlineVolume?.id}`;
-      const session = await db.pipelineSessions.get(pipelineSessionId);
-      const step2State = session?.step2State;
-      const step3Config = session?.step3Config;
+      let step2State: PipelineStep2State | null | undefined;
+      let step3Config: PipelineStep3Config | undefined;
+
+      if (context) {
+        step2State = context.step2State;
+        step3Config = context.step3Config;
+      } else {
+        const pipelineSessionId = `${currentBook?.id}_${currentOutlineVolume?.id}`;
+        const session = await db.pipelineSessions.get(pipelineSessionId);
+        step2State = session?.step2State;
+        step3Config = session?.step3Config;
+      }
 
       const result = await novelLLMService.refinePipelineChapter(
         step5State,
@@ -1056,14 +1088,23 @@ ${chapterContents}
 
   const handlePipelineBatchGenerateChapters = async (
     chapters: Array<{ index: number; title: string; outline: string }>,
+    context?: { step2State: PipelineStep2State | null; step3Config: PipelineStep3Config },
   ): Promise<Array<{ index: number; title: string; content: string }>> => {
     try {
       await initPipelineLLM();
 
-      const pipelineSessionId = `${currentBook?.id}_${currentOutlineVolume?.id}`;
-      const session = await db.pipelineSessions.get(pipelineSessionId);
-      const step2State = session?.step2State;
-      const step3Config = session?.step3Config;
+      let step2State: PipelineStep2State | null | undefined;
+      let step3Config: PipelineStep3Config | undefined;
+
+      if (context) {
+        step2State = context.step2State;
+        step3Config = context.step3Config;
+      } else {
+        const pipelineSessionId = `${currentBook?.id}_${currentOutlineVolume?.id}`;
+        const session = await db.pipelineSessions.get(pipelineSessionId);
+        step2State = session?.step2State;
+        step3Config = session?.step3Config;
+      }
 
       const result = await novelLLMService.generatePipelineChaptersBatch(
         chapters,
@@ -1088,8 +1129,9 @@ ${chapterContents}
       .join('');
   };
 
-  const handlePipelineAddChapterToVolume = async (title: string, content: string, detailedOutline?: string) => {
-    if (!currentBook || !currentOutlineVolume) {
+  const handlePipelineAddChapterToVolume = async (title: string, content: string, detailedOutline?: string, volumeId?: string) => {
+    const targetVolumeId = volumeId || currentOutlineVolume?.id;
+    if (!currentBook || !targetVolumeId) {
       showToast('请先选择书籍和卷', 'warning');
       return;
     }
@@ -1097,14 +1139,14 @@ ${chapterContents}
       const { v4: uuidv4 } = await import('uuid');
       const existingChapters = await db.chapters
         .where('volumeId')
-        .equals(currentOutlineVolume.id)
+        .equals(targetVolumeId)
         .count();
       const chapterId = uuidv4();
       const contentHtml = plainTextToHtml(content);
       const wordCount = countWords(content, wordCountSettings);
       await db.chapters.add({
         id: chapterId,
-        volumeId: currentOutlineVolume.id,
+        volumeId: targetVolumeId,
         bookId: currentBook.id,
         title,
         content: contentHtml,
@@ -1115,6 +1157,7 @@ ${chapterContents}
         updatedAt: Date.now(),
       });
       showToast(`章节「${title}」已录入本卷`, 'success');
+      setOutlineRefreshTrigger(prev => prev + 1);
     } catch (error) {
       console.error('录入章节失败:', error);
       showToast('录入章节失败', 'error');
@@ -1143,6 +1186,135 @@ ${chapterContents}
       console.error('事实提取失败:', error);
       return null;
     }
+  };
+
+  // 获取当前流水线的 step3Config（共享逻辑）
+  const getStep3Config = async (): Promise<{ writingStyle: string; storyLength: string; customRules: string } | undefined> => {
+    if (!currentBook) return undefined;
+    const pipelineSessionId = `${currentBook.id}_${currentOutlineVolume?.id}`;
+    try {
+      const session = await db.pipelineSessions.get(pipelineSessionId);
+      if (session?.step3Config) {
+        return {
+          writingStyle: session.step3Config.writingStyle || '',
+          storyLength: session.step3Config.storyLength || '',
+          customRules: session.step3Config.customRules || '',
+        };
+      }
+    } catch { /* 无 step3Config 也可续写 */ }
+    return undefined;
+  };
+
+  // AI 续写（流式 — 右键菜单入口）
+  const handleContinueWriting = async (
+    params: import('./components/RichTextEditor').ContinuationParams,
+    onChunk: (chunk: string) => void,
+    signal: AbortSignal,
+  ): Promise<void> => {
+    if (!currentBook || !currentChapter) {
+      throw new Error('请先选择章节');
+    }
+
+    await initPipelineLLM();
+
+    const chapterIndex = currentChapter.order;
+    const step3Config = await getStep3Config();
+
+    await novelLLMService.continueWritingStream(
+      {
+        previousText: params.previousText,
+        bookId: currentBook.id,
+        chapterIndex,
+        chapterTitle: currentChapter.title,
+        chapterOutline: currentChapter.detailedOutline || '',
+        wordCountTarget: params.wordCountTarget,
+        customInstruction: params.customInstruction,
+        step3Config,
+      },
+      onChunk,
+      signal,
+    );
+  };
+
+  // 续写面板的续写处理
+  const handleContinueWritingSidebar = async (
+    params: {
+      previousText: string;
+      customInstruction: string;
+      wordCountTarget: number;
+      selectedMaterialIds: string[];
+    },
+    onChunk: (chunk: string) => void,
+    signal: AbortSignal,
+  ): Promise<void> => {
+    if (!currentBook || !currentChapter) {
+      throw new Error('请先选择章节');
+    }
+
+    await initPipelineLLM();
+
+    const chapterIndex = currentChapter.order;
+    const step3Config = await getStep3Config();
+
+    // 组装素材信息
+    let materialContext = '';
+    if (params.selectedMaterialIds.length > 0) {
+      try {
+        const selectedMaterials = await db.materials.where('id').anyOf(params.selectedMaterialIds).toArray();
+        materialContext = selectedMaterials.map(m => `【${m.name}（${m.type}）】\n${m.description}`).join('\n\n');
+      } catch { /* 忽略素材加载失败 */ }
+    }
+
+    // 组装完整指令（素材通过 customInstruction 传递，避免与 memoryContext 重复）
+    const fullInstruction = [
+      params.customInstruction,
+      materialContext ? `相关素材：\n${materialContext}` : '',
+    ].filter(Boolean).join('\n\n');
+
+    await novelLLMService.continueWritingStream(
+      {
+        previousText: params.previousText,
+        bookId: currentBook.id,
+        chapterIndex,
+        chapterTitle: currentChapter.title,
+        chapterOutline: currentChapter.detailedOutline || '',
+        wordCountTarget: params.wordCountTarget,
+        customInstruction: fullInstruction,
+        step3Config,
+      },
+      onChunk,
+      signal,
+    );
+  };
+
+  // 续写结果追加到编辑器
+  const handleAppendToEditor = (content: string) => {
+    const newContent = editorContent + '\n\n' + content;
+    setEditorContent(newContent);
+    const newWordCount = countWords(newContent, wordCountSettings);
+    setWordCount(newWordCount);
+    setSaveStatus('unsaved');
+  };
+
+  // 续写面板生成大纲
+  const handleGenerateOutlineForContinue = async (volumeId: string, volumeName: string): Promise<string> => {
+    if (!currentBook) throw new Error('请先选择书籍');
+    await initPipelineLLM();
+    const result = await novelLLMService.generatePipelineOutline({
+      genres: [],
+      plotType: '',
+      protagonistIdentity: '',
+      customPrompt: `为《${currentBook.name}》的「${volumeName}」生成大纲`,
+      tone: '',
+    });
+    // 保存到卷
+    try {
+      await db.volumes.update(volumeId, { outline: result });
+      setOutlineRefreshTrigger(prev => prev + 1);
+    } catch (err) {
+      console.error('保存卷大纲失败:', err);
+    }
+    return result;
   };
 
   // 处理编辑器内容变化
@@ -1935,7 +2107,20 @@ ${chapterContents}
                   onBookSelect={handleBookSelect}
                   onBookDeselect={handleBookDeselect}
                   onChapterSelect={handleChapterSelect}
-                  onVolumeChange={() => setOutlineRefreshTrigger(prev => prev + 1)}
+                  onChapterDeselect={() => {
+                    setCurrentChapter(null);
+                    setEditorContent('');
+                    setWordCount(0);
+                    setSaveStatus('saved');
+                  }}
+                  onVolumeChange={async () => {
+                    setOutlineRefreshTrigger(prev => prev + 1);
+                    // 刷新 currentBook 以更新 totalWords
+                    if (currentBook?.id) {
+                      const updated = await db.books.get(currentBook.id);
+                      if (updated) setCurrentBook(updated);
+                    }
+                  }}
                   activeChapterId={currentChapter?.id || null}
                   onInsertMaterial={handleInsertMaterial}
                   onMaterialSelect={handleMaterialSelect}
@@ -1976,6 +2161,7 @@ ${chapterContents}
                   onPipelineBatchGenerateChapters={handlePipelineBatchGenerateChapters}
                   onPipelineAddChapterToVolume={handlePipelineAddChapterToVolume}
                   onPipelineExtractFacts={handlePipelineExtractFacts}
+                  onPipelineCancelGeneration={() => novelLLMService.abort()}
                   showToast={showToast}
                   agentState={agent.state}
                   onAgentSendMessage={agent.sendMessage}
@@ -1994,6 +2180,29 @@ ${chapterContents}
                   onVibeStartPipeline={pipeline.startPipeline}
                   onVibeIntervene={pipeline.intervene}
                   onVibeClearPipeline={pipeline.clearPipeline}
+                  onRestoreManualSession={async (session) => {
+                    // 恢复手动流水线会话：选择对应的书籍和卷，然后强制重新加载会话
+                    const book = await db.books.get(session.bookId);
+                    if (book) handleBookSelect(book);
+                    if (session.volumeId) {
+                      const vol = await db.volumes.get(session.volumeId);
+                      if (vol) handleVolumeOutlineSelect(vol);
+                    }
+                    // 通过改变 forceReloadSessionId 触发 PipelineWriting 重新加载
+                    setForceReloadSessionId(`${session.id}_${Date.now()}`);
+                    const stepLabels: Record<string, string> = { step1: '选择题材', step2: '生成大纲', step3: '风格设置', step4: '生成细纲', step5: '生成正文' };
+                    showToast?.(`已恢复手动流水线：${stepLabels[session.currentStep] || session.currentStep}`, 'success');
+                  }}
+                  onRestoreVibeHistory={(history) => {
+                    // 恢复 Vibe Writing 历史：显示详情信息
+                    showToast?.(`Vibe Writing 历史记录：${history.userRequest.slice(0, 30)}...（${history.status === 'completed' ? '已完成' : history.status}）`, 'info');
+                  }}
+                  forceReloadSessionId={forceReloadSessionId}
+                  currentChapter={currentChapter}
+                  editorContent={editorContent}
+                  onContinueWriting={handleContinueWritingSidebar}
+                  onAppendToEditor={handleAppendToEditor}
+                  onGenerateOutline={handleGenerateOutlineForContinue}
                 />
               </div>
               <div
@@ -2122,6 +2331,7 @@ ${chapterContents}
                   wordCount={wordCount}
                   currentChapter={currentChapter}
                   currentBook={currentBook}
+                  onContinueWriting={handleContinueWriting}
                 />
               )}
             </div>

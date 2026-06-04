@@ -9,6 +9,7 @@ import type { Chapter, ReviewIssue, ReviewSeverity } from '../../types';
 import { db, getDefaultLLMConfig, decodeApiKey } from '../../db';
 import { LlmProviderFactory } from '../../llm';
 import { generateId } from '../../utils/helpers';
+import { debugLogger } from '../../services/DebugLogger';
 
 /** AI 质检返回的单一维度评分 */
 interface AIDimensionScore {
@@ -434,7 +435,28 @@ ${rawContent}
         throw new Error('LLM 配置验证失败，请检查 API Key 和 API URL');
       }
 
+      const correlationId = `qc_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+      debugLogger.log({
+        source: 'service',
+        category: 'llm-call',
+        direction: `QualityCheck → ${config.provider}/${config.model}`,
+        correlationId,
+        systemPrompt,
+        userMessage,
+        metadata: { provider: config.provider, model: config.model, chapterId: currentChapter?.id },
+      });
+
       const responseText = await provider.callApi(userMessage, [], systemPrompt);
+
+      debugLogger.log({
+        source: 'service',
+        category: 'llm-call',
+        direction: `QualityCheck ← ${config.provider}/${config.model}`,
+        correlationId,
+        response: responseText,
+        responseLength: responseText.length,
+        metadata: { provider: config.provider, model: config.model },
+      });
 
       const result = parseAIQualityResponse(responseText);
       if (!result) {
