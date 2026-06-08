@@ -212,7 +212,10 @@ export const Sidebar = ({
                 }}
                 onBookDeselect={onBookDeselect}
                 onChapterDeselect={onChapterDeselect}
-                onVolumeChange={onVolumeChange}
+                onVolumeChange={() => {
+                  onVolumeChange?.();
+                  loadBooks();
+                }}
                 activeChapterId={activeChapterId}
                 refreshTrigger={outlineRefreshTrigger}
               />
@@ -309,7 +312,10 @@ export const Sidebar = ({
             />
           ) : activeActivity === 'recycleBin' ? (
             <RecycleBinPanel
-              onRestore={onVolumeChange}
+              onRestore={() => {
+                onVolumeChange?.();
+                loadBooks();
+              }}
             />
           ) : (
             <div className="p-4 text-vscode-text">

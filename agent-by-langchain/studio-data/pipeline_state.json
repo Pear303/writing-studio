@@ -1,0 +1,90 @@
+{
+  "id": "pipeline_1780910002_f8fc24",
+  "book_id": "1779764452099-caojr4xqf",
+  "volume_id": "1780151479308-38duv0gpb",
+  "user_request": "杜煌获得了每天力量翻倍的能力",
+  "steps": [
+    {
+      "id": "step_0",
+      "name": "需求分析",
+      "description": "",
+      "status": "completed",
+      "subagent": null,
+      "result": "需求分析完成。题材：都市异能成长类。核心设定：杜煌获得「每天力量翻倍」的指数级超能力。风格：轻松都市异能+成长探索。注意事项：避免过多破折号。目标卷ID：1780151479308-38duv0gpb（当前卷大纲为空，需新建）。",
+      "check_result": null,
+      "retry_count": 0,
+      "started_at": 1780910005.4032567,
+      "completed_at": 1780910024.2223055
+    },
+    {
+      "id": "step_1",
+      "name": "生成大纲",
+      "description": "",
+      "status": "completed",
+      "subagent": null,
+      "result": "7章大纲已生成。故事梗概：杜煌26岁生日获得每天力量翻倍能力，从怀疑到确认到失控，被神秘组织「归零社」盯上，发现前三任翻倍者都在第30天消失，最终在第30天通过光门蜕变。角色：杜煌、林筱雨（室友）、秦伯（引路人）、宋明远（归零社特派员）。",
+      "check_result": null,
+      "retry_count": 0,
+      "started_at": 1780910026.0489006,
+      "completed_at": 1780910106.810835
+    },
+    {
+      "id": "step_2",
+      "name": "生成细纲",
+      "description": "",
+      "status": "completed",
+      "subagent": null,
+      "result": "7章详细细纲已生成。包括每章的场景描述、出场人物、核心事件、情感基调和前后衔接。完整覆盖从第1天能力觉醒到第30天蜕变离去的全部内容。",
+      "check_result": null,
+      "retry_count": 0,
+      "started_at": 1780910108.9855661,
+      "completed_at": 1780910251.1605606
+    },
+    {
+      "id": "step_3",
+      "name": "撰写正文",
+      "description": "",
+      "status": "completed",
+      "subagent": null,
+      "result": "7章正文已全部撰写并提交，总字数约24500字。完整覆盖从第1天能力觉醒到第30天蜕变离去的全部内容。",
+      "check_result": null,
+      "retry_count": 0,
+      "started_at": 1780910253.4737182,
+      "completed_at": 1780910556.1223383
+    },
+    {
+      "id": "step_4",
+      "name": "一致性检查",
+      "description": "",
+      "status": "completed",
+      "subagent": null,
+      "result": "一致性检查完成。发现5个问题：①第2章翻倍公式写错（2^(n-1)应为2^n）；②第5章第11天写1024倍，实际应为2048倍；③第5章第14天78吨，数量级不符应为780吨+；④秦伯\"藏了三十年\"与时间线矛盾；⑤\"上一个翻倍者\"称谓有歧义。需派遣research_writer修正。",
+      "check_result": null,
+      "retry_count": 0,
+      "started_at": 1780910558.0788085,
+      "completed_at": 1780910701.9716837
+    },
+    {
+      "id": "step_5",
+      "name": "质量审阅",
+      "description": "",
+      "status": "skipped",
+      "subagent": null,
+      "result": "用户取消流水线，质量审阅跳过",
+      "check_result": null,
+      "retry_count": 0,
+      "started_at": null,
+      "completed_at": 1780910875.383471
+    }
+  ],
+  "current_step_index": 4,
+  "status": "completed",
+  "intervention": {
+    "type": "cancel",
+    "message": null,
+    "target_step_index": null,
+    "created_at": 1780910801.5038073
+  },
+  "created_at": 1780910002.0788171,
+  "updated_at": 1780910875.3845713
+}
