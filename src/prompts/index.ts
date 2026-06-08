@@ -72,6 +72,15 @@ export const PROMPT_TEMPLATES: Record<string, PromptTemplate> = {
     variables: ['outlineSummary', 'chaptersOutline', 'writingStyle', 'storyLength', 'customRules'],
     version: '1.0.0',
   },
+  'chapter-polish': {
+    id: 'chapter-polish',
+    name: '润色正文',
+    description: '对章节正文进行润色，提升文学品质',
+    file: './templates/pipeline/05-chapter-polish.md',
+    stage: 'CHAPTER_WRITING',
+    variables: ['outlineSummary', 'chapterContent', 'materialsText', 'previousChapterContent', 'writingStyle', 'storyLength', 'customRules'],
+    version: '1.0.0',
+  },
   'chapter-refine': {
     id: 'chapter-refine',
     name: '回炉重造正文',

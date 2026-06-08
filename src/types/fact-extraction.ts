@@ -36,6 +36,7 @@ export interface HookEntry {
 }
 
 export interface ChapterFacts {
+  chapterIndex: number;
   entities: EntitySnapshot[];
   stateChanges: StateChange[];
   events: NarrativeEvent[];
@@ -43,6 +44,8 @@ export interface ChapterFacts {
   hooks: HookEntry[];
   summary: string;
   extractedAt: number;
+  isFailed?: boolean;
+  wasTruncated?: boolean;
 }
 
 export interface ChapterStateCommit {

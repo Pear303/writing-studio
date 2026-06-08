@@ -1,4 +1,6 @@
 import type { ChapterFacts, ChapterStateCommit } from './fact-extraction';
+import type { BookDeconstructionResult } from './book-deconstruction';
+import type { ImitationOutline } from './imitation';
 
 // 回收站条目类型
 export interface RecycleBinItem {
@@ -24,6 +26,45 @@ export interface ChapterVersion {
 
 export type { EntitySnapshot, StateChange, NarrativeEvent, TimelineEntry, HookEntry, ChapterFacts, ChapterStateCommit } from './fact-extraction';
 export type { WritingTaskBook, TaskBookSources } from './task-book';
+export type {
+  BookSkeleton,
+  ChapterSkeleton,
+  ChapterRole,
+  SuspenseLine,
+  CrossChapterAnalysis,
+  CharacterArc,
+  SuspenseLineTracking,
+  PlotLine,
+  ForeshadowingPair,
+  PacingPoint,
+  RelationshipNode,
+  BookDeconstructionResult,
+  DeconstructionPhase,
+  DeconstructionStatus,
+} from './book-deconstruction';
+
+export type {
+  ImitationStrength,
+  PacingPreference,
+  ImitationCharacter,
+  ImitationConfig,
+  ImitationChapter,
+  ImitationSuspenseLine,
+  ImitationCharacterArc,
+  ImitationPacingPoint,
+  ImitationStatus,
+  ImitationOutline,
+  GenerateProgress,
+  ImitationPhase,
+  ImitationState,
+  ImitationAction,
+} from './imitation';
+
+export {
+  STRENGTH_LABELS,
+  imitationReducer,
+  INITIAL_IMITATION_STATE,
+} from './imitation';
 
 // 书籍相关类型
 export interface Book {
@@ -109,7 +150,7 @@ export interface AIConversation {
 }
 
 // 活动栏类型
-export type ActivityId = 'books' | 'materials' | 'agent' | 'pipeline' | 'continue' | 'settings' | 'recycleBin';
+export type ActivityId = 'books' | 'materials' | 'agent' | 'pipeline' | 'continue' | 'polish' | 'deconstruction' | 'settings' | 'recycleBin';
 
 export interface ActivityItem {
   id: ActivityId;
@@ -135,8 +176,15 @@ export interface ChapterDraftRound {
 export interface PipelineStep5State {
   chapters: ChapterDraft[];
   currentChapterIndex: number;
-  autoMode: boolean;
   completed: boolean;
+  /** 是否正在生成正文（持久化到 DB，用于重进时恢复加载状态） */
+  isGenerating?: boolean;
+  /** 正在生成的章节索引 */
+  generatingChapterIndex?: number;
+  /** 是否正在润色 */
+  isPolishing?: boolean;
+  /** 正在润色的章节索引 */
+  polishingChapterIndex?: number;
 }
 
 export interface PipelineStep1Config {
@@ -519,6 +567,8 @@ export interface FullExportData {
   antiPatterns: AntiPattern[];
   vibePipelineHistory: VibePipelineHistory[];
   recycleBinItems: RecycleBinItem[];
+  bookDeconstructions: BookDeconstructionResult[];
+  imitationOutlines: ImitationOutline[];
   users: any[];
   userSettings: any[];
   formattingSettings: Record<string, FormattingSettings>;

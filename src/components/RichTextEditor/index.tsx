@@ -7,7 +7,7 @@ import Underline from '@tiptap/extension-underline';
 import { Selection } from '@tiptap/pm/state';
 import type { Editor } from '@tiptap/react';
 import { SearchReplaceExtension } from '../../extensions/searchReplace';
-import { Loader2, PenLine, X, StopCircle } from 'lucide-react';
+import { Loader2, PenLine, X, StopCircle, Sparkles } from 'lucide-react';
 
 export interface RichTextEditorRef {
   editor: Editor | null;
@@ -29,6 +29,12 @@ interface RichTextEditorProps {
   paragraphIndent?: string;
   lineHeight?: string;
   onContinueWriting?: (params: ContinuationParams, onChunk: (chunk: string) => void, signal: AbortSignal) => Promise<void>;
+  onPolish?: (params: PolishParams, onChunk: (chunk: string) => void, signal: AbortSignal) => Promise<void>;
+}
+
+export interface PolishParams {
+  chapterContent: string;
+  customInstruction: string;
 }
 
 // 续写设置弹窗
@@ -144,6 +150,92 @@ const ContinuationModal: React.FC<{
   );
 };
 
+// 润色设置弹窗
+const PolishModal: React.FC<{
+  onClose: () => void;
+  onConfirm: (instruction: string) => void;
+  onCancel: () => void;
+  isWorking: boolean;
+}> = ({ onClose, onConfirm, onCancel, isWorking }) => {
+  const [instruction, setInstruction] = useState('');
+
+  const handleConfirm = () => {
+    onConfirm(instruction);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
+      <div
+        className="bg-vscode-sidebar border border-vscode-border"
+        style={{ width: '400px', borderRadius: '6px', boxShadow: '0 8px 24px rgba(0,0,0,0.2)' }}
+      >
+        <div className="flex items-center justify-between px-4 py-3 border-b border-vscode-border">
+          <div className="flex items-center gap-2">
+            <Sparkles size={16} style={{ color: 'var(--color-vscode-active)' }} />
+            <span className="text-sm font-semibold text-vscode-text">AI 润色</span>
+          </div>
+          <button
+            onClick={onClose}
+            className="text-vscode-text opacity-60 hover:opacity-100"
+          >
+            <X size={16} />
+          </button>
+        </div>
+
+        <div className="p-4 space-y-4">
+          <div>
+            <label className="block text-xs text-vscode-text opacity-70 mb-1">润色指令（可选）</label>
+            <textarea
+              value={instruction}
+              onChange={e => setInstruction(e.target.value)}
+              placeholder="例如：增强场景描写、优化对话节奏、提升文学性..."
+              rows={3}
+              className="w-full px-3 py-2 text-sm resize-none outline-none"
+              style={{
+                backgroundColor: 'var(--color-vscode-bg)',
+                color: 'var(--color-vscode-text)',
+                border: '1px solid var(--color-vscode-border)',
+                borderRadius: '3px',
+              }}
+            />
+          </div>
+        </div>
+
+        <div className="flex justify-end gap-2 px-4 py-3 border-t border-vscode-border">
+          {isWorking ? (
+            <button
+              onClick={onCancel}
+              className="px-3 py-1.5 text-xs border border-vscode-border text-vscode-text hover:opacity-80 rounded-sm flex items-center gap-1"
+              style={{ backgroundColor: 'transparent' }}
+            >
+              <StopCircle size={12} />
+              停止润色
+            </button>
+          ) : (
+            <>
+              <button
+                onClick={onClose}
+                className="px-3 py-1.5 text-xs border border-vscode-border text-vscode-text hover:opacity-80 rounded-sm"
+                style={{ backgroundColor: 'transparent' }}
+              >
+                取消
+              </button>
+              <button
+                onClick={handleConfirm}
+                className="px-3 py-1.5 text-xs text-white rounded-sm flex items-center gap-1"
+                style={{ backgroundColor: 'var(--color-vscode-active)' }}
+              >
+                <Sparkles size={12} />
+                开始润色
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
 /** 清洗 AI 返回的 Markdown 标记（仅清除行首标题标记和成对格式标记） */
 function cleanMarkdown(text: string): string {
   return text
@@ -163,6 +255,7 @@ export const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>
   paragraphIndent,
   lineHeight,
   onContinueWriting,
+  onPolish,
 }, ref) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [showContextMenu, setShowContextMenu] = useState(false);
@@ -170,6 +263,10 @@ export const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>
   const [showContinuationModal, setShowContinuationModal] = useState(false);
   const [isContinuing, setIsContinuing] = useState(false);
   const [continuationError, setContinuationError] = useState<string | null>(null);
+  const [showPolishModal, setShowPolishModal] = useState(false);
+  const [isPolishing, setIsPolishing] = useState(false);
+  const [polishError, setPolishError] = useState<string | null>(null);
+  const polishAbortRef = useRef<AbortController | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const streamBufferRef = useRef<string>('');
   const insertPosRef = useRef<number | null>(null);
@@ -210,10 +307,10 @@ export const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>
     }
   }, [content, editor]);
 
-  // 右键菜单：续写
+  // 右键菜单：续写 + 润色
   useEffect(() => {
     const container = containerRef.current;
-    if (!container || !editor || !onContinueWriting) return;
+    if (!container || !editor || (!onContinueWriting && !onPolish)) return;
 
     const handleContextMenu = (e: MouseEvent) => {
       const proseMirror = container.querySelector('.ProseMirror');
@@ -236,7 +333,7 @@ export const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>
       container.removeEventListener('contextmenu', handleContextMenu);
       document.removeEventListener('click', handleClick);
     };
-  }, [editor, onContinueWriting]);
+  }, [editor, onContinueWriting, onPolish]);
 
   // 添加原生点击事件监听器到容器（使用捕获阶段）
   useEffect(() => {
@@ -384,6 +481,58 @@ export const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>
     abortControllerRef.current?.abort();
   }, []);
 
+  // 润色处理
+  const handlePolishConfirm = useCallback(async (instruction: string) => {
+    if (!editor || !onPolish) return;
+
+    setIsPolishing(true);
+    setPolishError(null);
+
+    const abortController = new AbortController();
+    polishAbortRef.current = abortController;
+
+    let polishedText = '';
+
+    try {
+      const chapterContent = editor.state.doc.textContent;
+
+      await onPolish(
+        {
+          chapterContent,
+          customInstruction: instruction,
+        },
+        (chunk) => {
+          polishedText += chunk;
+        },
+        abortController.signal,
+      );
+
+      // 润色完成后替换整个编辑器内容
+      if (polishedText.trim()) {
+        const cleaned = cleanMarkdown(polishedText);
+        const htmlContent = cleaned
+          .split(/\n{2,}/)
+          .map(para => `<p>${para.trim().replace(/\n/g, '<br>')}</p>`)
+          .join('');
+        editor.commands.setContent(htmlContent);
+      }
+      setShowPolishModal(false);
+    } catch (err) {
+      if (err instanceof Error && err.message === 'Request aborted') {
+        setShowPolishModal(false);
+      } else {
+        setPolishError(err instanceof Error ? err.message : '润色失败');
+      }
+    } finally {
+      setIsPolishing(false);
+      polishAbortRef.current = null;
+    }
+  }, [editor, onPolish]);
+
+  const handleCancelPolish = useCallback(() => {
+    polishAbortRef.current?.abort();
+  }, []);
+
   if (!editor) {
     return null;
   }
@@ -406,7 +555,7 @@ export const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>
       </div>
 
       {/* 右键菜单 */}
-      {showContextMenu && onContinueWriting && (
+      {showContextMenu && (onContinueWriting || onPolish) && (
         <div
           className="fixed z-50 bg-vscode-sidebar border border-vscode-border py-1"
           style={{
@@ -418,16 +567,30 @@ export const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>
           }}
           onClick={e => e.stopPropagation()}
         >
-          <button
-            className="w-full px-3 py-1.5 text-left text-xs text-vscode-text hover:bg-vscode-active/10 flex items-center gap-2"
-            onClick={() => {
-              setShowContextMenu(false);
-              setShowContinuationModal(true);
-            }}
-          >
-            <PenLine size={13} style={{ color: 'var(--color-vscode-active)' }} />
-            AI 续写
-          </button>
+          {onContinueWriting && (
+            <button
+              className="w-full px-3 py-1.5 text-left text-xs text-vscode-text hover:bg-vscode-active/10 flex items-center gap-2"
+              onClick={() => {
+                setShowContextMenu(false);
+                setShowContinuationModal(true);
+              }}
+            >
+              <PenLine size={13} style={{ color: 'var(--color-vscode-active)' }} />
+              AI 续写
+            </button>
+          )}
+          {onPolish && (
+            <button
+              className="w-full px-3 py-1.5 text-left text-xs text-vscode-text hover:bg-vscode-active/10 flex items-center gap-2"
+              onClick={() => {
+                setShowContextMenu(false);
+                setShowPolishModal(true);
+              }}
+            >
+              <Sparkles size={13} style={{ color: 'var(--color-vscode-active)' }} />
+              AI 润色
+            </button>
+          )}
         </div>
       )}
 
@@ -460,6 +623,41 @@ export const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>
           <button
             className="ml-2 underline"
             onClick={() => setContinuationError(null)}
+          >
+            关闭
+          </button>
+        </div>
+      )}
+
+      {/* 润色设置弹窗 */}
+      {showPolishModal && (
+        <PolishModal
+          onClose={() => {
+            if (isPolishing) return;
+            setShowPolishModal(false);
+            setPolishError(null);
+          }}
+          onConfirm={handlePolishConfirm}
+          onCancel={handleCancelPolish}
+          isWorking={isPolishing}
+        />
+      )}
+
+      {/* 润色错误提示 */}
+      {polishError && !showPolishModal && (
+        <div
+          className="absolute bottom-4 left-1/2 -translate-x-1/2 z-50 px-4 py-2 text-xs"
+          style={{
+            backgroundColor: 'var(--color-danger, #dc2626)',
+            color: 'white',
+            borderRadius: '4px',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
+          }}
+        >
+          {polishError}
+          <button
+            className="ml-2 underline"
+            onClick={() => setPolishError(null)}
           >
             关闭
           </button>

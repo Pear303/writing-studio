@@ -3,8 +3,9 @@ import {
   PenLine, Loader2, X, CheckSquare, Square, ChevronDown, ChevronRight,
   FileText, BookOpen, Sparkles, Send
 } from 'lucide-react';
-import type { Book, Chapter, Volume, Material } from '../../types';
+import type { Book, Chapter, Volume, Material, OutlineItemData } from '../../types';
 import { db, getCurrentUserId } from '../../db';
+import { outlineToMarkdown } from '../../utils/helpers';
 
 interface ContinueWritingPanelProps {
   currentBook: Book | null;
@@ -66,6 +67,26 @@ export const ContinueWritingPanel: React.FC<ContinueWritingPanelProps> = ({
   const [showMemoryPicker, setShowMemoryPicker] = useState(false);
   const [generatingOutlineId, setGeneratingOutlineId] = useState<string | null>(null);
 
+  // 持久化前文记忆选择偏好
+  const getMemoryStorageKey = useCallback((bookId: string) => `continueWritingMemory_${bookId}`, []);
+
+  const saveMemorySelection = useCallback((bookId: string, ids: Set<string>) => {
+    try {
+      localStorage.setItem(getMemoryStorageKey(bookId), JSON.stringify(Array.from(ids)));
+    } catch { /* 忽略存储失败 */ }
+  }, [getMemoryStorageKey]);
+
+  const loadMemorySelection = useCallback((bookId: string): Set<string> => {
+    try {
+      const saved = localStorage.getItem(getMemoryStorageKey(bookId));
+      if (saved) {
+        const arr = JSON.parse(saved);
+        if (Array.isArray(arr)) return new Set(arr);
+      }
+    } catch { /* 忽略读取失败 */ }
+    return new Set();
+  }, [getMemoryStorageKey]);
+
   // 续写状态
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatedText, setGeneratedText] = useState('');
@@ -110,22 +131,28 @@ export const ContinueWritingPanel: React.FC<ContinueWritingPanelProps> = ({
       return;
     }
     loadMemoryOptions();
-  }, [currentBook?.id, currentOutlineVolume?.id]);
+  }, [currentBook?.id, currentOutlineVolume?.id, currentChapter?.volumeId]);
 
   const loadMemoryOptions = async () => {
     try {
       const options: MemoryOption[] = [];
 
-      // 加载当前卷的章节
-      if (currentOutlineVolume?.id) {
+      // 确定当前卷 ID：优先使用 currentOutlineVolume，否则从 currentChapter 推导
+      let volumeId = currentOutlineVolume?.id || currentChapter?.volumeId || null;
+
+      if (volumeId) {
+        // 加载当前卷的章节
         const chapters = await db.chapters
           .where('volumeId')
-          .equals(currentOutlineVolume.id)
+          .equals(volumeId)
           .sortBy('order');
 
         for (const ch of chapters) {
-          // 章节全文
-          if (ch.content && ch.content.trim()) {
+          // 跳过当前章节的全文（previousText 已包含当前章节正文，避免重复）
+          const isCurrentChapter = ch.id === currentChapter?.id;
+
+          // 章节全文（排除当前章节）
+          if (!isCurrentChapter && ch.content && ch.content.trim()) {
             options.push({
               id: `chapter_full_${ch.id}`,
               label: `${ch.title} - 全文`,
@@ -133,7 +160,7 @@ export const ContinueWritingPanel: React.FC<ContinueWritingPanelProps> = ({
               content: ch.content,
             });
           }
-          // 章节大纲
+          // 章节大纲（当前章节也保留，因为大纲是概要信息，与正文不同）
           if (ch.detailedOutline && ch.detailedOutline.trim()) {
             options.push({
               id: `chapter_outline_${ch.id}`,
@@ -145,18 +172,34 @@ export const ContinueWritingPanel: React.FC<ContinueWritingPanelProps> = ({
         }
 
         // 卷大纲
-        const vol = await db.volumes.get(currentOutlineVolume.id);
+        const vol = await db.volumes.get(volumeId);
         if (vol?.outline && vol.outline.trim()) {
+          // outline 是 JSON 序列化的 OutlineItemData[]，需转为可读文本
+          let outlineText = vol.outline;
+          try {
+            const items: OutlineItemData[] = JSON.parse(vol.outline);
+            if (Array.isArray(items) && items.length > 0) {
+              outlineText = outlineToMarkdown(items);
+            }
+          } catch { /* 解析失败则使用原始文本 */ }
           options.push({
             id: `volume_outline_${vol.id}`,
             label: `${vol.name} - 卷大纲`,
             type: 'volume_outline',
-            content: vol.outline,
+            content: outlineText,
           });
         }
       }
 
       setMemoryOptions(options);
+
+      // 恢复之前保存的选择偏好（与当前可用的 options 取交集）
+      if (currentBook?.id) {
+        const savedIds = loadMemorySelection(currentBook.id);
+        const availableIds = new Set(options.map(o => o.id));
+        const restored = new Set([...savedIds].filter(id => availableIds.has(id)));
+        setSelectedMemoryIds(restored);
+      }
     } catch (err) {
       console.error('加载前文记忆选项失败:', err);
     }
@@ -185,10 +228,14 @@ export const ContinueWritingPanel: React.FC<ContinueWritingPanelProps> = ({
 
   // 生成大纲
   const handleGenerateOutline = async (option: MemoryOption) => {
-    if (!currentOutlineVolume?.id || !onGenerateOutline) return;
+    const volumeId = currentOutlineVolume?.id || currentChapter?.volumeId || null;
+    if (!volumeId || !onGenerateOutline) return;
     setGeneratingOutlineId(option.id);
     try {
-      const outline = await onGenerateOutline(currentOutlineVolume.id, currentOutlineVolume.name);
+      // 获取卷名称
+      const vol = await db.volumes.get(volumeId);
+      const volumeName = vol?.name || currentOutlineVolume?.name || '';
+      const outline = await onGenerateOutline(volumeId, volumeName);
       // 更新对应选项的内容
       setMemoryOptions(prev => prev.map(o =>
         o.id === option.id ? { ...o, content: outline } : o
@@ -275,6 +322,10 @@ export const ContinueWritingPanel: React.FC<ContinueWritingPanelProps> = ({
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
+      // 持久化选择偏好
+      if (currentBook?.id) {
+        saveMemorySelection(currentBook.id, next);
+      }
       return next;
     });
   };

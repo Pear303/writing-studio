@@ -9,7 +9,7 @@
 
 // ── 数据模型 ──
 
-export type DebugEventSource = 'manual-pipeline' | 'vibe-writing' | 'service';
+export type DebugEventSource = 'manual-pipeline' | 'vibe-writing' | 'standalone-polish' | 'service';
 
 export type DebugEventCategory =
   | 'llm-call'           // LLM API 调用（generate / generateRaw）
@@ -18,7 +18,8 @@ export type DebugEventCategory =
   | 'fact-extract'       // 事实提取（FactExtractor）
   | 'review-gate'        // 审查闸门（ReviewGate）
   | 'pipeline-event'     // Vibe Writing SSE 事件
-  | 'prompt-compose';    // SmartPromptComposer 组装系统提示词
+  | 'prompt-compose'     // SmartPromptComposer 组装系统提示词
+  | 'deconstruction';    // 拆书分析
 
 export interface DebugEvent {
   id: string;

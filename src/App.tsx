@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useLayoutEffect, use, useContext } from 'react';
+import { useState, useRef, useEffect, useLayoutEffect, use, useContext, useReducer } from 'react';
 import { ActivityBar } from './components/ActivityBar';
 import { Sidebar } from './components/Sidebar';
 import { EditorArea } from './components/EditorArea';
@@ -68,6 +68,9 @@ function App() {
   const [currentMaterial, setCurrentMaterial] = useState<Material | null>(null);
   const [pipelinePreview, setPipelinePreview] = useState<{ title: string; content: string; onChange: (content: string) => void } | null>(null);
   const [forceReloadSessionId, setForceReloadSessionId] = useState<string | undefined>(undefined);
+
+  // 拆书相关状态（已迁移到 DeconstructionPanel，保留 handleStartDeconstruction 供 BookCardList 使用）
+
   const [showFindReplace, setShowFindReplace] = useState(false);
   const [lastSearchText, setLastSearchText] = useState('');
   const [showFormattingSettings, setShowFormattingSettings] = useState(false);
@@ -1119,6 +1122,44 @@ ${chapterContents}
     }
   };
 
+  const handlePipelinePolishChapter = async (
+    step5State: PipelineStep5State,
+    chapterIndex: number,
+    context?: { step2State: PipelineStep2State | null; step3Config: PipelineStep3Config },
+    materialsText?: string,
+    previousChapterContent?: string,
+  ): Promise<string> => {
+    try {
+      await initPipelineLLM();
+
+      let step2State: PipelineStep2State | null | undefined;
+      let step3Config: PipelineStep3Config | undefined;
+
+      if (context) {
+        step2State = context.step2State;
+        step3Config = context.step3Config;
+      } else {
+        const pipelineSessionId = `${currentBook?.id}_${currentOutlineVolume?.id}`;
+        const session = await db.pipelineSessions.get(pipelineSessionId);
+        step2State = session?.step2State;
+        step3Config = session?.step3Config;
+      }
+
+      const result = await novelLLMService.polishPipelineChapter(
+        step5State,
+        chapterIndex,
+        step2State?.currentOutline || '',
+        step3Config || { writingStyle: '', storyLength: '', customRules: '' },
+        materialsText,
+        previousChapterContent,
+      );
+      return result;
+    } catch (error) {
+      console.error('流水线章节润色失败:', error);
+      throw error;
+    }
+  };
+
   // 纯文本转简易 HTML（段落+换行），用于录入 Pipeline 生成的章节
   const plainTextToHtml = (text: string): string => {
     // 如果已包含 HTML 标签则跳过转换
@@ -1137,10 +1178,14 @@ ${chapterContents}
     }
     try {
       const { v4: uuidv4 } = await import('uuid');
+      // 使用最大 order + 1 确保录入到本卷末尾，而非 count()（删除章节后 count 可能小于 max order）
       const existingChapters = await db.chapters
         .where('volumeId')
         .equals(targetVolumeId)
-        .count();
+        .toArray();
+      const maxOrder = existingChapters.length > 0
+        ? Math.max(...existingChapters.map(ch => ch.order))
+        : -1;
       const chapterId = uuidv4();
       const contentHtml = plainTextToHtml(content);
       const wordCount = countWords(content, wordCountSettings);
@@ -1152,10 +1197,16 @@ ${chapterContents}
         content: contentHtml,
         wordCount,
         detailedOutline: detailedOutline || undefined,
-        order: existingChapters,
+        order: maxOrder + 1,
         createdAt: Date.now(),
         updatedAt: Date.now(),
       });
+      // 更新书籍总字数
+      const allChapters = await db.chapters.where('bookId').equals(currentBook.id).toArray();
+      const totalWords = allChapters.reduce((sum, ch) => sum + ch.wordCount, 0);
+      await db.books.update(currentBook.id, { totalWords, updatedAt: Date.now() });
+      const updatedBook = await db.books.get(currentBook.id);
+      if (updatedBook) setCurrentBook(updatedBook);
       showToast(`章节「${title}」已录入本卷`, 'success');
       setOutlineRefreshTrigger(prev => prev + 1);
     } catch (error) {
@@ -1316,6 +1367,73 @@ ${chapterContents}
     }
     return result;
   };
+
+  // 独立润色（右键菜单入口）
+  const handlePolishEditor = async (
+    params: import('./components/RichTextEditor').PolishParams,
+    onChunk: (chunk: string) => void,
+    signal: AbortSignal,
+  ): Promise<void> => {
+    if (!currentBook || !currentChapter) {
+      throw new Error('请先选择章节');
+    }
+
+    await initPipelineLLM();
+
+    const step3Config = await getStep3Config();
+
+    await novelLLMService.polishChapterStream(
+      {
+        chapterContent: params.chapterContent,
+        chapterTitle: currentChapter.title,
+        chapterOutline: currentChapter.detailedOutline || '',
+        writingStyle: step3Config?.writingStyle,
+        customInstruction: params.customInstruction,
+      },
+      onChunk,
+      signal,
+    );
+  };
+
+  // 润色面板的润色处理
+  const handlePolishSidebar = async (
+    params: {
+      chapterContent: string;
+      customInstruction: string;
+    },
+    onChunk: (chunk: string) => void,
+    signal: AbortSignal,
+  ): Promise<void> => {
+    if (!currentBook || !currentChapter) {
+      throw new Error('请先选择章节');
+    }
+
+    await initPipelineLLM();
+
+    const step3Config = await getStep3Config();
+
+    await novelLLMService.polishChapterStream(
+      {
+        chapterContent: params.chapterContent,
+        chapterTitle: currentChapter.title,
+        chapterOutline: currentChapter.detailedOutline || '',
+        writingStyle: step3Config?.writingStyle,
+        customInstruction: params.customInstruction,
+      },
+      onChunk,
+      signal,
+    );
+  };
+
+  // 润色结果替换编辑器内容
+  const handleReplaceEditorContent = (content: string) => {
+    setEditorContent(content);
+    const newWordCount = countWords(content, wordCountSettings);
+    setWordCount(newWordCount);
+    setSaveStatus('unsaved');
+  };
+
+  // 拆书功能已迁移到 DeconstructionPanel（ActivityBar 拆书/仿写入口）
 
   // 处理编辑器内容变化
   const handleContentChange = (content: string) => {
@@ -1859,7 +1977,7 @@ ${chapterContents}
 
     const editor = editorRef.current.editor;
     
-    const jsonContent = editor.getJSON();
+    const jsonContent = JSON.parse(JSON.stringify(editor.getJSON()));
     console.log('[排版] 原始JSON:', JSON.stringify(jsonContent, null, 2));
     
     // 辅助函数：清除段落文本中的前导空白字符，防止与排版缩进叠加
@@ -1867,7 +1985,11 @@ ${chapterContents}
       for (const child of content) {
         if (child.type === 'text' && child.text) {
           // 清除前导空白：普通空格、&nbsp;(\u00A0)、全角空格(\u3000)等
-          child.text = child.text.replace(/^[\s\u00A0\u3000\u2000-\u200A\u202F\u205F]+/, '');
+          const trimmed = child.text.replace(/^[\s\u00A0\u3000\u2000-\u200A\u202F\u205F]+/, '');
+          // 如果去除前导空白后文本为空，保留原始内容，避免段落被清空
+          if (trimmed.length > 0) {
+            child.text = trimmed;
+          }
           break; // 只处理第一个文本节点
         }
         // 如果遇到非文本节点（如 hardBreak），跳过继续
@@ -2158,6 +2280,7 @@ ${chapterContents}
                   onPipelinePreviewInEditor={handlePipelinePreviewInEditor}
                   onPipelineGenerateChapter={handlePipelineGenerateChapter}
                   onPipelineRefineChapter={handlePipelineRefineChapter}
+                  onPipelinePolishChapter={handlePipelinePolishChapter}
                   onPipelineBatchGenerateChapters={handlePipelineBatchGenerateChapters}
                   onPipelineAddChapterToVolume={handlePipelineAddChapterToVolume}
                   onPipelineExtractFacts={handlePipelineExtractFacts}
@@ -2203,6 +2326,8 @@ ${chapterContents}
                   onContinueWriting={handleContinueWritingSidebar}
                   onAppendToEditor={handleAppendToEditor}
                   onGenerateOutline={handleGenerateOutlineForContinue}
+                  onPolish={handlePolishSidebar}
+                  onReplaceEditorContent={handleReplaceEditorContent}
                 />
               </div>
               <div
@@ -2332,6 +2457,7 @@ ${chapterContents}
                   currentChapter={currentChapter}
                   currentBook={currentBook}
                   onContinueWriting={handleContinueWriting}
+                  onPolish={handlePolishEditor}
                 />
               )}
             </div>
@@ -2468,6 +2594,8 @@ ${chapterContents}
           onFormat={handleFormat}
         />
       )}
+
+      {/* 拆书/仿写功能已迁移到 ActivityBar DeconstructionPanel */}
 
       {/* 导入选项弹窗 */}
       {showImportModal && importPreview && (

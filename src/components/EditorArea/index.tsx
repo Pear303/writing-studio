@@ -1,5 +1,5 @@
 import React, { forwardRef } from 'react';
-import { RichTextEditor, type RichTextEditorRef, type ContinuationParams } from '../RichTextEditor';
+import { RichTextEditor, type RichTextEditorRef, type ContinuationParams, type PolishParams } from '../RichTextEditor';
 import type { Chapter, Book } from '../../types';
 
 interface EditorAreaProps {
@@ -17,6 +17,7 @@ interface EditorAreaProps {
   currentChapter?: Chapter | null;
   currentBook?: Book | null;
   onContinueWriting?: (params: ContinuationParams, onChunk: (chunk: string) => void, signal: AbortSignal) => Promise<void>;
+  onPolish?: (params: PolishParams, onChunk: (chunk: string) => void, signal: AbortSignal) => Promise<void>;
 }
 
 export const EditorArea = forwardRef<RichTextEditorRef, EditorAreaProps>(({
@@ -34,6 +35,7 @@ export const EditorArea = forwardRef<RichTextEditorRef, EditorAreaProps>(({
   currentChapter,
   currentBook,
   onContinueWriting,
+  onPolish,
 }, ref) => {
   return (
     <div className="flex-1 h-full flex flex-col bg-vscode-bg overflow-hidden">
@@ -61,6 +63,7 @@ export const EditorArea = forwardRef<RichTextEditorRef, EditorAreaProps>(({
         paragraphIndent={paragraphIndent}
         lineHeight={lineHeight}
         onContinueWriting={onContinueWriting}
+        onPolish={onPolish}
       />
     </div>
   );

@@ -1,7 +1,7 @@
 import Dexie, { Table } from 'dexie';
 import bcrypt from 'bcryptjs';
 import { v4 as uuidv4 } from 'uuid';
-import type { Book, Volume, Chapter, Material, AIConversation, ChapterVersion, LLMConfig, QARecord, FullExportData, ImportResult, FormattingSettings, WritingGoal, PomodoroState, Theme, PipelineSession, VibePreset, PipelinePromptTemplate, VibePipelineHistory, RecycleBinItem } from '../types';
+import type { Book, Volume, Chapter, Material, AIConversation, ChapterVersion, LLMConfig, QARecord, FullExportData, ImportResult, FormattingSettings, WritingGoal, PomodoroState, Theme, PipelineSession, VibePreset, PipelinePromptTemplate, VibePipelineHistory, RecycleBinItem, BookDeconstructionResult, ImitationOutline } from '../types';
 import { DEFAULT_VIBE_PRESETS } from '../types';
 export type { LLMConfig };
 
@@ -83,6 +83,8 @@ export class NovelIDEDatabase extends Dexie {
   antiPatterns!: Table<import('../types').AntiPattern>;
   vibePipelineHistory!: Table<VibePipelineHistory>;
   recycleBin!: Table<RecycleBinItem>;
+  bookDeconstructions!: Table<BookDeconstructionResult>;
+  imitationOutlines!: Table<ImitationOutline>;
 
   constructor() {
     super('NovelIDE');
@@ -158,6 +160,14 @@ export class NovelIDEDatabase extends Dexie {
 
     this.version(16).stores({
       recycleBin: 'id, bookId, itemType, deletedAt',
+    });
+
+    this.version(17).stores({
+      bookDeconstructions: 'id, bookId, status, createdAt, updatedAt',
+    });
+
+    this.version(18).stores({
+      imitationOutlines: 'id, status, createdAt, updatedAt',
     });
 
     /*
@@ -332,6 +342,8 @@ export const exportAllData = async (): Promise<string> => {
     antiPatterns: await db.antiPatterns.toArray(),
     vibePipelineHistory: await db.vibePipelineHistory.toArray(),
     recycleBinItems: await db.recycleBin.toArray(),
+    bookDeconstructions: await db.bookDeconstructions.toArray(),
+    imitationOutlines: await db.imitationOutlines.toArray(),
     users,
     userSettings,
     formattingSettings,
@@ -356,7 +368,7 @@ export const importAllData = async (jsonData: string, mergeMode: boolean = true)
 
   if (!mergeMode) {
     await db.transaction('rw', 
-      [db.books, db.volumes, db.chapters, db.materials, db.aiConversations, db.chapterVersions, db.llmConfigs, db.qaRecords, db.users, db.userSettings, db.chapterStateCommits, db.antiPatterns, db.vibePipelineHistory, db.recycleBin],
+      [db.books, db.volumes, db.chapters, db.materials, db.aiConversations, db.chapterVersions, db.llmConfigs, db.qaRecords, db.users, db.userSettings, db.chapterStateCommits, db.antiPatterns, db.vibePipelineHistory, db.recycleBin, db.bookDeconstructions, db.imitationOutlines],
       async () => {
         await db.books.clear();
         await db.volumes.clear();
@@ -372,6 +384,8 @@ export const importAllData = async (jsonData: string, mergeMode: boolean = true)
         await db.antiPatterns.clear();
         await db.vibePipelineHistory.clear();
         await db.recycleBin.clear();
+        await db.bookDeconstructions.clear();
+        await db.imitationOutlines.clear();
         
         if (data.books?.length) {
           await db.books.bulkAdd(data.books.map(b => ({ ...b, userId: b.userId || importUserId })));
@@ -391,6 +405,8 @@ export const importAllData = async (jsonData: string, mergeMode: boolean = true)
         if (data.antiPatterns?.length) await db.antiPatterns.bulkAdd(data.antiPatterns);
         if (data.vibePipelineHistory?.length) await db.vibePipelineHistory.bulkAdd(data.vibePipelineHistory);
         if (data.recycleBinItems?.length) await db.recycleBin.bulkAdd(data.recycleBinItems);
+        if (data.bookDeconstructions?.length) await db.bookDeconstructions.bulkAdd(data.bookDeconstructions);
+        if (data.imitationOutlines?.length) await db.imitationOutlines.bulkAdd(data.imitationOutlines);
       }
     );
     
@@ -407,7 +423,7 @@ export const importAllData = async (jsonData: string, mergeMode: boolean = true)
   }
   
   await db.transaction('rw', 
-    [db.books, db.volumes, db.chapters, db.materials, db.aiConversations, db.chapterVersions, db.llmConfigs, db.qaRecords, db.users, db.userSettings, db.chapterStateCommits, db.antiPatterns, db.vibePipelineHistory, db.recycleBin],
+    [db.books, db.volumes, db.chapters, db.materials, db.aiConversations, db.chapterVersions, db.llmConfigs, db.qaRecords, db.users, db.userSettings, db.chapterStateCommits, db.antiPatterns, db.vibePipelineHistory, db.recycleBin, db.bookDeconstructions, db.imitationOutlines],
     async () => {
       const existingBookIds = new Set((await db.books.toArray()).map(b => b.id));
       const existingVolumeIds = new Set((await db.volumes.toArray()).map(v => v.id));
@@ -510,6 +526,16 @@ export const importAllData = async (jsonData: string, mergeMode: boolean = true)
       
       for (const item of data.recycleBinItems || []) {
         await db.recycleBin.put(item);
+        result.added++;
+      }
+      
+      for (const decon of data.bookDeconstructions || []) {
+        await db.bookDeconstructions.put(decon);
+        result.added++;
+      }
+
+      for (const im of data.imitationOutlines || []) {
+        await db.imitationOutlines.put(im);
         result.added++;
       }
     }

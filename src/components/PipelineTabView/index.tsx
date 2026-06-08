@@ -23,6 +23,7 @@ interface PipelineTabViewProps {
   onPipelineRefineDetailedOutlineChapter?: (step4State: PipelineStep4State, chapterIndices: number[], round: DetailedOutlineRound, outline: string) => Promise<string>;
   onPipelineGenerateChapter?: (chapterIndex: number, context?: { step4State: PipelineStep4State; step2State: PipelineStep2State | null; step3Config: PipelineStep3Config; step5State: PipelineStep5State | null }) => Promise<string>;
   onPipelineRefineChapter?: (step5State: PipelineStep5State, chapterIndex: number, round: ChapterDraftRound, context?: { step2State: PipelineStep2State | null; step3Config: PipelineStep3Config }) => Promise<string>;
+  onPipelinePolishChapter?: (step5State: PipelineStep5State, chapterIndex: number, context?: { step2State: PipelineStep2State | null; step3Config: PipelineStep3Config }, materialsText?: string, previousChapterContent?: string) => Promise<string>;
   onPipelineBatchGenerateChapters?: (chapters: Array<{ index: number; title: string; outline: string }>, context?: { step2State: PipelineStep2State | null; step3Config: PipelineStep3Config }) => Promise<Array<{ index: number; title: string; content: string }>>;
   onPipelineAddChapterToVolume?: (title: string, content: string, detailedOutline?: string, volumeId?: string) => void;
   onPipelinePreviewInEditor?: (title: string, content: string, onChange: (content: string) => void) => void;
@@ -53,6 +54,7 @@ export const PipelineTabView: React.FC<PipelineTabViewProps> = ({
   onPipelineRefineDetailedOutlineChapter,
   onPipelineGenerateChapter,
   onPipelineRefineChapter,
+  onPipelinePolishChapter,
   onPipelineBatchGenerateChapters,
   onPipelineAddChapterToVolume,
   onPipelinePreviewInEditor,
@@ -170,6 +172,7 @@ export const PipelineTabView: React.FC<PipelineTabViewProps> = ({
               onRefineDetailedOutlineChapter={onPipelineRefineDetailedOutlineChapter}
               onGenerateChapter={onPipelineGenerateChapter}
               onRefineChapter={onPipelineRefineChapter}
+              onPolishChapter={onPipelinePolishChapter}
               onBatchGenerateChapters={onPipelineBatchGenerateChapters}
               onAddChapterToVolume={onPipelineAddChapterToVolume}
               onPreviewInEditor={onPipelinePreviewInEditor}

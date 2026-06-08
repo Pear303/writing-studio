@@ -14,9 +14,10 @@ interface BookCardListProps {
   books: Book[];
   onBookSelect: (book: Book) => void;
   onRefresh: () => void;
+  onStartDeconstruction?: (bookId: string, chapters: Array<{ index: number; title: string; content: string }>) => void;
 }
 
-export const BookCardList = ({ books, onBookSelect, onRefresh }: BookCardListProps) => {
+export const BookCardList = ({ books, onBookSelect, onRefresh, onStartDeconstruction }: BookCardListProps) => {
   const [contextMenu, setContextMenu] = useState<{
     x: number;
     y: number;
@@ -543,6 +544,7 @@ export const BookCardList = ({ books, onBookSelect, onRefresh }: BookCardListPro
           const book = books.find(b => b.id === bookId);
           if (book) onBookSelect(book);
         }}
+        onStartDeconstruction={onStartDeconstruction}
         showToast={showToast}
       />
     </div>

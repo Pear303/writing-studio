@@ -1,10 +1,13 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Copy, Loader2, RefreshCw, Play, Pause, Check, ExternalLink, BookOpen, Zap, XCircle } from 'lucide-react';
+import { Copy, Loader2, RefreshCw, Check, ExternalLink, BookOpen, Zap, XCircle, BookmarkPlus, X, Sparkles } from 'lucide-react';
 import type { PipelineStep2State, PipelineStep4State, PipelineStep5State, PipelineStep3Config, ChapterDraft, ChapterDraftRound } from '../../types';
 import type { ChapterFacts } from '../../types/fact-extraction';
+import type { Material, MaterialType } from '../../types';
+import { db, getCurrentUserId } from '../../db';
 
 interface Step5WriteTextProps {
   volumeId: string | null;
+  bookId: string | null;
   step2State: PipelineStep2State | null;
   step4State: PipelineStep4State | null;
   step3Config: PipelineStep3Config;
@@ -12,6 +15,7 @@ interface Step5WriteTextProps {
   onStep5StateChange: (state: PipelineStep5State) => void;
   onGenerateChapter: (chapterIndex: number, context?: { step4State: PipelineStep4State; step2State: PipelineStep2State | null; step3Config: PipelineStep3Config; step5State: PipelineStep5State | null }) => Promise<string>;
   onRefineChapter: (step5State: PipelineStep5State, chapterIndex: number, round: ChapterDraftRound, context?: { step2State: PipelineStep2State | null; step3Config: PipelineStep3Config }) => Promise<string>;
+  onPolishChapter?: (step5State: PipelineStep5State, chapterIndex: number, context?: { step2State: PipelineStep2State | null; step3Config: PipelineStep3Config }, materialsText?: string, previousChapterContent?: string) => Promise<string>;
   onBatchGenerateChapters?: (chapters: Array<{ index: number; title: string; outline: string }>, context?: { step2State: PipelineStep2State | null; step3Config: PipelineStep3Config }) => Promise<Array<{ index: number; title: string; content: string }>>;
   onAddChapterToVolume: (title: string, content: string, detailedOutline?: string, volumeId?: string) => void;
   onPreviewInEditor?: (title: string, content: string, onChange: (content: string) => void) => void;
@@ -57,13 +61,14 @@ const compactInputStyle: React.CSSProperties = {
   outline: 'none',
   boxSizing: 'border-box' as const,
   minHeight: '28px',
-  resize: 'none',
+  resize: 'vertical',
   fontFamily: 'inherit',
   lineHeight: '1.4',
 };
 
 export const Step5WriteText: React.FC<Step5WriteTextProps> = ({
   volumeId,
+  bookId,
   step2State,
   step4State,
   step3Config,
@@ -71,24 +76,39 @@ export const Step5WriteText: React.FC<Step5WriteTextProps> = ({
   onStep5StateChange,
   onGenerateChapter,
   onRefineChapter,
+  onPolishChapter,
   onBatchGenerateChapters,
   onAddChapterToVolume,
   onPreviewInEditor,
   onExtractFacts,
   onCancelGeneration,
 }) => {
-  const [isWorking, setIsWorking] = useState(false);
+  // 从 step5State 恢复生成状态（重进时保持加载状态）
+  const [isWorking, setIsWorking] = useState(() => step5State?.isGenerating ?? false);
   const [isBatchGenerating, setIsBatchGenerating] = useState(false);
-  const [generatingIndex, setGeneratingIndex] = useState<number | null>(null);
+  const [generatingIndex, setGeneratingIndex] = useState<number | null>(() => step5State?.generatingChapterIndex ?? null);
   const [error, setError] = useState<string | null>(null);
   const [copySuccess, setCopySuccess] = useState<string | null>(null);
   const [additions, setAdditions] = useState('');
   const [deletions, setDeletions] = useState('');
   const [modifications, setModifications] = useState('');
-  const [autoMode, setAutoMode] = useState(step5State?.autoMode ?? false);
   const [previewHeight, setPreviewHeight] = useState(200);
   const [isDragging, setIsDragging] = useState(false);
-  const autoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [showMaterialPicker, setShowMaterialPicker] = useState(false);
+  const [materials, setMaterials] = useState<Material[]>([]);
+  const [embeddedMaterialIds, setEmbeddedMaterialIds] = useState<Set<string>>(new Set());
+  const [polishMaterialIds, setPolishMaterialIds] = useState<Set<string>>(new Set());
+  const [showPolishMaterialPicker, setShowPolishMaterialPicker] = useState(false);
+  const [selectedPolishChapters, setSelectedPolishChapters] = useState<Set<number>>(new Set());
+  const [isPolishing, setIsPolishing] = useState(() => step5State?.isPolishing ?? false);
+  const [polishingIndex, setPolishingIndex] = useState<number | null>(() => step5State?.polishingChapterIndex ?? null);
+
+  // 跟踪组件是否已挂载，用于卸载后仍能保存生成结果到 DB
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
 
   const chapters = step4State?.chapters || [];
   const outlineText = step2State?.currentOutline || '';
@@ -98,42 +118,255 @@ export const Step5WriteText: React.FC<Step5WriteTextProps> = ({
   const totalChapters = chapters.length;
   const isCompleted = step5State?.completed ?? false;
 
+  // 组件卸载后直接将 step5State 保存到 DB，确保生成结果不丢失
+  const saveStep5StateToDB = useCallback(async (newStep5State: PipelineStep5State) => {
+    if (!bookId || !volumeId) return;
+    const sessionId = `${bookId}_${volumeId}`;
+    try {
+      const session = await db.pipelineSessions.get(sessionId);
+      if (session) {
+        await db.pipelineSessions.update(sessionId, { step5State: newStep5State, updatedAt: Date.now() });
+      }
+    } catch (err) {
+      console.error('卸载后保存 step5State 失败:', err);
+    }
+  }, [bookId, volumeId]);
+
+  // 重进时如果 step5State 标记了正在生成，轮询 DB 等待结果
+  useEffect(() => {
+    if (!step5State?.isGenerating || !bookId || !volumeId) return;
+
+    const pollInterval = setInterval(async () => {
+      const sessionId = `${bookId}_${volumeId}`;
+      const session = await db.pipelineSessions.get(sessionId);
+      if (session?.step5State && !session.step5State.isGenerating) {
+        // 生成已完成，结果已保存到 DB，更新父组件状态并清除本地加载状态
+        onStep5StateChange(session.step5State);
+        setIsWorking(false);
+        setGeneratingIndex(null);
+        setIsPolishing(false);
+        setPolishingIndex(null);
+        clearInterval(pollInterval);
+      }
+    }, 1000);
+
+    return () => clearInterval(pollInterval);
+  }, [step5State?.isGenerating, bookId, volumeId, onStep5StateChange]);
+
   useEffect(() => {
     return () => {
-      if (autoTimerRef.current) {
-        clearTimeout(autoTimerRef.current);
-      }
+      // cleanup
     };
   }, []);
 
+  // 加载素材列表
   useEffect(() => {
-    if (autoMode && !isWorking && !isCompleted && currentDraft && !currentDraft.content) {
-      autoTimerRef.current = setTimeout(() => {
-        handleGenerateCurrent();
-      }, 1000);
+    const loadMaterials = async () => {
+      try {
+        const currentUserId = getCurrentUserId();
+        let allMaterials = await db.materials.orderBy('updatedAt').reverse().toArray();
+        if (currentUserId) {
+          allMaterials = allMaterials.filter(m => m.userId === currentUserId);
+          if (bookId) {
+            allMaterials = allMaterials.filter(m => !m.bookId || m.bookId === bookId);
+          } else {
+            allMaterials = allMaterials.filter(m => !m.bookId);
+          }
+        } else {
+          allMaterials = [];
+        }
+        setMaterials(allMaterials);
+      } catch (error) {
+        console.error('加载素材失败:', error);
+      }
+    };
+    loadMaterials();
+  }, [bookId]);
+
+  const getTypeText = (type: MaterialType) => {
+    switch (type) {
+      case 'character': return '人物';
+      case 'location': return '地点';
+      case 'item': return '物品';
+      case 'plot': return '情节';
+      case 'writing_rule': return '写作规则';
+      case 'style_rule': return '文风规则';
+      case 'other': return '其他';
+      default: return '未知';
     }
-    if (autoMode && !isWorking && !isCompleted && currentDraft?.content) {
-      const nextIdx = findNextUngenerated(currentIdx);
-      if (nextIdx !== null) {
-        autoTimerRef.current = setTimeout(() => {
-          handleGoToChapter(nextIdx);
-        }, 1500);
+  };
+
+  const toggleEmbeddedMaterial = (materialId: string) => {
+    setEmbeddedMaterialIds(prev => {
+      const next = new Set(prev);
+      if (next.has(materialId)) {
+        next.delete(materialId);
       } else {
-        setAutoMode(false);
+        next.add(materialId);
+      }
+      return next;
+    });
+  };
+
+  const removeEmbeddedMaterial = (materialId: string) => {
+    setEmbeddedMaterialIds(prev => {
+      const next = new Set(prev);
+      next.delete(materialId);
+      return next;
+    });
+  };
+
+  // 获取已嵌入的素材列表
+  const embeddedMaterials = materials.filter(m => embeddedMaterialIds.has(m.id));
+
+  // 获取润色用素材列表
+  const polishMaterials = materials.filter(m => polishMaterialIds.has(m.id));
+
+  const togglePolishMaterial = (materialId: string) => {
+    setPolishMaterialIds(prev => {
+      const next = new Set(prev);
+      if (next.has(materialId)) next.delete(materialId);
+      else next.add(materialId);
+      return next;
+    });
+  };
+
+  const removePolishMaterial = (materialId: string) => {
+    setPolishMaterialIds(prev => {
+      const next = new Set(prev);
+      next.delete(materialId);
+      return next;
+    });
+  };
+
+  const togglePolishChapter = (idx: number) => {
+    setSelectedPolishChapters(prev => {
+      const next = new Set(prev);
+      if (next.has(idx)) next.delete(idx);
+      else next.add(idx);
+      return next;
+    });
+  };
+
+  const handlePolishSingle = async (chapterIndex: number) => {
+    if (!step5State || !onPolishChapter) return;
+    const draft = step5State.chapters.find(ch => ch.index === chapterIndex);
+    if (!draft?.content) return;
+
+    setIsPolishing(true);
+    setPolishingIndex(chapterIndex);
+    setError(null);
+    // 标记润色状态到 step5State
+    onStep5StateChange({ ...step5State, isPolishing: true, polishingChapterIndex: chapterIndex });
+
+    try {
+      const materialsText = polishMaterials.length > 0
+        ? polishMaterials.map(m => `【${getTypeText(m.type)}：${m.name}】\n${m.description}`).join('\n\n')
+        : undefined;
+
+      // 获取上一章内容作为文风参考
+      let previousChapterContent: string | undefined;
+      if (chapterIndex > 0) {
+        const prevDraft = step5State.chapters.find(ch => ch.index === chapterIndex - 1);
+        if (prevDraft?.content) {
+          previousChapterContent = prevDraft.content.slice(0, 500);
+        }
+      }
+
+      const content = await onPolishChapter(step5State, chapterIndex, { step2State, step3Config }, materialsText, previousChapterContent);
+      const newChapters = step5State.chapters.map(ch =>
+        ch.index === chapterIndex ? { ...ch, content } : ch
+      );
+      const newState = { ...step5State, chapters: newChapters, isPolishing: false as const, polishingChapterIndex: undefined as undefined };
+      if (mountedRef.current) {
+        onStep5StateChange(newState);
+      } else {
+        saveStep5StateToDB(newState);
+      }
+    } catch (err) {
+      if (err instanceof Error && (err.message === 'Request aborted' || err.name === 'AbortError')) {
+        // silently ignore
+      } else {
+        setError(err instanceof Error ? err.message : '润色失败');
+      }
+      if (!mountedRef.current) {
+        saveStep5StateToDB({ ...step5State, isPolishing: false, polishingChapterIndex: undefined });
+      }
+    } finally {
+      if (mountedRef.current) {
+        setIsPolishing(false);
+        setPolishingIndex(null);
       }
     }
-    if (!autoMode && autoTimerRef.current) {
-      clearTimeout(autoTimerRef.current);
-      autoTimerRef.current = null;
-    }
-  }, [autoMode, isWorking, isCompleted, currentDraft?.content, currentIdx]);
+  };
 
-  const findNextUngenerated = (fromIdx: number): number | null => {
-    for (let i = fromIdx + 1; i < totalChapters; i++) {
-      const draft = step5State?.chapters.find(ch => ch.index === i);
-      if (!draft?.content) return i;
+  const handleBatchPolish = async () => {
+    if (!step5State || !onPolishChapter || selectedPolishChapters.size === 0) return;
+
+    setIsPolishing(true);
+    setError(null);
+    // 标记润色状态到 step5State
+    onStep5StateChange({ ...step5State, isPolishing: true, polishingChapterIndex: Array.from(selectedPolishChapters).sort((a, b) => a - b)[0] });
+
+    const sortedIndices = Array.from(selectedPolishChapters).sort((a, b) => a - b);
+    let currentState = step5State;
+
+    try {
+      const materialsText = polishMaterials.length > 0
+        ? polishMaterials.map(m => `【${getTypeText(m.type)}：${m.name}】\n${m.description}`).join('\n\n')
+        : undefined;
+
+      for (let i = 0; i < sortedIndices.length; i++) {
+        const chapterIndex = sortedIndices[i];
+        const draft = currentState.chapters.find(ch => ch.index === chapterIndex);
+        if (!draft?.content) continue;
+
+        if (mountedRef.current) setPolishingIndex(chapterIndex);
+
+        // 获取上一章内容作为文风参考（连续润色时使用已润色的版本）
+        let previousChapterContent: string | undefined;
+        if (chapterIndex > 0) {
+          const prevDraft = currentState.chapters.find(ch => ch.index === chapterIndex - 1);
+          if (prevDraft?.content) {
+            previousChapterContent = prevDraft.content.slice(0, 500);
+          }
+        }
+
+        const content = await onPolishChapter(currentState, chapterIndex, { step2State, step3Config }, materialsText, previousChapterContent);
+
+        // 更新 step5State 以便下一章能引用已润色的内容
+        const updatedChapters: ChapterDraft[] = currentState.chapters.map(ch =>
+          ch.index === chapterIndex ? { ...ch, content } : ch
+        );
+        currentState = { ...currentState, chapters: updatedChapters };
+        if (mountedRef.current) {
+          onStep5StateChange(currentState);
+        }
+      }
+
+      // 批量润色完成，清除标记
+      const finalState = { ...currentState, isPolishing: false as const, polishingChapterIndex: undefined as undefined };
+      if (mountedRef.current) {
+        onStep5StateChange(finalState);
+        setSelectedPolishChapters(new Set());
+      } else {
+        saveStep5StateToDB(finalState);
+      }
+    } catch (err) {
+      if (err instanceof Error && (err.message === 'Request aborted' || err.name === 'AbortError')) {
+        // silently ignore
+      } else {
+        setError(err instanceof Error ? err.message : '批量润色失败');
+      }
+      if (!mountedRef.current) {
+        saveStep5StateToDB({ ...currentState, isPolishing: false, polishingChapterIndex: undefined });
+      }
+    } finally {
+      if (mountedRef.current) {
+        setIsPolishing(false);
+        setPolishingIndex(null);
+      }
     }
-    return null;
   };
 
   const ensureStep5State = (): PipelineStep5State => {
@@ -141,7 +374,6 @@ export const Step5WriteText: React.FC<Step5WriteTextProps> = ({
     return {
       chapters: [],
       currentChapterIndex: 0,
-      autoMode: false,
       completed: false,
     };
   };
@@ -151,8 +383,24 @@ export const Step5WriteText: React.FC<Step5WriteTextProps> = ({
     setIsWorking(true);
     setGeneratingIndex(currentIdx);
     setError(null);
+    // 标记生成状态到 step5State，以便重进时恢复
+    const stateBefore = ensureStep5State();
+    onStep5StateChange({ ...stateBefore, isGenerating: true, generatingChapterIndex: currentIdx });
     try {
-      const content = await onGenerateChapter(currentIdx, step4State ? { step4State, step2State, step3Config, step5State } : undefined);
+      // 如果有嵌入素材，将其附加到当前章节的细纲中
+      let contextStep4State = step4State;
+      if (step4State && embeddedMaterials.length > 0) {
+        const materialText = embeddedMaterials.map(m =>
+          `【${getTypeText(m.type)}：${m.name}】\n${m.description}`
+        ).join('\n\n');
+        const enhancedChapters = step4State.chapters.map(ch =>
+          ch.index === currentIdx
+            ? { ...ch, content: ch.content + `\n\n---\n【本章强调素材】\n${materialText}` }
+            : ch
+        );
+        contextStep4State = { ...step4State, chapters: enhancedChapters };
+      }
+      const content = await onGenerateChapter(currentIdx, contextStep4State ? { step4State: contextStep4State, step2State, step3Config, step5State } : undefined);
       const state = ensureStep5State();
       const existingIdx = state.chapters.findIndex(ch => ch.index === currentIdx);
       const newDraft: ChapterDraft = {
@@ -168,13 +416,21 @@ export const Step5WriteText: React.FC<Step5WriteTextProps> = ({
         newChapters.push(newDraft);
         newChapters.sort((a, b) => a.index - b.index);
       }
-      onStep5StateChange({
+      const newState = {
         ...state,
         chapters: newChapters,
         currentChapterIndex: currentIdx,
-      });
+        isGenerating: false,
+        generatingChapterIndex: undefined,
+      };
+      if (mountedRef.current) {
+        onStep5StateChange(newState);
+      } else {
+        // 组件已卸载，直接保存到 DB
+        saveStep5StateToDB(newState);
+      }
 
-      if (onExtractFacts && content) {
+      if (onExtractFacts && content && mountedRef.current) {
         try {
           await onExtractFacts(currentIdx, chapters[currentIdx].title, content);
         } catch {
@@ -185,13 +441,24 @@ export const Step5WriteText: React.FC<Step5WriteTextProps> = ({
       // 用户主动取消不报错
       if (err instanceof Error && (err.message === 'Request aborted' || err.name === 'AbortError')) {
         // silently ignore
+        // 清除生成标记
+        const state = ensureStep5State();
+        if (!mountedRef.current) {
+          saveStep5StateToDB({ ...state, isGenerating: false, generatingChapterIndex: undefined });
+        }
       } else {
         setError(err instanceof Error ? err.message : '生成章节失败');
+        // 清除生成标记
+        const state = ensureStep5State();
+        if (!mountedRef.current) {
+          saveStep5StateToDB({ ...state, isGenerating: false, generatingChapterIndex: undefined });
+        }
       }
-      setAutoMode(false);
     } finally {
-      setIsWorking(false);
-      setGeneratingIndex(null);
+      if (mountedRef.current) {
+        setIsWorking(false);
+        setGeneratingIndex(null);
+      }
     }
   };
 
@@ -200,6 +467,8 @@ export const Step5WriteText: React.FC<Step5WriteTextProps> = ({
     setIsWorking(true);
     setGeneratingIndex(currentIdx);
     setError(null);
+    // 标记生成状态到 step5State
+    onStep5StateChange({ ...step5State, isGenerating: true, generatingChapterIndex: currentIdx });
 
     const hasInput = additions.trim() || deletions.trim() || modifications.trim();
 
@@ -209,15 +478,25 @@ export const Step5WriteText: React.FC<Step5WriteTextProps> = ({
         const newChapters = step5State.chapters.map(ch =>
           ch.index === currentIdx ? { ...ch, content, rounds: [] } : ch
         );
-        onStep5StateChange({ ...step5State, chapters: newChapters });
+        const newState = { ...step5State, chapters: newChapters, isGenerating: false as const, generatingChapterIndex: undefined as undefined };
+        if (mountedRef.current) {
+          onStep5StateChange(newState);
+        } else {
+          saveStep5StateToDB(newState);
+        }
       } catch (err) {
         if (err instanceof Error && (err.message === 'Request aborted' || err.name === 'AbortError')) {
           // silently ignore
         } else {
           setError(err instanceof Error ? err.message : '回炉重造失败');
         }
+        if (!mountedRef.current) {
+          saveStep5StateToDB({ ...step5State, isGenerating: false, generatingChapterIndex: undefined });
+        }
       } finally {
-        setIsWorking(false);
+        if (mountedRef.current) {
+          setIsWorking(false);
+        }
       }
       return;
     }
@@ -235,19 +514,29 @@ export const Step5WriteText: React.FC<Step5WriteTextProps> = ({
           ? { ...ch, content, rounds: [...ch.rounds, currentRound] }
           : ch
       );
-      onStep5StateChange({ ...step5State, chapters: newChapters });
-      setAdditions('');
-      setDeletions('');
-      setModifications('');
+      const newState = { ...step5State, chapters: newChapters, isGenerating: false as const, generatingChapterIndex: undefined as undefined };
+      if (mountedRef.current) {
+        onStep5StateChange(newState);
+        setAdditions('');
+        setDeletions('');
+        setModifications('');
+      } else {
+        saveStep5StateToDB(newState);
+      }
     } catch (err) {
       if (err instanceof Error && (err.message === 'Request aborted' || err.name === 'AbortError')) {
         // silently ignore
       } else {
         setError(err instanceof Error ? err.message : '回炉重造失败');
       }
+      if (!mountedRef.current) {
+        saveStep5StateToDB({ ...step5State, isGenerating: false, generatingChapterIndex: undefined });
+      }
     } finally {
-      setIsWorking(false);
-      setGeneratingIndex(null);
+      if (mountedRef.current) {
+        setIsWorking(false);
+        setGeneratingIndex(null);
+      }
     }
   };
 
@@ -301,23 +590,14 @@ export const Step5WriteText: React.FC<Step5WriteTextProps> = ({
     }
   };
 
-  const handleToggleAuto = () => {
-    const newAuto = !autoMode;
-    setAutoMode(newAuto);
-    if (step5State) {
-      onStep5StateChange({ ...step5State, autoMode: newAuto });
-    }
-    if (!newAuto && autoTimerRef.current) {
-      clearTimeout(autoTimerRef.current);
-      autoTimerRef.current = null;
-    }
-  };
-
   const handleBatchGenerate = async () => {
     if (!onBatchGenerateChapters || chapters.length === 0) return;
     setIsBatchGenerating(true);
     setIsWorking(true);
     setError(null);
+    // 标记生成状态到 step5State
+    const stateBefore = ensureStep5State();
+    onStep5StateChange({ ...stateBefore, isGenerating: true });
 
     try {
       const ungeneratedChapters = chapters
@@ -329,6 +609,7 @@ export const Step5WriteText: React.FC<Step5WriteTextProps> = ({
 
       if (ungeneratedChapters.length === 0) {
         setError('所有章节已生成，无需批量生成');
+        onStep5StateChange({ ...stateBefore, isGenerating: false });
         return;
       }
 
@@ -352,20 +633,33 @@ export const Step5WriteText: React.FC<Step5WriteTextProps> = ({
       }
       newChapters.sort((a, b) => a.index - b.index);
 
-      onStep5StateChange({
+      const newState = {
         ...state,
         chapters: newChapters,
         currentChapterIndex: results.length > 0 ? results[0].index : state.currentChapterIndex,
-      });
+        isGenerating: false as const,
+        generatingChapterIndex: undefined as undefined,
+      };
+      if (mountedRef.current) {
+        onStep5StateChange(newState);
+      } else {
+        saveStep5StateToDB(newState);
+      }
     } catch (err) {
       if (err instanceof Error && (err.message === 'Request aborted' || err.name === 'AbortError')) {
         // silently ignore
       } else {
         setError(err instanceof Error ? err.message : '批量生成失败');
       }
+      if (!mountedRef.current) {
+        const state = ensureStep5State();
+        saveStep5StateToDB({ ...state, isGenerating: false, generatingChapterIndex: undefined });
+      }
     } finally {
-      setIsBatchGenerating(false);
-      setIsWorking(false);
+      if (mountedRef.current) {
+        setIsBatchGenerating(false);
+        setIsWorking(false);
+      }
     }
   };
 
@@ -414,34 +708,59 @@ export const Step5WriteText: React.FC<Step5WriteTextProps> = ({
           <span style={{ fontSize: '12px', color: 'var(--color-vscode-text)', opacity: 0.7 }}>
             生成正文 · 已完成 {generatedCount}/{totalChapters} 章
           </span>
-          <button
-            type="button"
-            style={{
-              ...btnStyle(autoMode ? 'warning' : 'secondary'),
-              fontSize: '11px',
-              padding: '3px 8px',
-            }}
-            onClick={handleToggleAuto}
-            disabled={isWorking}
-          >
-            {autoMode ? <Pause size={12} /> : <Play size={12} />}
-            {autoMode ? '停止自动' : '自动生成'}
-          </button>
-          {onBatchGenerateChapters && (
-            <button
-              type="button"
-              style={{
-                ...btnStyle('primary'),
-                fontSize: '11px',
-                padding: '3px 8px',
-              }}
-              onClick={handleBatchGenerate}
-              disabled={isWorking || isBatchGenerating}
-            >
-              {isBatchGenerating ? <Loader2 size={12} style={{ animation: 'spin 1s linear infinite' }} /> : <Zap size={12} />}
-              {isBatchGenerating ? '批量生成中...' : '批量生成'}
-            </button>
-          )}
+          <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+            {onPolishChapter && selectedPolishChapters.size > 0 && (
+              <button
+                type="button"
+                style={{
+                  ...btnStyle('success'),
+                  fontSize: '11px',
+                  padding: '3px 8px',
+                }}
+                onClick={handleBatchPolish}
+                disabled={isPolishing || isWorking}
+              >
+                {isPolishing ? <Loader2 size={12} style={{ animation: 'spin 1s linear infinite' }} /> : <Sparkles size={12} />}
+                {isPolishing ? `润色中(${(polishingIndex ?? -1) + 1}章)` : `连续润色(${selectedPolishChapters.size}章)`}
+              </button>
+            )}
+            {onPolishChapter && generatedCount > 0 && (
+              <button
+                type="button"
+                style={{
+                  fontSize: '11px',
+                  padding: '3px 8px',
+                  border: '1px solid var(--color-vscode-border)',
+                  borderRadius: '2px',
+                  cursor: 'pointer',
+                  backgroundColor: selectedPolishChapters.size > 0 ? 'var(--color-vscode-active-light, rgba(0, 122, 204, 0.15))' : 'transparent',
+                  color: 'var(--color-vscode-text)',
+                }}
+                onClick={() => {
+                  if (selectedPolishChapters.size > 0) {
+                    setSelectedPolishChapters(new Set());
+                  }
+                }}
+              >
+                {selectedPolishChapters.size > 0 ? '取消多选' : '多选润色'}
+              </button>
+            )}
+            {onBatchGenerateChapters && (
+              <button
+                type="button"
+                style={{
+                  ...btnStyle('primary'),
+                  fontSize: '11px',
+                  padding: '3px 8px',
+                }}
+                onClick={handleBatchGenerate}
+                disabled={isWorking || isBatchGenerating}
+              >
+                {isBatchGenerating ? <Loader2 size={12} style={{ animation: 'spin 1s linear infinite' }} /> : <Zap size={12} />}
+                {isBatchGenerating ? '批量生成中...' : '批量生成'}
+              </button>
+            )}
+          </div>
         </div>
 
         <div style={{ display: 'flex', gap: '2px', overflow: 'auto', paddingBottom: '4px' }}>
@@ -449,6 +768,7 @@ export const Step5WriteText: React.FC<Step5WriteTextProps> = ({
             const draft = step5State?.chapters.find(d => d.index === idx);
             const isGenerated = !!draft?.content;
             const isCurrent = idx === currentIdx;
+            const isPolishSelected = selectedPolishChapters.has(idx);
 
             return (
               <button
@@ -457,14 +777,16 @@ export const Step5WriteText: React.FC<Step5WriteTextProps> = ({
                 style={{
                   padding: '3px 6px',
                   fontSize: '11px',
-                  border: `1px solid ${isCurrent ? 'var(--color-vscode-active)' : 'var(--color-vscode-border)'}`,
+                  border: `1px solid ${isPolishSelected ? 'var(--color-vscode-active)' : isCurrent ? 'var(--color-vscode-active)' : 'var(--color-vscode-border)'}`,
                   borderRadius: '2px',
                   cursor: 'pointer',
-                  backgroundColor: isCurrent
+                  backgroundColor: isPolishSelected
                     ? 'var(--color-vscode-active-light, rgba(0, 122, 204, 0.15))'
-                    : isGenerated
-                      ? 'var(--color-success-light, rgba(22, 163, 74, 0.08))'
-                      : 'transparent',
+                    : isCurrent
+                      ? 'var(--color-vscode-active-light, rgba(0, 122, 204, 0.15))'
+                      : isGenerated
+                        ? 'var(--color-success-light, rgba(22, 163, 74, 0.08))'
+                        : 'transparent',
                   color: isCurrent
                     ? 'white'
                     : isGenerated
@@ -477,9 +799,16 @@ export const Step5WriteText: React.FC<Step5WriteTextProps> = ({
                   gap: '3px',
                   flexShrink: 0,
                 }}
-                onClick={() => handleGoToChapter(idx)}
+                onClick={() => {
+                  if (selectedPolishChapters.size > 0 && isGenerated) {
+                    togglePolishChapter(idx);
+                  } else {
+                    handleGoToChapter(idx);
+                  }
+                }}
               >
-                {isGenerated && <Check size={10} />}
+                {isPolishSelected && <Check size={10} style={{ color: 'var(--color-vscode-active)' }} />}
+                {!isPolishSelected && isGenerated && <Check size={10} />}
                 {idx + 1}
               </button>
             );
@@ -494,6 +823,22 @@ export const Step5WriteText: React.FC<Step5WriteTextProps> = ({
           </span>
           {currentDraft?.content && (
             <div style={{ display: 'flex', gap: '4px' }}>
+              {onPolishChapter && (
+                <button
+                  type="button"
+                  style={{
+                    ...btnStyle('secondary'),
+                    padding: '3px 8px',
+                    opacity: isPolishing && polishingIndex === currentIdx ? 0.5 : 1,
+                  }}
+                  onClick={() => handlePolishSingle(currentIdx)}
+                  disabled={isPolishing || isWorking}
+                  title="润色本章"
+                >
+                  {isPolishing && polishingIndex === currentIdx ? <Loader2 size={12} style={{ animation: 'spin 1s linear infinite' }} /> : <Sparkles size={12} />}
+                  润色
+                </button>
+              )}
               {onPreviewInEditor && (
                 <button type="button" style={{ ...btnStyle('secondary'), padding: '3px 8px' }} onClick={handlePreviewInEditor} title="在编辑区查看">
                   <ExternalLink size={12} />
@@ -524,25 +869,291 @@ export const Step5WriteText: React.FC<Step5WriteTextProps> = ({
             细纲：{chapters[currentIdx].content.slice(0, 120)}{chapters[currentIdx].content.length > 120 ? '...' : ''}
           </p>
         )}
+
+        {/* 素材嵌入区域 */}
+        <div style={{ marginTop: '6px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+              <BookmarkPlus size={12} style={{ color: 'var(--color-vscode-text)', opacity: 0.6 }} />
+              <span style={{ fontSize: '11px', color: 'var(--color-vscode-text)', opacity: 0.6 }}>
+                素材嵌入
+              </span>
+              {embeddedMaterials.length > 0 && (
+                <span style={{ fontSize: '10px', color: 'var(--color-vscode-active)', opacity: 0.8 }}>
+                  ({embeddedMaterials.length})
+                </span>
+              )}
+            </div>
+            <button
+              type="button"
+              style={{
+                fontSize: '11px',
+                padding: '2px 6px',
+                border: '1px solid var(--color-vscode-border)',
+                borderRadius: '2px',
+                cursor: 'pointer',
+                backgroundColor: 'transparent',
+                color: 'var(--color-vscode-text)',
+                opacity: 0.7,
+              }}
+              onClick={() => setShowMaterialPicker(!showMaterialPicker)}
+            >
+              {showMaterialPicker ? '收起' : '选择素材'}
+            </button>
+          </div>
+
+          {/* 已嵌入的素材标签 */}
+          {embeddedMaterials.length > 0 && (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '4px' }}>
+              {embeddedMaterials.map(m => (
+                <span
+                  key={m.id}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '3px',
+                    padding: '1px 6px',
+                    fontSize: '10px',
+                    border: '1px solid var(--color-vscode-active)',
+                    borderRadius: '2px',
+                    backgroundColor: 'var(--color-vscode-active-light, rgba(0, 122, 204, 0.15))',
+                    color: 'var(--color-vscode-text)',
+                  }}
+                >
+                  {getTypeText(m.type)}：{m.name}
+                  <button
+                    type="button"
+                    onClick={() => removeEmbeddedMaterial(m.id)}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      cursor: 'pointer',
+                      padding: 0,
+                      color: 'var(--color-vscode-text)',
+                      opacity: 0.5,
+                      lineHeight: 1,
+                    }}
+                  >
+                    <X size={10} />
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
+
+          {/* 素材选择器 */}
+          {showMaterialPicker && (
+            <div style={{
+              marginTop: '4px',
+              maxHeight: '160px',
+              overflow: 'auto',
+              border: '1px solid var(--color-vscode-border)',
+              borderRadius: '3px',
+              backgroundColor: 'var(--color-vscode-bg)',
+            }}>
+              {materials.length === 0 ? (
+                <div style={{ padding: '8px 10px', fontSize: '11px', color: 'var(--color-vscode-text)', opacity: 0.5 }}>
+                  暂无素材，请在素材箱中添加
+                </div>
+              ) : (
+                materials.map(m => {
+                  const isEmbedded = embeddedMaterialIds.has(m.id);
+                  return (
+                    <div
+                      key={m.id}
+                      style={{
+                        padding: '4px 8px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        cursor: 'pointer',
+                        fontSize: '11px',
+                        color: 'var(--color-vscode-text)',
+                        borderBottom: '1px solid var(--color-vscode-border)',
+                        backgroundColor: isEmbedded ? 'var(--color-vscode-active-light, rgba(0, 122, 204, 0.15))' : 'transparent',
+                      }}
+                      onClick={() => toggleEmbeddedMaterial(m.id)}
+                      onMouseEnter={e => { if (!isEmbedded) e.currentTarget.style.backgroundColor = 'var(--color-hover-bg)'; }}
+                      onMouseLeave={e => { if (!isEmbedded) e.currentTarget.style.backgroundColor = 'transparent'; }}
+                    >
+                      <span style={{
+                        width: '12px',
+                        height: '12px',
+                        border: `1px solid ${isEmbedded ? 'var(--color-vscode-active)' : 'var(--color-vscode-border)'}`,
+                        borderRadius: '2px',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        flexShrink: 0,
+                        backgroundColor: isEmbedded ? 'var(--color-vscode-active)' : 'transparent',
+                      }}>
+                        {isEmbedded && <Check size={10} style={{ color: 'white' }} />}
+                      </span>
+                      <span style={{ opacity: 0.5, flexShrink: 0 }}>{getTypeText(m.type)}</span>
+                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>{m.name}</span>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* 润色素材注入区域 */}
+        {onPolishChapter && currentDraft?.content && (
+          <div style={{ marginTop: '6px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                <Sparkles size={12} style={{ color: 'var(--color-vscode-text)', opacity: 0.6 }} />
+                <span style={{ fontSize: '11px', color: 'var(--color-vscode-text)', opacity: 0.6 }}>
+                  润色素材
+                </span>
+                {polishMaterials.length > 0 && (
+                  <span style={{ fontSize: '10px', color: 'var(--color-vscode-active)', opacity: 0.8 }}>
+                    ({polishMaterials.length})
+                  </span>
+                )}
+              </div>
+              <button
+                type="button"
+                style={{
+                  fontSize: '11px',
+                  padding: '2px 6px',
+                  border: '1px solid var(--color-vscode-border)',
+                  borderRadius: '2px',
+                  cursor: 'pointer',
+                  backgroundColor: 'transparent',
+                  color: 'var(--color-vscode-text)',
+                  opacity: 0.7,
+                }}
+                onClick={() => setShowPolishMaterialPicker(!showPolishMaterialPicker)}
+              >
+                {showPolishMaterialPicker ? '收起' : '选择素材'}
+              </button>
+            </div>
+
+            {polishMaterials.length > 0 && (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '4px' }}>
+                {polishMaterials.map(m => (
+                  <span
+                    key={m.id}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '3px',
+                      padding: '1px 6px',
+                      fontSize: '10px',
+                      border: '1px solid var(--color-vscode-active)',
+                      borderRadius: '2px',
+                      backgroundColor: 'var(--color-vscode-active-light, rgba(0, 122, 204, 0.15))',
+                      color: 'var(--color-vscode-text)',
+                    }}
+                  >
+                    {getTypeText(m.type)}：{m.name}
+                    <button
+                      type="button"
+                      onClick={() => removePolishMaterial(m.id)}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        cursor: 'pointer',
+                        padding: 0,
+                        color: 'var(--color-vscode-text)',
+                        opacity: 0.5,
+                        lineHeight: 1,
+                      }}
+                    >
+                      <X size={10} />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+
+            {showPolishMaterialPicker && (
+              <div style={{
+                marginTop: '4px',
+                maxHeight: '120px',
+                overflow: 'auto',
+                border: '1px solid var(--color-vscode-border)',
+                borderRadius: '3px',
+                backgroundColor: 'var(--color-vscode-bg)',
+              }}>
+                {materials.length === 0 ? (
+                  <div style={{ padding: '8px 10px', fontSize: '11px', color: 'var(--color-vscode-text)', opacity: 0.5 }}>
+                    暂无素材，请在素材箱中添加
+                  </div>
+                ) : (
+                  materials.map(m => {
+                    const isSelected = polishMaterialIds.has(m.id);
+                    return (
+                      <div
+                        key={m.id}
+                        style={{
+                          padding: '4px 8px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          cursor: 'pointer',
+                          fontSize: '11px',
+                          color: 'var(--color-vscode-text)',
+                          borderBottom: '1px solid var(--color-vscode-border)',
+                          backgroundColor: isSelected ? 'var(--color-vscode-active-light, rgba(0, 122, 204, 0.15))' : 'transparent',
+                        }}
+                        onClick={() => togglePolishMaterial(m.id)}
+                        onMouseEnter={e => { if (!isSelected) e.currentTarget.style.backgroundColor = 'var(--color-hover-bg)'; }}
+                        onMouseLeave={e => { if (!isSelected) e.currentTarget.style.backgroundColor = 'transparent'; }}
+                      >
+                        <span style={{
+                          width: '12px',
+                          height: '12px',
+                          border: `1px solid ${isSelected ? 'var(--color-vscode-active)' : 'var(--color-vscode-border)'}`,
+                          borderRadius: '2px',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          flexShrink: 0,
+                          backgroundColor: isSelected ? 'var(--color-vscode-active)' : 'transparent',
+                        }}>
+                          {isSelected && <Check size={10} style={{ color: 'white' }} />}
+                        </span>
+                        <span style={{ opacity: 0.5, flexShrink: 0 }}>{getTypeText(m.type)}</span>
+                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>{m.name}</span>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
-      {isWorking && (
+      {(isWorking || isPolishing) && (
         <div style={{ textAlign: 'center', padding: '40px 16px' }}>
           <Loader2 size={32} style={{ color: 'var(--color-vscode-active)', animation: 'spin 1s linear infinite', margin: '0 auto 12px' }} />
           <p style={{ fontSize: '13px', color: 'var(--color-vscode-text)', opacity: 0.7 }}>
-            正在生成第{(generatingIndex ?? currentIdx) + 1}章正文，请稍候...
+            {isPolishing
+              ? `正在润色第${(polishingIndex ?? currentIdx) + 1}章，请稍候...`
+              : `正在生成第${(generatingIndex ?? currentIdx) + 1}章正文，请稍候...`
+            }
           </p>
-          {onCancelGeneration && (
+          {(onCancelGeneration || isPolishing) && (
             <button
               type="button"
               style={{ ...btnStyle('danger'), marginTop: '12px' }}
               onClick={() => {
-                onCancelGeneration();
-                setAutoMode(false);
+                if (isPolishing) {
+                  setIsPolishing(false);
+                  setPolishingIndex(null);
+                }
+                if (onCancelGeneration && isWorking) {
+                  onCancelGeneration();
+                }
               }}
             >
               <XCircle size={13} />
-              取消生成
+              取消
             </button>
           )}
           <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
@@ -563,7 +1174,7 @@ export const Step5WriteText: React.FC<Step5WriteTextProps> = ({
         </div>
       )}
 
-      {!isWorking && currentDraft?.content && (
+      {!isWorking && !isPolishing && currentDraft?.content && (
         <>
           <div style={{ flex: 1, minHeight: previewHeight, maxHeight: previewHeight, overflow: 'auto', padding: '6px 10px' }}>
             <textarea
@@ -601,7 +1212,7 @@ export const Step5WriteText: React.FC<Step5WriteTextProps> = ({
         </>
       )}
 
-      {!isWorking && (
+      {!isWorking && !isPolishing && (
         <div style={{
           padding: '6px 10px 8px 10px',
           borderTop: '1px solid var(--color-vscode-border)',
@@ -618,34 +1229,28 @@ export const Step5WriteText: React.FC<Step5WriteTextProps> = ({
                 </span>
               </div>
 
-              <div style={{ display: 'flex', gap: '6px', marginBottom: '6px' }}>
-                <div style={{ flex: 1 }}>
-                  <textarea
-                    style={compactInputStyle}
-                    placeholder="新增..."
-                    value={additions}
-                    onChange={e => setAdditions(e.target.value)}
-                    rows={1}
-                  />
-                </div>
-                <div style={{ flex: 1 }}>
-                  <textarea
-                    style={compactInputStyle}
-                    placeholder="删除..."
-                    value={deletions}
-                    onChange={e => setDeletions(e.target.value)}
-                    rows={1}
-                  />
-                </div>
-                <div style={{ flex: 1 }}>
-                  <textarea
-                    style={compactInputStyle}
-                    placeholder="修改..."
-                    value={modifications}
-                    onChange={e => setModifications(e.target.value)}
-                    rows={1}
-                  />
-                </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '6px' }}>
+                <textarea
+                  style={{ ...compactInputStyle, minHeight: '48px' }}
+                  placeholder="新增..."
+                  value={additions}
+                  onChange={e => setAdditions(e.target.value)}
+                  rows={2}
+                />
+                <textarea
+                  style={{ ...compactInputStyle, minHeight: '48px' }}
+                  placeholder="删除..."
+                  value={deletions}
+                  onChange={e => setDeletions(e.target.value)}
+                  rows={2}
+                />
+                <textarea
+                  style={{ ...compactInputStyle, minHeight: '48px' }}
+                  placeholder="修改..."
+                  value={modifications}
+                  onChange={e => setModifications(e.target.value)}
+                  rows={2}
+                />
               </div>
             </div>
           )}

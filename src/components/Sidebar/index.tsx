@@ -9,8 +9,10 @@ import { AgentPanel } from '../AgentPanel';
 import { VibeWritingPanel } from '../VibeWritingPanel';
 import { PipelineTabView } from '../PipelineTabView';
 import { ContinueWritingPanel } from '../ContinueWritingPanel';
+import { PolishPanel } from '../PolishPanel';
 import { RecycleBinPanel } from '../RecycleBinPanel';
 import { ImportNovelModal } from '../ImportNovelModal';
+import { DeconstructionPanel } from '../BookDeconstruction';
 import type { ActivityId, Book, Chapter, Material, FormattingSettings, WordCountSettings, PipelineStep1Config, PipelineStep2State, PipelineStep3Config, PipelineStep4State, PipelineStep5State, OutlineRound, DetailedOutlineRound, ChapterDraftRound, Volume, AgentState, PipelineAutoState, PipelineSession, VibePipelineHistory } from '../../types';
 import { db } from '../../db';
 import { useUser } from '../../auth/UserContext';
@@ -52,6 +54,7 @@ interface SidebarProps {
   onPipelinePreviewInEditor?: (title: string, content: string, onChange: (content: string) => void) => void;
   onPipelineGenerateChapter?: (chapterIndex: number, context?: { step4State: PipelineStep4State; step2State: PipelineStep2State | null; step3Config: PipelineStep3Config; step5State: PipelineStep5State | null }) => Promise<string>;
   onPipelineRefineChapter?: (step5State: PipelineStep5State, chapterIndex: number, round: ChapterDraftRound, context?: { step2State: PipelineStep2State | null; step3Config: PipelineStep3Config }) => Promise<string>;
+  onPipelinePolishChapter?: (step5State: PipelineStep5State, chapterIndex: number, context?: { step2State: PipelineStep2State | null; step3Config: PipelineStep3Config }, materialsText?: string, previousChapterContent?: string) => Promise<string>;
   onPipelineBatchGenerateChapters?: (chapters: Array<{ index: number; title: string; outline: string }>, context?: { step2State: PipelineStep2State | null; step3Config: PipelineStep3Config }) => Promise<Array<{ index: number; title: string; content: string }>>;
   onPipelineAddChapterToVolume?: (title: string, content: string, detailedOutline?: string, volumeId?: string) => void;
   onPipelineExtractFacts?: (chapterIndex: number, chapterTitle: string, chapterContent: string) => Promise<import('../../types/fact-extraction').ChapterFacts | null>;
@@ -88,6 +91,14 @@ interface SidebarProps {
   }, onChunk: (chunk: string) => void, signal: AbortSignal) => Promise<void>;
   onAppendToEditor?: (content: string) => void;
   onGenerateOutline?: (volumeId: string, volumeName: string) => Promise<string>;
+  // 润色相关
+  onPolish?: (params: {
+    chapterContent: string;
+    customInstruction: string;
+  }, onChunk: (chunk: string) => void, signal: AbortSignal) => Promise<void>;
+  onReplaceEditorContent?: (content: string) => void;
+  // 拆书相关
+  onStartDeconstruction?: (bookId: string, chapters: Array<{ index: number; title: string; content: string }>) => void;
 }
 
 export const Sidebar = ({
@@ -125,6 +136,7 @@ export const Sidebar = ({
   onPipelinePreviewInEditor,
   onPipelineGenerateChapter,
   onPipelineRefineChapter,
+  onPipelinePolishChapter,
   onPipelineBatchGenerateChapters,
   onPipelineAddChapterToVolume,
   onPipelineExtractFacts,
@@ -155,6 +167,9 @@ export const Sidebar = ({
   onContinueWriting,
   onAppendToEditor,
   onGenerateOutline,
+  onPolish,
+  onReplaceEditorContent,
+  onStartDeconstruction,
 }: SidebarProps) => {
   const { user } = useUser();
   
@@ -212,7 +227,10 @@ export const Sidebar = ({
                 }}
                 onBookDeselect={onBookDeselect}
                 onChapterDeselect={onChapterDeselect}
-                onVolumeChange={onVolumeChange}
+                onVolumeChange={() => {
+                  onVolumeChange?.();
+                  loadBooks();
+                }}
                 activeChapterId={activeChapterId}
                 refreshTrigger={outlineRefreshTrigger}
               />
@@ -226,6 +244,7 @@ export const Sidebar = ({
                   }
                 }}
                 onRefresh={handleRefresh}
+                onStartDeconstruction={onStartDeconstruction}
               />
             )
           ) : activeActivity === 'materials' ? (
@@ -286,6 +305,7 @@ export const Sidebar = ({
               onPipelineRefineDetailedOutlineChapter={onPipelineRefineDetailedOutlineChapter}
               onPipelineGenerateChapter={onPipelineGenerateChapter}
               onPipelineRefineChapter={onPipelineRefineChapter}
+              onPipelinePolishChapter={onPipelinePolishChapter}
               onPipelineBatchGenerateChapters={onPipelineBatchGenerateChapters}
               onPipelineAddChapterToVolume={onPipelineAddChapterToVolume}
               onPipelinePreviewInEditor={onPipelinePreviewInEditor}
@@ -307,9 +327,30 @@ export const Sidebar = ({
               onGenerateOutline={onGenerateOutline}
               showToast={showToast}
             />
+          ) : activeActivity === 'polish' ? (
+            <PolishPanel
+              currentBook={currentBook}
+              currentChapter={currentChapter ?? null}
+              editorContent={editorContent || ''}
+              onPolish={onPolish || (async () => {})}
+              onReplaceEditorContent={onReplaceEditorContent}
+              showToast={showToast}
+            />
+          ) : activeActivity === 'deconstruction' ? (
+            <DeconstructionPanel
+              showToast={showToast}
+              onBookCreated={async (bookId) => {
+                loadBooks();
+                const book = books.find(b => b.id === bookId);
+                if (book && onBookSelect) onBookSelect(book);
+              }}
+            />
           ) : activeActivity === 'recycleBin' ? (
             <RecycleBinPanel
-              onRestore={onVolumeChange}
+              onRestore={() => {
+                onVolumeChange?.();
+                loadBooks();
+              }}
             />
           ) : (
             <div className="p-4 text-vscode-text">
@@ -329,6 +370,7 @@ export const Sidebar = ({
           const book = books.find(b => b.id === bookId);
           if (book && onBookSelect) onBookSelect(book);
         }}
+        onStartDeconstruction={onStartDeconstruction}
         showToast={showToast || ((msg, type) => {})}
       />
     </div>

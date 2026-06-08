@@ -234,7 +234,7 @@ function buildOutputRequirements(stage: WritingStage): string[] {
     ],
     'DETAILED_OUTLINE': [
       '按要求生成指定数量的章节细纲',
-      '每章包含：标题、核心情节点、悬念钩子（除非用户禁用）',
+      '每章包含：标题、核心情节点',
       '说明与前后章节的关联',
       '如果是首批章节，需要为整部书奠定基础',
     ],
@@ -242,7 +242,6 @@ function buildOutputRequirements(stage: WritingStage): string[] {
       '严格遵循前20%原则 - 开头必须立即抓住读者',
       '使用十种强力开头技巧之一',
       '标准章节结构：开头(20%)→发展(60%)→高潮(15%)→结尾(5%)',
-      '结尾必须设置悬念钩子',
       '与前文保持连贯性',
     ],
     'DIALOGUE': [
