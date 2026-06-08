@@ -16,6 +16,7 @@ const CATEGORY_CSS_VARS: Record<DebugEventCategory, { text: string; bg: string }
   'fact-extract': { text: 'var(--color-debug-fact-extract)', bg: 'var(--color-debug-fact-extract-bg)' },
   'review-gate': { text: 'var(--color-debug-review-gate)', bg: 'var(--color-debug-review-gate-bg)' },
   'pipeline-event': { text: 'var(--color-debug-pipeline-event)', bg: 'var(--color-debug-pipeline-event-bg)' },
+  'deconstruction': { text: 'var(--color-debug-fact-extract)', bg: 'var(--color-debug-fact-extract-bg)' },
 };
 
 const CATEGORY_LABELS: Record<DebugEventCategory, string> = {
@@ -26,16 +27,18 @@ const CATEGORY_LABELS: Record<DebugEventCategory, string> = {
   'fact-extract': '事实提取',
   'review-gate': '审查闸门',
   'pipeline-event': 'Pipeline事件',
+  'deconstruction': '拆书分析',
 };
 
 const SOURCE_LABELS: Record<DebugEventSource, string> = {
   'manual-pipeline': '手动流水线',
   'vibe-writing': 'Vibe Writing',
+  'standalone-polish': '独立润色',
   'service': '服务层',
 };
 
 const ALL_CATEGORIES: DebugEventCategory[] = ['llm-call', 'template-render', 'prompt-compose', 'taskbook-compose', 'fact-extract', 'review-gate', 'pipeline-event'];
-const ALL_SOURCES: DebugEventSource[] = ['manual-pipeline', 'vibe-writing', 'service'];
+const ALL_SOURCES: DebugEventSource[] = ['manual-pipeline', 'vibe-writing', 'standalone-polish', 'service'];
 
 // ── 子组件：事件详情 ──
 

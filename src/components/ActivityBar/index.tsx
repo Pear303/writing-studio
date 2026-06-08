@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { BookOpen, Package, Bot, Settings, Workflow, PenLine, Trash2 } from 'lucide-react';
+import { BookOpen, Package, Bot, Settings, Workflow, PenLine, Trash2, BookSearch, Sparkles } from 'lucide-react';
 import type { ActivityId } from '../../types';
 
 interface ActivityBarProps {
@@ -13,6 +13,8 @@ const activities: Array<{ id: ActivityId; label: string }> = [
   { id: 'agent', label: 'Agent' },
   { id: 'pipeline', label: '流水线写作' },
   { id: 'continue', label: '续写' },
+  { id: 'polish', label: '润色' },
+  { id: 'deconstruction', label: '拆书/仿写' },
   { id: 'recycleBin', label: '回收站' },
   { id: 'settings', label: '设置' },
 ];
@@ -29,6 +31,10 @@ const getActivityIcon = (id: ActivityId) => {
       return <Workflow size={22} />;
     case 'continue':
       return <PenLine size={22} />;
+    case 'polish':
+      return <Sparkles size={22} />;
+    case 'deconstruction':
+      return <BookSearch size={22} />;
     case 'recycleBin':
       return <Trash2 size={22} />;
     case 'settings':

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { FolderPlus, ChevronRight, ChevronLeft, FileText } from 'lucide-react';
+import { FolderPlus, ChevronRight, ChevronLeft, FileText, RotateCcw } from 'lucide-react';
 import type { Book, Volume, PipelineStep, PipelineStep1Config, PipelineStep3Config, PipelineStep2State, PipelineStep4State, PipelineStep5State, OutlineRound, DetailedOutlineRound, ChapterDraftRound, PipelineSession } from '../../types';
 import type { ChapterFacts } from '../../types/fact-extraction';
 import { db, getCurrentUserId, getPipelinePromptTemplates, ensureDefaultPipelinePromptTemplates } from '../../db';
@@ -22,6 +22,7 @@ interface PipelineWritingProps {
   onRefineDetailedOutlineChapter: (step4State: PipelineStep4State, chapterIndices: number[], round: DetailedOutlineRound, outline: string) => Promise<string>;
   onGenerateChapter: (chapterIndex: number, context?: { step4State: PipelineStep4State; step2State: PipelineStep2State | null; step3Config: PipelineStep3Config; step5State: PipelineStep5State | null }) => Promise<string>;
   onRefineChapter: (step5State: PipelineStep5State, chapterIndex: number, round: ChapterDraftRound, context?: { step2State: PipelineStep2State | null; step3Config: PipelineStep3Config }) => Promise<string>;
+  onPolishChapter?: (step5State: PipelineStep5State, chapterIndex: number, context?: { step2State: PipelineStep2State | null; step3Config: PipelineStep3Config }, materialsText?: string, previousChapterContent?: string) => Promise<string>;
   onBatchGenerateChapters?: (chapters: Array<{ index: number; title: string; outline: string }>, context?: { step2State: PipelineStep2State | null; step3Config: PipelineStep3Config }) => Promise<Array<{ index: number; title: string; content: string }>>;
   onAddChapterToVolume: (title: string, content: string, detailedOutline?: string, volumeId?: string) => void;
   onPreviewInEditor?: (title: string, content: string, onChange: (content: string) => void) => void;
@@ -67,6 +68,7 @@ export const PipelineWriting: React.FC<PipelineWritingProps> = ({
   onRefineDetailedOutlineChapter,
   onGenerateChapter,
   onRefineChapter,
+  onPolishChapter,
   onBatchGenerateChapters,
   onAddChapterToVolume,
   onPreviewInEditor,
@@ -94,6 +96,11 @@ export const PipelineWriting: React.FC<PipelineWritingProps> = ({
   const [newVolumeName, setNewVolumeName] = useState('');
   const [sessionLoaded, setSessionLoaded] = useState(false);
   const [showTemplateManager, setShowTemplateManager] = useState(false);
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
+  // 每个步骤的重置计数器，改变 key 强制子组件重新挂载，清除所有本地脏数据
+  const [resetKeys, setResetKeys] = useState<Record<PipelineStep, number>>({
+    step1: 0, step2: 0, step3: 0, step4: 0, step5: 0,
+  });
 
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const loadingSessionIdRef = useRef<string | null>(null);
@@ -325,6 +332,30 @@ export const PipelineWriting: React.FC<PipelineWritingProps> = ({
 
   const handleStep5StateChange = (newState: PipelineStep5State) => {
     setStep5State(newState);
+  };
+
+  const handleResetCurrentStep = () => {
+    switch (step) {
+      case 'step1':
+        setStep1Config(defaultStep1Config);
+        break;
+      case 'step2':
+        setStep2State(null);
+        break;
+      case 'step3':
+        setStep3Config(defaultStep3Config);
+        break;
+      case 'step4':
+        setStep4State(null);
+        break;
+      case 'step5':
+        setStep5State(null);
+        break;
+    }
+    // 递增 resetKey 强制子组件重新挂载，清除所有本地脏数据（输入框、素材选择等）
+    setResetKeys(prev => ({ ...prev, [step]: prev[step] + 1 }));
+    setShowResetConfirm(false);
+    showToast(`已重置${STEP_LABELS[step]}`, 'info');
   };
 
   const stepIndicatorStyle = (s: PipelineStep): React.CSSProperties => {
@@ -559,10 +590,11 @@ export const PipelineWriting: React.FC<PipelineWritingProps> = ({
 
       <div style={{ flex: 1, overflow: 'auto', padding: (step === 'step2' || step === 'step4' || step === 'step5') ? '0' : '12px' }}>
         {step === 'step1' && (
-          <Step1Config config={step1Config} onChange={setStep1Config} />
+          <Step1Config key={`step1-${resetKeys.step1}`} config={step1Config} onChange={setStep1Config} />
         )}
         {step === 'step2' && (
           <Step2Outline
+            key={`step2-${resetKeys.step2}`}
             step1Config={step1Config}
             selectedVolume={selectedVolume}
             step2State={step2State}
@@ -575,10 +607,11 @@ export const PipelineWriting: React.FC<PipelineWritingProps> = ({
           />
         )}
         {step === 'step3' && (
-          <Step3Style config={step3Config} onChange={setStep3Config} showToast={showToast} />
+          <Step3Style key={`step3-${resetKeys.step3}`} config={step3Config} onChange={setStep3Config} showToast={showToast} />
         )}
         {step === 'step4' && (
           <Step4DetailedOutline
+            key={`step4-${resetKeys.step4}`}
             step2State={step2State}
             step4State={step4State}
             onStep4StateChange={handleStep4StateChange}
@@ -592,7 +625,9 @@ export const PipelineWriting: React.FC<PipelineWritingProps> = ({
         )}
         {step === 'step5' && (
           <Step5WriteText
+            key={`step5-${resetKeys.step5}`}
             volumeId={selectedVolumeId}
+            bookId={currentBook?.id ?? null}
             step2State={step2State}
             step4State={step4State}
             step3Config={step3Config}
@@ -600,6 +635,7 @@ export const PipelineWriting: React.FC<PipelineWritingProps> = ({
             onStep5StateChange={handleStep5StateChange}
             onGenerateChapter={onGenerateChapter}
             onRefineChapter={onRefineChapter}
+            onPolishChapter={onPolishChapter}
             onBatchGenerateChapters={onBatchGenerateChapters}
             onAddChapterToVolume={onAddChapterToVolume}
             onPreviewInEditor={onPreviewInEditor}
@@ -614,17 +650,44 @@ export const PipelineWriting: React.FC<PipelineWritingProps> = ({
         borderTop: '1px solid var(--color-vscode-border)',
         display: 'flex',
         justifyContent: 'space-between',
+        alignItems: 'center',
         flexShrink: 0,
       }}>
-        <button
-          type="button"
-          style={step === 'step1' ? navBtnStyle('disabled') : navBtnStyle('secondary')}
-          onClick={handlePrev}
-          disabled={step === 'step1'}
-        >
-          <ChevronLeft size={14} />
-          上一步
-        </button>
+        <div style={{ display: 'flex', gap: '6px' }}>
+          <button
+            type="button"
+            style={step === 'step1' ? navBtnStyle('disabled') : navBtnStyle('secondary')}
+            onClick={handlePrev}
+            disabled={step === 'step1'}
+          >
+            <ChevronLeft size={14} />
+            上一步
+          </button>
+          <button
+            type="button"
+            style={{
+              padding: '6px 12px',
+              fontSize: '12px',
+              border: '1px solid var(--color-vscode-border)',
+              borderRadius: '3px',
+              cursor: 'pointer',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '4px',
+              backgroundColor: 'transparent',
+              color: 'var(--color-vscode-text)',
+              opacity: 0.6,
+              transition: 'all 0.15s ease',
+            }}
+            onMouseEnter={e => { e.currentTarget.style.opacity = '1'; e.currentTarget.style.color = 'var(--color-danger, #dc2626)'; e.currentTarget.style.borderColor = 'var(--color-danger, #dc2626)'; }}
+            onMouseLeave={e => { e.currentTarget.style.opacity = '0.6'; e.currentTarget.style.color = 'var(--color-vscode-text)'; e.currentTarget.style.borderColor = 'var(--color-vscode-border)'; }}
+            onClick={() => setShowResetConfirm(true)}
+            title={`重置当前步骤：${STEP_LABELS[step]}`}
+          >
+            <RotateCcw size={14} />
+            重置本步
+          </button>
+        </div>
         {step !== 'step5' ? (
           <button
             type="button"
@@ -641,6 +704,68 @@ export const PipelineWriting: React.FC<PipelineWritingProps> = ({
           </span>
         )}
       </div>
+
+      {showResetConfirm && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 50,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: 'var(--color-modal-overlay, rgba(0,0,0,0.5))',
+          }}
+          onClick={() => setShowResetConfirm(false)}
+        >
+          <div
+            style={{
+              width: '320px',
+              backgroundColor: 'var(--color-vscode-sidebar)',
+              border: '1px solid var(--color-vscode-border)',
+              borderRadius: '4px',
+              padding: '16px',
+              boxShadow: '0 8px 32px rgba(0,0,0,0.3)',
+            }}
+            onClick={e => e.stopPropagation()}
+          >
+            <p style={{ fontSize: '13px', fontWeight: 600, color: 'var(--color-vscode-text)', marginBottom: '8px' }}>
+              重置「{STEP_LABELS[step]}」
+            </p>
+            <p style={{ fontSize: '12px', color: 'var(--color-vscode-text)', opacity: 0.7, marginBottom: '16px', lineHeight: '1.5' }}>
+              确定要重置当前步骤吗？该步骤的所有数据将被清除，从零开始。此操作不可撤销。
+            </p>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+              <button
+                type="button"
+                style={navBtnStyle('secondary')}
+                onClick={() => setShowResetConfirm(false)}
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                style={{
+                  padding: '6px 16px',
+                  fontSize: '12px',
+                  border: '1px solid var(--color-danger, #dc2626)',
+                  borderRadius: '3px',
+                  cursor: 'pointer',
+                  backgroundColor: 'var(--color-danger, #dc2626)',
+                  color: 'white',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                }}
+                onClick={handleResetCurrentStep}
+              >
+                <RotateCcw size={14} />
+                确认重置
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showTemplateManager && (
         <PromptTemplateManager

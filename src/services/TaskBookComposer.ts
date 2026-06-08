@@ -131,7 +131,7 @@ export class TaskBookComposer {
     return {
       plotPoints,
       emotionalArc: sources.emotionalArc || '',
-      hookRequirement: sources.hookRequirement || '章末设置悬念钩子',
+      hookRequirement: sources.hookRequirement || '',
       wordCountTarget: sources.wordCountTarget || 3000,
     };
   }

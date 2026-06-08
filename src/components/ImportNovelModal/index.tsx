@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { FileUp, Loader2, CheckCircle, AlertTriangle, BookOpen, FolderOpen, FileText, X } from 'lucide-react';
+import { FileUp, Loader2, CheckCircle, AlertTriangle, BookOpen, FolderOpen, FileText, X, BookMarked } from 'lucide-react';
 import {
   selectNovelFile,
   readNovelFile,
@@ -20,10 +20,11 @@ interface ImportNovelModalProps {
   isOpen: boolean;
   onClose: () => void;
   onImportComplete: (bookId: string) => void;
+  onStartDeconstruction?: (bookId: string, chapters: Array<{ index: number; title: string; content: string }>, fileName: string) => void;
   showToast: (message: string, type: ToastType) => void;
 }
 
-export const ImportNovelModal = ({ isOpen, onClose, onImportComplete, showToast }: ImportNovelModalProps) => {
+export const ImportNovelModal = ({ isOpen, onClose, onImportComplete, onStartDeconstruction, showToast }: ImportNovelModalProps) => {
   const [step, setStep] = useState<ImportStep>('select');
   const [filePath, setFilePath] = useState('');
   const [fileName, setFileName] = useState('');
@@ -370,6 +371,41 @@ export const ImportNovelModal = ({ isOpen, onClose, onImportComplete, showToast 
                 <BookOpen size={16} />
                 打开书籍
               </button>
+              {onStartDeconstruction && splitResult && (
+                <button
+                  onClick={() => {
+                    const chapters: Array<{ index: number; title: string; content: string }> = [];
+                    let idx = 0;
+                    if (splitResult.volumes.length > 0) {
+                      for (const vol of splitResult.volumes) {
+                        for (const ch of vol.chapters) {
+                          if (ch.content?.trim()) {
+                            chapters.push({ index: idx, title: ch.title, content: ch.content });
+                          }
+                          idx++;
+                        }
+                      }
+                    }
+                    for (const ch of splitResult.unassignedChapters) {
+                      if (ch.content?.trim()) {
+                        chapters.push({ index: idx, title: ch.title, content: ch.content });
+                      }
+                      idx++;
+                    }
+                    if (chapters.length === 0) {
+                      showToast('未找到有效章节内容，无法进行拆书分析', 'error');
+                      return;
+                    }
+                    onStartDeconstruction(importedBookId, chapters, bookName);
+                    onClose();
+                  }}
+                  className="btn-secondary px-4 py-2 text-sm flex items-center gap-2"
+                  style={{ borderRadius: '6px' }}
+                >
+                  <BookMarked size={16} />
+                  拆书分析
+                </button>
+              )}
               <button
                 onClick={onClose}
                 className="btn-secondary px-4 py-2 text-sm"

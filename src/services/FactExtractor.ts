@@ -1,6 +1,7 @@
 import type { ChapterFacts, EntitySnapshot, StateChange, NarrativeEvent, TimelineEntry, HookEntry, ChapterStateCommit } from '../types/fact-extraction';
 import { db } from '../db';
 import { debugLogger } from './DebugLogger';
+import { parseLlmJson } from '../utils/helpers';
 
 interface RawExtractionResult {
   entities?: Array<{
@@ -37,6 +38,8 @@ interface RawExtractionResult {
 }
 
 export class FactExtractor {
+  private readonly MAX_CHAPTER_CONTENT_LENGTH = 8000;
+
   async extractFromChapter(
     bookId: string,
     chapterIndex: number,
@@ -44,11 +47,15 @@ export class FactExtractor {
     chapterContent: string,
     llmCall: (prompt: string) => Promise<string>,
     correlationId?: string,
+    abortSignal?: AbortSignal,
   ): Promise<ChapterFacts> {
     const prevState = await this.loadStateCommit(bookId, chapterIndex - 1);
     const previousStateSummary = prevState
       ? this.buildPreviousStateSummary(prevState)
       : '';
+
+    // 检查是否已取消
+    if (abortSignal?.aborted) throw new Error('cancelled');
 
     const prompt = this.buildExtractionPrompt(
       chapterIndex,
@@ -77,6 +84,7 @@ export class FactExtractor {
     const parsed = this.parseRawResult(rawResult);
 
     const facts: ChapterFacts = {
+      chapterIndex,
       entities: this.normalizeEntities(parsed, chapterIndex),
       stateChanges: this.normalizeStateChanges(parsed),
       events: this.normalizeEvents(parsed),
@@ -84,6 +92,7 @@ export class FactExtractor {
       hooks: this.normalizeHooks(parsed, chapterIndex),
       summary: parsed.summary || '',
       extractedAt: Date.now(),
+      wasTruncated: chapterContent.length > this.MAX_CHAPTER_CONTENT_LENGTH,
     };
 
     // Debug: 记录事实提取结果
@@ -160,7 +169,16 @@ export class FactExtractor {
     sections.push(`第${chapterIndex + 1}章：${chapterTitle}`);
 
     sections.push(`\n## 章节正文`);
-    sections.push(chapterContent.slice(0, 8000));
+    const truncatedContent = chapterContent.slice(0, this.MAX_CHAPTER_CONTENT_LENGTH);
+    sections.push(truncatedContent);
+    if (chapterContent.length > this.MAX_CHAPTER_CONTENT_LENGTH) {
+      debugLogger.log({
+        source: 'service',
+        category: 'fact-extract',
+        direction: `FactExtractor: chapter content truncated`,
+        metadata: { chapterIndex, originalLength: chapterContent.length, truncatedLength: truncatedContent.length },
+      });
+    }
 
     if (previousStateSummary) {
       sections.push(`\n## 前文已知状态摘要`);
@@ -223,22 +241,7 @@ export class FactExtractor {
   }
 
   private parseRawResult(raw: string): RawExtractionResult {
-    const jsonMatch = raw.match(/```json\s*([\s\S]*?)```/);
-    const jsonStr = jsonMatch ? jsonMatch[1] : raw;
-
-    try {
-      return JSON.parse(jsonStr.trim());
-    } catch {
-      const braceMatch = raw.match(/\{[\s\S]*\}/);
-      if (braceMatch) {
-        try {
-          return JSON.parse(braceMatch[0]);
-        } catch {
-          return {};
-        }
-      }
-      return {};
-    }
+    return parseLlmJson<RawExtractionResult>(raw);
   }
 
   private normalizeEntities(parsed: RawExtractionResult, chapterIndex: number): EntitySnapshot[] {

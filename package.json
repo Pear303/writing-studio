@@ -36,6 +36,7 @@
     "react-markdown": "^10.1.0",
     "react-virtualized-auto-sizer": "^2.0.3",
     "react-window": "^2.2.7",
+    "recharts": "^3.8.1",
     "remark-gfm": "^4.0.1",
     "tailwindcss": "^4.2.2",
     "uuid": "^13.0.0"

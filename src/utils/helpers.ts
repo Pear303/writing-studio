@@ -93,6 +93,86 @@ export const throttle = <T extends (...args: any[]) => any>(
 };
 
 /**
+ * 从 LLM 返回的文本中解析 JSON。
+ * 支持包裹在 ```json ... ``` 中的格式，也支持裸 JSON。
+ * 当 JSON 因 max_tokens 截断时，尝试自动补全。
+ */
+export function parseLlmJson<T>(raw: string): T {
+  const jsonMatch = raw.match(/```json\s*([\s\S]*?)```/);
+  let jsonStr = jsonMatch ? jsonMatch[1].trim() : raw.trim();
+
+  // 去除 markdown 代码块标记但未闭合的情况（截断场景）
+  if (!jsonMatch && jsonStr.startsWith('```json')) {
+    jsonStr = jsonStr.replace(/^```json\s*/, '').trim();
+  }
+
+  if (!jsonStr.startsWith('{') && !jsonStr.startsWith('[')) {
+    throw new Error('LLM 返回内容不是有效的 JSON 格式');
+  }
+
+  try {
+    return JSON.parse(jsonStr);
+  } catch (e) {
+    // 尝试修复截断的 JSON
+    try {
+      const repaired = repairTruncatedJson(jsonStr);
+      return JSON.parse(repaired);
+    } catch {
+      throw new Error(`JSON 解析失败：${(e as Error).message}`);
+    }
+  }
+}
+
+/**
+ * 尝试修复被截断的 JSON 字符串。
+ * 常见场景：LLM 因 max_tokens 限制导致输出被截断，
+ * 如字符串未闭合、数组/对象未闭合等。
+ */
+function repairTruncatedJson(json: string): string {
+  let repaired = json.trimEnd();
+
+  // 移除末尾的不完整内容（如截断在字符串中间）
+  // 策略：从末尾向前找到最后一个完整的值/结构
+
+  // 1. 如果末尾在字符串中间（有奇数个引号），截断到最后一个完整的键值对
+  const quoteCount = (repaired.match(/(?<!\\)"/g) || []).length;
+  if (quoteCount % 2 !== 0) {
+    // 找到最后一个完整的逗号或冒号后的位置
+    const lastComma = repaired.lastIndexOf(',');
+    const lastColon = repaired.lastIndexOf(':');
+    const cutPos = Math.max(lastComma, lastColon);
+    if (cutPos > 0) {
+      repaired = repaired.substring(0, cutPos);
+    }
+  }
+
+  // 2. 移除末尾的逗号（JSON 不允许 trailing comma）
+  repaired = repaired.replace(/,\s*$/, '');
+
+  // 3. 补全未闭合的括号
+  const stack: string[] = [];
+  let inString = false;
+  let escape = false;
+  for (const ch of repaired) {
+    if (escape) { escape = false; continue; }
+    if (ch === '\\') { escape = true; continue; }
+    if (ch === '"') { inString = !inString; continue; }
+    if (inString) continue;
+    if (ch === '{' || ch === '[') stack.push(ch);
+    else if (ch === '}' && stack[stack.length - 1] === '{') stack.pop();
+    else if (ch === ']' && stack[stack.length - 1] === '[') stack.pop();
+  }
+
+  // 补全闭合括号
+  while (stack.length > 0) {
+    const open = stack.pop()!;
+    repaired += open === '{' ? '}' : ']';
+  }
+
+  return repaired;
+}
+
+/**
  * 全角标点转半角
  */
 export const convertFullWidthToHalfWidth = (text: string): string => {
@@ -102,7 +182,9 @@ export const convertFullWidthToHalfWidth = (text: string): string => {
 };
 
 export const clearExtraBlankLines = (text: string): string => {
-  return text.replace(/<p>\s*<\/p>\s*/g, '');
+  // 将连续的多个空段落合并为一个，而不是全部删除
+  // 匹配连续的 <p></p> 或 <p><br></p> 等空段落
+  return text.replace(/(<p>\s*(<br\s*\/?>)?\s*<\/p>\s*){2,}/g, '<p><br></p>');
 };
 
 export const clearExtraSpaces = (text: string): string => {

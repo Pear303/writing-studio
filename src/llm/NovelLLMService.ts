@@ -31,6 +31,11 @@ export class NovelLLMService {
   private sessionPrefix: string | null = null;
   private currentAbortController: AbortController | null = null;
 
+  /** 检查服务是否已初始化（config 已设置） */
+  get isInitialized(): boolean {
+    return this.config !== null;
+  }
+
   /** 中止当前正在进行的 LLM 请求 */
   abort(): void {
     if (this.currentAbortController) {
@@ -228,7 +233,7 @@ export class NovelLLMService {
     }
   }
   
-  async generateRaw(prompt: string, correlationId?: string): Promise<LLMResponse> {
+  async generateRaw(prompt: string, correlationId?: string, options?: { maxTokens?: number }): Promise<LLMResponse> {
     if (!this.config) {
       throw new Error('LLM服务未初始化');
     }
@@ -258,7 +263,7 @@ export class NovelLLMService {
           model: this.config.model,
           messages,
           temperature: 0.3,
-          max_tokens: 4000,
+          max_tokens: options?.maxTokens ?? 4000,
         }),
       });
 
@@ -886,6 +891,111 @@ async generateOutline(project: {
     });
 
     return result.content;
+  }
+
+  async polishPipelineChapter(
+    step5State: PipelineStep5State,
+    chapterIndex: number,
+    outline: string,
+    step3Config: { writingStyle: string; storyLength: string; customRules: string },
+    materialsText?: string,
+    previousChapterContent?: string,
+  ): Promise<string> {
+    const chapter = step5State.chapters.find(ch => ch.index === chapterIndex);
+    if (!chapter) throw new Error('未找到章节');
+
+    const outlineSummary = this.extractOutlineSummary(outline, chapterIndex + 1);
+
+    this.sessionPrefix = `【全书大纲摘要（固定参考）】\n${outlineSummary}`;
+
+    const userMessage = await this.composer!.renderTemplate('chapter-polish', {
+      outlineSummary,
+      chapterContent: chapter.content,
+      materialsText: materialsText || '',
+      previousChapterContent: previousChapterContent || '',
+      writingStyle: step3Config.writingStyle,
+      storyLength: step3Config.storyLength,
+      customRules: step3Config.customRules,
+    });
+
+    debugLogger.log({
+      source: 'manual-pipeline',
+      category: 'template-render',
+      direction: 'CHAPTER_WRITING → chapter-polish',
+      templateId: 'chapter-polish',
+      templateFile: './templates/pipeline/05-chapter-polish.md',
+      variables: {
+        chapterIndex: chapterIndex + 1,
+        chapterTitle: chapter.title,
+        writingStyle: step3Config.writingStyle,
+        hasMaterials: !!materialsText,
+        hasPreviousChapter: !!previousChapterContent,
+      },
+      userMessage,
+      metadata: { chapterIndex },
+    });
+
+    const result = await this.generate('CHAPTER_WRITING', userMessage, {
+      novelType: '',
+      protagonistTypes: [],
+      plotTypes: [],
+      coreIdea: '润色章节',
+      chapterNumber: chapterIndex + 1,
+      chapterTitle: chapter.title,
+    });
+
+    return result.content;
+  }
+
+  /** 独立章节润色（流式）— 不依赖 Pipeline session，直接润色当前编辑器内容 */
+  async polishChapterStream(
+    params: {
+      chapterContent: string;
+      chapterTitle?: string;
+      chapterOutline?: string;
+      writingStyle?: string;
+      customInstruction?: string;
+    },
+    onChunk: (chunk: string) => void,
+    signal: AbortSignal,
+  ): Promise<void> {
+    if (!this.composer || !this.config) {
+      throw new Error('LLM服务未初始化');
+    }
+
+    const userMessage = await this.composer.renderTemplate('chapter-polish', {
+      outlineSummary: params.chapterOutline || '',
+      chapterContent: params.chapterContent,
+      materialsText: '',
+      previousChapterContent: '',
+      writingStyle: params.writingStyle || '',
+      storyLength: '',
+      customRules: params.customInstruction || '',
+    });
+
+    debugLogger.log({
+      source: 'standalone-polish',
+      category: 'template-render',
+      direction: 'CHAPTER_WRITING → chapter-polish (stream)',
+      templateId: 'chapter-polish',
+      templateFile: './templates/pipeline/05-chapter-polish.md',
+      variables: {
+        chapterTitle: params.chapterTitle,
+        contentLength: params.chapterContent.length,
+        hasOutline: !!params.chapterOutline,
+        hasWritingStyle: !!params.writingStyle,
+        hasCustomInstruction: !!params.customInstruction,
+      },
+      userMessage,
+    });
+
+    await this.generateStream('CHAPTER_WRITING', userMessage, onChunk, signal, {
+      novelType: '',
+      protagonistTypes: [],
+      plotTypes: [],
+      coreIdea: '润色章节',
+      chapterTitle: params.chapterTitle,
+    });
   }
 
   async generatePipelineChaptersBatch(
