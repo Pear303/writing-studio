@@ -102,7 +102,9 @@ export const convertFullWidthToHalfWidth = (text: string): string => {
 };
 
 export const clearExtraBlankLines = (text: string): string => {
-  return text.replace(/<p>\s*<\/p>\s*/g, '');
+  // 将连续的多个空段落合并为一个，而不是全部删除
+  // 匹配连续的 <p></p> 或 <p><br></p> 等空段落
+  return text.replace(/(<p>\s*(<br\s*\/?>)?\s*<\/p>\s*){2,}/g, '<p><br></p>');
 };
 
 export const clearExtraSpaces = (text: string): string => {

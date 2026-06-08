@@ -50,7 +50,7 @@ const compactInputStyle: React.CSSProperties = {
   outline: 'none',
   boxSizing: 'border-box' as const,
   minHeight: '28px',
-  resize: 'none',
+  resize: 'vertical',
   fontFamily: 'inherit',
   lineHeight: '1.4',
 };
@@ -579,27 +579,27 @@ export const Step4DetailedOutline: React.FC<Step4DetailedOutlineProps> = ({
               )}
             </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginBottom: '6px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '6px' }}>
               <textarea
-                style={{ ...compactInputStyle, resize: 'vertical', minHeight: '28px' }}
+                style={{ ...compactInputStyle, minHeight: '48px' }}
                 placeholder="新增..."
                 value={additions}
                 onChange={e => setAdditions(e.target.value)}
-                rows={1}
+                rows={2}
               />
               <textarea
-                style={{ ...compactInputStyle, resize: 'vertical', minHeight: '28px' }}
+                style={{ ...compactInputStyle, minHeight: '48px' }}
                 placeholder="删除..."
                 value={deletions}
                 onChange={e => setDeletions(e.target.value)}
-                rows={1}
+                rows={2}
               />
               <textarea
-                style={{ ...compactInputStyle, resize: 'vertical', minHeight: '28px' }}
+                style={{ ...compactInputStyle, minHeight: '48px' }}
                 placeholder="修改..."
                 value={modifications}
                 onChange={e => setModifications(e.target.value)}
-                rows={1}
+                rows={2}
               />
             </div>
 

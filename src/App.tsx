@@ -1156,6 +1156,12 @@ ${chapterContents}
         createdAt: Date.now(),
         updatedAt: Date.now(),
       });
+      // 更新书籍总字数
+      const allChapters = await db.chapters.where('bookId').equals(currentBook.id).toArray();
+      const totalWords = allChapters.reduce((sum, ch) => sum + ch.wordCount, 0);
+      await db.books.update(currentBook.id, { totalWords, updatedAt: Date.now() });
+      const updatedBook = await db.books.get(currentBook.id);
+      if (updatedBook) setCurrentBook(updatedBook);
       showToast(`章节「${title}」已录入本卷`, 'success');
       setOutlineRefreshTrigger(prev => prev + 1);
     } catch (error) {
@@ -1859,7 +1865,7 @@ ${chapterContents}
 
     const editor = editorRef.current.editor;
     
-    const jsonContent = editor.getJSON();
+    const jsonContent = JSON.parse(JSON.stringify(editor.getJSON()));
     console.log('[排版] 原始JSON:', JSON.stringify(jsonContent, null, 2));
     
     // 辅助函数：清除段落文本中的前导空白字符，防止与排版缩进叠加
@@ -1867,7 +1873,11 @@ ${chapterContents}
       for (const child of content) {
         if (child.type === 'text' && child.text) {
           // 清除前导空白：普通空格、&nbsp;(\u00A0)、全角空格(\u3000)等
-          child.text = child.text.replace(/^[\s\u00A0\u3000\u2000-\u200A\u202F\u205F]+/, '');
+          const trimmed = child.text.replace(/^[\s\u00A0\u3000\u2000-\u200A\u202F\u205F]+/, '');
+          // 如果去除前导空白后文本为空，保留原始内容，避免段落被清空
+          if (trimmed.length > 0) {
+            child.text = trimmed;
+          }
           break; // 只处理第一个文本节点
         }
         // 如果遇到非文本节点（如 hardBreak），跳过继续

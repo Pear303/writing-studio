@@ -57,7 +57,7 @@ const compactInputStyle: React.CSSProperties = {
   outline: 'none',
   boxSizing: 'border-box' as const,
   minHeight: '28px',
-  resize: 'none',
+  resize: 'vertical',
   fontFamily: 'inherit',
   lineHeight: '1.4',
 };
@@ -618,34 +618,28 @@ export const Step5WriteText: React.FC<Step5WriteTextProps> = ({
                 </span>
               </div>
 
-              <div style={{ display: 'flex', gap: '6px', marginBottom: '6px' }}>
-                <div style={{ flex: 1 }}>
-                  <textarea
-                    style={compactInputStyle}
-                    placeholder="新增..."
-                    value={additions}
-                    onChange={e => setAdditions(e.target.value)}
-                    rows={1}
-                  />
-                </div>
-                <div style={{ flex: 1 }}>
-                  <textarea
-                    style={compactInputStyle}
-                    placeholder="删除..."
-                    value={deletions}
-                    onChange={e => setDeletions(e.target.value)}
-                    rows={1}
-                  />
-                </div>
-                <div style={{ flex: 1 }}>
-                  <textarea
-                    style={compactInputStyle}
-                    placeholder="修改..."
-                    value={modifications}
-                    onChange={e => setModifications(e.target.value)}
-                    rows={1}
-                  />
-                </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '6px' }}>
+                <textarea
+                  style={{ ...compactInputStyle, minHeight: '48px' }}
+                  placeholder="新增..."
+                  value={additions}
+                  onChange={e => setAdditions(e.target.value)}
+                  rows={2}
+                />
+                <textarea
+                  style={{ ...compactInputStyle, minHeight: '48px' }}
+                  placeholder="删除..."
+                  value={deletions}
+                  onChange={e => setDeletions(e.target.value)}
+                  rows={2}
+                />
+                <textarea
+                  style={{ ...compactInputStyle, minHeight: '48px' }}
+                  placeholder="修改..."
+                  value={modifications}
+                  onChange={e => setModifications(e.target.value)}
+                  rows={2}
+                />
               </div>
             </div>
           )}
