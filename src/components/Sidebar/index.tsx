@@ -28,6 +28,8 @@ interface SidebarProps {
   onChapterSelect?: (chapter: Chapter) => void;
   onChapterDeselect?: () => void;
   onVolumeChange?: () => void;
+  onVolumesWithChaptersChange?: (volumeIds: Set<string>) => void;
+  chapterWordCountUpdates?: Record<string, number>;
   activeChapterId?: string | null;
   onInsertMaterial?: (material: Material) => void;
   onMaterialSelect?: (material: Material) => void;
@@ -110,6 +112,8 @@ export const Sidebar = ({
   onChapterSelect,
   onChapterDeselect,
   onVolumeChange,
+  onVolumesWithChaptersChange,
+  chapterWordCountUpdates,
   activeChapterId,
   onInsertMaterial,
   onMaterialSelect,
@@ -231,6 +235,8 @@ export const Sidebar = ({
                   onVolumeChange?.();
                   loadBooks();
                 }}
+                onVolumesWithChaptersChange={onVolumesWithChaptersChange}
+                chapterWordCountUpdates={chapterWordCountUpdates}
                 activeChapterId={activeChapterId}
                 refreshTrigger={outlineRefreshTrigger}
               />

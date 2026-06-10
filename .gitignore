@@ -53,15 +53,40 @@ ehthumbs.db
 src-tauri/target/
 src-tauri/gen/schemas
 
+# ========== 个人私密数据 ==========
+# 书籍数据（含章节、大纲、素材等）
+agent-by-langchain/studio-data/books/
+# 个人记忆/学习数据
+agent-by-langchain/memory/
+agent-by-langchain/learning/
+agent-by-langchain/finished work/
+agent-by-langchain/finished-work/
+# 向量化数据与模型
+agent-by-langchain/model/
+agent-by-langchain/embeddings/
+agent-by-langchain/data/
+agent-by-langchain/vector_store/
+# Python 虚拟环境
+agent-by-langchain/.venv/
+
 # ========== 项目特定 - 工作区/临时文件 ==========
 .sisyphus/
 learning/
 *.java
+TAILWIND_STYLE_GUIDE.md
+
+# ========== AI/编辑器私有配置 ==========
+.claude/
+.trae/
+
+# ========== 测试缓存 ==========
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+*.egg-info/
+coverage/
 
 # ========== 其他缓存 ==========
 .cache/
 *.cache
-<<<<<<< HEAD
-TAILWIND_STYLE_GUIDE.md
-=======
->>>>>>> a3c3812c35f7ea215c38605f0651c42cca74529c

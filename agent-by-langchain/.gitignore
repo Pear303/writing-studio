@@ -35,6 +35,11 @@ node-output.txt
 # 临时工具脚本
 test-browser.js
 
+# 测试文件
+tests/
+frontend/src/__tests__/
+frontend/vitest.config.js
+
 # ── 第三方技能（版权限制，不随仓库分发） ──
 # Anthropic 专有（pdf/pptx/xlsx 为 AI 工具内建，不可提取分发）
 skills/pdf/
@@ -57,3 +62,6 @@ embeddings/
 data/
 vector_store/
 requirements.txt.new
+
+# 书籍数据（含章节、大纲、素材等个人创作内容）
+studio-data/books/

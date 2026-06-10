@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Trash2, RotateCcw, FileText, Folder } from 'lucide-react';
 import type { RecycleBinItem, Chapter, Volume } from '../../types';
-import { db } from '../../db';
+import { db, adjustBookTotalWords } from '../../db';
 
 interface RecycleBinPanelProps {
   onRestore?: () => void;
@@ -45,7 +45,7 @@ export const RecycleBinPanel = ({ onRestore }: RecycleBinPanelProps) => {
         volumeId = firstVol?.id || null;
       }
 
-      await db.transaction('rw', [db.chapters, db.recycleBin, db.books], async () => {
+      await db.transaction('rw', [db.chapters, db.recycleBin], async () => {
         // 恢复章节
         await db.chapters.add({
           ...chapter,
@@ -54,12 +54,10 @@ export const RecycleBinPanel = ({ onRestore }: RecycleBinPanelProps) => {
 
         // 从回收站删除
         await db.recycleBin.delete(item.id);
-
-        // 重新计算书籍总字数
-        const allChapters = await db.chapters.where('bookId').equals(chapter.bookId).toArray();
-        const totalWords = allChapters.reduce((sum, ch) => sum + ch.wordCount, 0);
-        await db.books.update(chapter.bookId, { totalWords, updatedAt: Date.now() });
       });
+
+      // 增量更新书籍总字数
+      await adjustBookTotalWords(chapter.bookId, chapter.wordCount || 0);
 
       loadItems();
       onRestore?.();
@@ -73,7 +71,7 @@ export const RecycleBinPanel = ({ onRestore }: RecycleBinPanelProps) => {
     const volume = item.data as Volume;
     const childChapters = item.childChapters || [];
     try {
-      await db.transaction('rw', [db.volumes, db.chapters, db.recycleBin, db.books], async () => {
+      await db.transaction('rw', [db.volumes, db.chapters, db.recycleBin], async () => {
         // 恢复卷
         await db.volumes.add(volume);
 
@@ -84,12 +82,11 @@ export const RecycleBinPanel = ({ onRestore }: RecycleBinPanelProps) => {
 
         // 从回收站删除
         await db.recycleBin.delete(item.id);
-
-        // 重新计算书籍总字数
-        const allChapters = await db.chapters.where('bookId').equals(volume.bookId).toArray();
-        const totalWords = allChapters.reduce((sum, ch) => sum + ch.wordCount, 0);
-        await db.books.update(volume.bookId, { totalWords, updatedAt: Date.now() });
       });
+
+      // 增量更新书籍总字数
+      const restoredWordCount = childChapters.reduce((sum, ch) => sum + (ch.wordCount || 0), 0);
+      await adjustBookTotalWords(volume.bookId, restoredWordCount);
 
       loadItems();
       onRestore?.();
