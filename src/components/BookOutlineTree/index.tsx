@@ -7,7 +7,7 @@ import { ContextMenu, type MenuItem } from '../ContextMenu';
 import { VersionHistory } from '../VersionHistory';
 import { Toast, type ToastType } from '../Toast';
 import type { Book, Volume, Chapter } from '../../types';
-import { db, saveChapterVersion, cleanupOldVersions, updateChapterTitle, updateVolumeName } from '../../db';
+import { db, saveChapterVersion, cleanupOldVersions, updateChapterTitle, updateVolumeName, adjustBookTotalWords } from '../../db';
 import { generateId, countWords, computeChapterDisplayTitle, stripAutoNumberPrefix } from '../../utils/helpers';
 import { save } from '@tauri-apps/plugin-dialog';
 import { writeTextFile } from '@tauri-apps/plugin-fs';
@@ -18,8 +18,10 @@ interface BookOutlineTreeProps {
   onChapterDeselect?: () => void;
   onBookDeselect?: () => void;
   onVolumeChange?: () => void;
+  onVolumesWithChaptersChange?: (volumeIds: Set<string>) => void;
   activeChapterId?: string | null;
   refreshTrigger?: number;
+  chapterWordCountUpdates?: Record<string, number>;
 }
 
 interface SortableTreeNodeProps {
@@ -97,7 +99,7 @@ const SortableTreeNode: React.FC<SortableTreeNodeProps> = ({
   );
 };
 
-export const BookOutlineTree = ({ book, onChapterSelect, onChapterDeselect, onBookDeselect, onVolumeChange, activeChapterId, refreshTrigger }: BookOutlineTreeProps) => {
+export const BookOutlineTree = ({ book, onChapterSelect, onChapterDeselect, onBookDeselect, onVolumeChange, onVolumesWithChaptersChange, activeChapterId, refreshTrigger, chapterWordCountUpdates }: BookOutlineTreeProps) => {
   const [volumes, setVolumes] = useState<Volume[]>([]);
   const [chapters, setChapters] = useState<Chapter[]>([]);
   const [expandedVolumes, setExpandedVolumes] = useState<Set<string>>(new Set());
@@ -314,31 +316,45 @@ export const BookOutlineTree = ({ book, onChapterSelect, onChapterDeselect, onBo
   };
 
   useEffect(() => {
-    console.log('[BookOutlineTree] useEffect 触发，refreshTrigger:', refreshTrigger);
     loadData();
   }, [book.id, book, refreshTrigger]);
 
+  // 消费字数更新 prop，仅更新对应章节的 wordCount，不重载整棵树
+  useEffect(() => {
+    if (!chapterWordCountUpdates || Object.keys(chapterWordCountUpdates).length === 0) return;
+    setChapters(prev => prev.map(ch => {
+      const newWc = chapterWordCountUpdates[ch.id];
+      return newWc !== undefined ? { ...ch, wordCount: newWc } : ch;
+    }));
+  }, [chapterWordCountUpdates]);
+
   const loadData = async () => {
     try {
-      console.log('[BookOutlineTree] 开始加载数据...');
-      const allVolumes = await db.volumes
-        .where('bookId')
-        .equals(book.id)
-        .sortBy('order');
-      console.log('[BookOutlineTree] 加载了', allVolumes.length, '个卷');
+      // 并行加载卷和章节数据
+      const [allVolumes, allChapters] = await Promise.all([
+        db.volumes.where('bookId').equals(book.id).sortBy('order'),
+        db.chapters.where('bookId').equals(book.id).toArray(),
+      ]);
 
-      const allChapters = await db.chapters
-        .where('bookId')
-        .equals(book.id)
-        .toArray();
-      console.log('[BookOutlineTree] 加载了', allChapters.length, '个章节');
-      
+      // 性能优化：剥离完整 content，按需计算摘要，避免大量数据驻留内存
+      const needExcerpt = chapterDetailDisplay === 'nameAndExcerpt' || chapterDetailDisplay === 'full';
+      const lightweightChapters = allChapters.map(ch => {
+        const excerpt = (needExcerpt && ch.content)
+          ? ch.content.replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/\s+/g, ' ').trim().slice(0, 100)
+          : '';
+        return { ...ch, content: '', _excerpt: excerpt };
+      });
+
       setVolumes(allVolumes);
-      setChapters(allChapters);
+      setChapters(lightweightChapters);
+
+      // 通知父组件哪些卷包含章节（避免 App.tsx 再查一次数据库）
+      const volumeIds = new Set<string>();
+      lightweightChapters.forEach(ch => { if (ch.volumeId) volumeIds.add(ch.volumeId); });
+      onVolumesWithChaptersChange?.(volumeIds);
 
       const restored = loadExpandedVolumes(allVolumes);
       setExpandedVolumes(restored);
-      console.log('[BookOutlineTree] 数据加载完成');
     } catch (error) {
       console.error('[BookOutlineTree] 加载大纲数据失败:', error);
     }
@@ -375,33 +391,43 @@ export const BookOutlineTree = ({ book, onChapterSelect, onChapterDeselect, onBo
     return volumes.filter(v => v.parentId === parentId);
   };
 
-  // 获取章节开头摘要（前50字）
-  const getChapterExcerpt = (chapter: Chapter): string => {
-    if (!chapter.content) return '';
-    // 去除 HTML 标签
-    const text = chapter.content
-      .replace(/<[^>]+>/g, '')
-      .replace(/&nbsp;/g, ' ')
-      .replace(/&amp;/g, '&')
-      .replace(/&lt;/g, '<')
-      .replace(/&gt;/g, '>')
-      .replace(/\s+/g, ' ')
-      .trim();
-    return text.length > 80 ? text.slice(0, 80) + '...' : text;
+  // 获取章节开头摘要（前80字）
+  const getChapterExcerpt = (chapter: Chapter & { _excerpt?: string }): string => {
+    if (chapter._excerpt) {
+      return chapter._excerpt.length > 80 ? chapter._excerpt.slice(0, 80) + '...' : chapter._excerpt;
+    }
+    return '';
   };
 
-  // 递归计算卷下所有章节数和字数
+  // 预计算所有卷的统计数据（useMemo 缓存，避免每次渲染递归重算）
+  const volumeStatsMap = useMemo(() => {
+    const map = new Map<string, { childVolumeCount: number; chapterCount: number; totalWordCount: number }>();
+
+    const computeStats = (volumeId: string): { childVolumeCount: number; chapterCount: number; totalWordCount: number } => {
+      if (map.has(volumeId)) return map.get(volumeId)!;
+
+      const childVols = volumes.filter(v => v.parentId === volumeId);
+      const directChapters = chapters.filter(c => c.volumeId === volumeId);
+      let chapterCount = directChapters.length;
+      let totalWordCount = directChapters.reduce((sum, c) => sum + (c.wordCount || 0), 0);
+
+      for (const child of childVols) {
+        const childStats = computeStats(child.id);
+        chapterCount += childStats.chapterCount;
+        totalWordCount += childStats.totalWordCount;
+      }
+
+      const result = { childVolumeCount: childVols.length, chapterCount, totalWordCount };
+      map.set(volumeId, result);
+      return result;
+    };
+
+    volumes.forEach(v => computeStats(v.id));
+    return map;
+  }, [volumes, chapters]);
+
   const getVolumeStats = (volumeId: string): { childVolumeCount: number; chapterCount: number; totalWordCount: number } => {
-    const childVols = getChildVolumes(volumeId);
-    const directChapters = getVolumeChapters(volumeId);
-    let chapterCount = directChapters.length;
-    let totalWordCount = directChapters.reduce((sum, c) => sum + (c.wordCount || 0), 0);
-    for (const child of childVols) {
-      const childStats = getVolumeStats(child.id);
-      chapterCount += childStats.chapterCount;
-      totalWordCount += childStats.totalWordCount;
-    }
-    return { childVolumeCount: childVols.length, chapterCount, totalWordCount };
+    return volumeStatsMap.get(volumeId) || { childVolumeCount: 0, chapterCount: 0, totalWordCount: 0 };
   };
 
   // 构建卷节点详细信息字符串
@@ -741,13 +767,6 @@ export const BookOutlineTree = ({ book, onChapterSelect, onChapterDeselect, onBo
     }
   };
 
-  // 重新计算并更新书籍总字数
-  const recalcBookTotalWords = async () => {
-    const allChapters = await db.chapters.where('bookId').equals(book.id).toArray();
-    const totalWords = allChapters.reduce((sum, ch) => sum + ch.wordCount, 0);
-    await db.books.update(book.id, { totalWords, updatedAt: Date.now() });
-  };
-
   // 删除卷（移入回收站）
   const handleDeleteVolume = async (volume: Volume) => {
     if (!confirm(`确定要删除卷"${volume.name}"吗？该卷及其下所有章节将移入回收站。`)) {
@@ -778,7 +797,7 @@ export const BookOutlineTree = ({ book, onChapterSelect, onChapterDeselect, onBo
         await db.volumes.delete(volume.id);
       });
 
-      await recalcBookTotalWords();
+      await adjustBookTotalWords(book.id, -(volumeChapters.reduce((sum, c) => sum + (c.wordCount || 0), 0)));
       loadData();
       onVolumeChange?.();
       // 如果当前正在编辑的章节在被删除的卷中，清除编辑器
@@ -818,7 +837,7 @@ export const BookOutlineTree = ({ book, onChapterSelect, onChapterDeselect, onBo
         await db.chapters.delete(chapter.id);
       });
 
-      await recalcBookTotalWords();
+      await adjustBookTotalWords(book.id, -(chapter.wordCount || 0));
       loadData();
       onVolumeChange?.();
       // 如果删除的是当前正在编辑的章节，清除编辑器
@@ -1164,8 +1183,10 @@ export const BookOutlineTree = ({ book, onChapterSelect, onChapterDeselect, onBo
       });
       
       if (!filePath) return;
-      
-      await writeTextFile(filePath, chapter.content);
+
+      // 从数据库加载完整内容（大纲树中的 content 已被剥离以优化性能）
+      const fullChapter = await db.chapters.get(chapter.id);
+      await writeTextFile(filePath, fullChapter?.content || '');
       showToast(`章节已导出到: ${filePath}`, 'success');
     } catch (error) {
       console.error('导出章节失败:', error);

@@ -373,12 +373,20 @@ export const DeconstructionPanel: React.FC<DeconstructionPanelProps> = ({
       {/* Header */}
       <div className="flex items-center justify-between px-3 py-2 border-b border-vscode-border">
         <h3 className="text-vscode-text text-sm font-medium">拆书 / 仿写</h3>
-        <button
-          onClick={() => setShowImportModal(true)}
-          className="text-xs px-2 py-1 bg-vscode-active text-white hover:opacity-90 rounded"
-        >
-          导入书籍
-        </button>
+        <div className="flex items-center gap-1.5">
+          <button
+            onClick={handleOpenBookshelfPicker}
+            className="text-xs px-2 py-1 bg-vscode-input text-vscode-text hover:opacity-80 rounded border border-vscode-border"
+          >
+            从书架选择
+          </button>
+          <button
+            onClick={() => setShowImportModal(true)}
+            className="text-xs px-2 py-1 bg-vscode-active text-white hover:opacity-90 rounded"
+          >
+            导入书籍
+          </button>
+        </div>
       </div>
 
       {/* List */}
@@ -438,6 +446,45 @@ export const DeconstructionPanel: React.FC<DeconstructionPanelProps> = ({
           }}
           showToast={showToast || (() => {})}
         />
+      )}
+
+      {/* Bookshelf Picker Modal */}
+      {showBookshelfPicker && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ backgroundColor: 'var(--color-modal-overlay)' }}>
+          <div className="modal-content w-96 max-h-[70vh] flex flex-col">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-vscode-border">
+              <h3 className="text-vscode-text text-sm font-medium">从书架选择</h3>
+              <button
+                onClick={() => setShowBookshelfPicker(false)}
+                className="text-vscode-text opacity-50 hover:opacity-100 text-sm"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="flex-1 overflow-auto">
+              {bookshelfBooks.length === 0 ? (
+                <div className="p-4 text-center">
+                  <p className="text-vscode-text opacity-50 text-sm">书架为空</p>
+                </div>
+              ) : (
+                <div className="divide-y divide-vscode-border">
+                  {bookshelfBooks.map(book => (
+                    <div
+                      key={book.id}
+                      onClick={() => handleSelectBookFromShelf(book)}
+                      className="px-4 py-3 cursor-pointer hover:bg-vscode-active/10 transition-colors"
+                    >
+                      <div className="text-vscode-text text-sm font-medium truncate">{book.name}</div>
+                      <div className="text-vscode-text text-xs opacity-40 mt-0.5">
+                        {book.totalWords.toLocaleString()} 字
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

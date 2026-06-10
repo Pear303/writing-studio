@@ -1,6 +1,6 @@
 # Writing Studio
 
-基于 Tauri + React + TypeScript 开发的小说创作集成环境，支持书籍管理、大纲编辑、富文本写作、AI 辅助写作、质检等功能。
+基于 Tauri + React + TypeScript 的 AI 原生小说创作环境。核心特色：可编排写作流水线（大纲→细纲→正文→润色）自动串联执行；Agent 化任务调度，多模型 LLM 协同；提示词模板动态注入，支持变量插值与上下文感知渲染；多书籍管理、富文本写作、AI 质检，数据本地存储安全可控。
 
 ## 项目结构
 
@@ -22,9 +22,10 @@ writing-studio/
 
 ## 技术栈
 
-- **前端**: React 19 + TypeScript + Vite
+- **前端**: React 19 + TypeScript + Vite + Tailwind CSS
 - **桌面端**: Tauri 2.0 (Rust)
-- **样式**: CSS
+- **AI Agent**: LangChain + 多模型 LLM (DeepSeek / GPT / Claude / GLM)
+- **数据存储**: IndexedDB (Dexie) + 本地文件系统
 
 ## 快速开始
 

@@ -808,6 +808,26 @@ export const updateVolumeName = async (volumeId: string, name: string): Promise<
   });
 };
 
+// 辅助函数：增量更新书籍总字数（原子操作，无竞态）
+export const adjustBookTotalWords = async (bookId: string, delta: number): Promise<void> => {
+  if (delta === 0) return;
+  await db.books.where(':id').equals(bookId).modify(book => {
+    book.totalWords = Math.max(0, (book.totalWords || 0) + delta);
+    book.updatedAt = Date.now();
+  });
+};
+
+// 辅助函数：全量重算书籍总字数（仅用于校准）
+export const recalcBookTotalWordsFull = async (bookId: string): Promise<number> => {
+  let totalWords = 0;
+  await db.chapters
+    .where('bookId')
+    .equals(bookId)
+    .each(ch => { totalWords += ch.wordCount || 0; });
+  await db.books.update(bookId, { totalWords, updatedAt: Date.now() });
+  return totalWords;
+};
+
 // ===== VibePreset 辅助函数 =====
 
 const VIBE_PRESET_PREFIX = 'vibePresets_';

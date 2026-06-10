@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useLayoutEffect, use, useContext, useReducer } from 'react';
+import { useState, useRef, useEffect, useLayoutEffect, use, useContext, useReducer, useCallback } from 'react';
 import { ActivityBar } from './components/ActivityBar';
 import { Sidebar } from './components/Sidebar';
 import { EditorArea } from './components/EditorArea';
@@ -18,7 +18,7 @@ import { MaterialEditor } from './components/MaterialEditor';
 import { QAPanel } from './components/QAPanel';
 import type { RichTextEditorRef } from './components/RichTextEditor';
 import type { ActivityId, Book, Chapter, Volume, FormattingSettings, Material, OutlineItemData, WordCountSettings, PipelineStep1Config, PipelineStep2State, PipelineStep3Config, PipelineStep4State, PipelineStep5State, OutlineRound, DetailedOutlineRound, ChapterDraftRound } from './types';
-import { db, saveChapterVersion, cleanupOldVersions, exportAllData, importAllData, getDefaultLLMConfig, decodeApiKey, getCurrentUserId, getPipelinePromptTemplates, ensureDefaultPipelinePromptTemplates } from './db';
+import { db, saveChapterVersion, cleanupOldVersions, exportAllData, importAllData, getDefaultLLMConfig, decodeApiKey, getCurrentUserId, getPipelinePromptTemplates, ensureDefaultPipelinePromptTemplates, adjustBookTotalWords, recalcBookTotalWordsFull } from './db';
 import { countWords, clearExtraBlankLines, clearExtraSpaces, convertFullWidthToHalfWidth, markdownToOutline } from './utils/helpers';
 import { getSearchReplaceCommands } from './extensions/searchReplace';
 
@@ -155,6 +155,11 @@ function App() {
   // 刷新目录树
   const [outlineRefreshTrigger, setOutlineRefreshTrigger] = useState(0);
   
+  // 触发大纲树全量重载，同时清空增量更新缓存（避免 loadData 后残留旧条目覆盖新数据）
+  const triggerOutlineRefresh = useCallback(() => {
+    triggerOutlineRefresh();
+    setChapterWordCountUpdates({});
+  }, []);
   // 新增状态
   const [isFullScreen, setIsFullScreen] = useState(false); // 专注模式
   const [agentSyncing, setAgentSyncing] = useState(false);
@@ -181,6 +186,7 @@ function App() {
   const [rightActivity, setRightActivity] = useState<'preview' | 'outline' | 'qa'>('preview');
   const [isRightResizing, setIsRightResizing] = useState(false);
   const [volumesWithChapters, setVolumesWithChapters] = useState<Set<string>>(new Set());
+  const [chapterWordCountUpdates, setChapterWordCountUpdates] = useState<Record<string, number>>({});
 
   // 右侧面板拖拽
   const rightDragStartXRef = useRef(0);
@@ -229,6 +235,8 @@ function App() {
   const outlineEditorRef = useRef<OutlineEditorRef>(null);
   const pomodoroTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const refreshDebounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // 记录上次已同步到书籍总字数的章节字数，用于增量更新
+  const lastBookUpdatedWordCountRef = useRef<number>(0);
 
   // 显示Toast通知
   const showToast = (message: string, type: ToastType = 'info') => {
@@ -646,13 +654,17 @@ function App() {
   // 处理书籍选择
   const handleBookSelect = async (book: Book) => {
     await autoSave();
-    setCurrentBook(book);
+    // 校准书籍总字数（防止增量更新累积误差）
+    const calibratedTotal = await recalcBookTotalWordsFull(book.id);
+    setCurrentBook({ ...book, totalWords: calibratedTotal });
     setCurrentChapter(null);
     setCurrentOutlineVolume(null);
     setCurrentOutlineChapter(null);
     setEditorContent('');
     setWordCount(0);
     setSaveStatus('saved');
+    setVolumesWithChapters(new Set());
+    lastBookUpdatedWordCountRef.current = 0;
   };
 
   const handleBookDeselect = async () => {
@@ -664,6 +676,7 @@ function App() {
     setEditorContent('');
     setWordCount(0);
     setSaveStatus('saved');
+    setVolumesWithChapters(new Set());
   };
 
   // 处理章节选择
@@ -688,6 +701,7 @@ function App() {
     setCurrentChapter(latestChapter);
     setEditorContent(latestChapter.content || '');
     setWordCount(latestChapter.wordCount || 0);
+    lastBookUpdatedWordCountRef.current = latestChapter.wordCount || 0;
     setSaveStatus('saved');
   };
 
@@ -718,29 +732,19 @@ function App() {
   // 处理章节细纲保存后的回调
   const handleDetailedOutlineSave = (chapter: Chapter) => {
     setCurrentOutlineChapter(chapter);
-    setOutlineRefreshTrigger(prev => prev + 1);
+    triggerOutlineRefresh();
   };
 
   // 处理卷大纲保存后的回调
   const handleOutlineSave = (volume: Volume) => {
     setCurrentOutlineVolume(volume);
-    setOutlineRefreshTrigger(prev => prev + 1);
+    triggerOutlineRefresh();
   };
 
-  // 计算哪些卷包含章节
-  useEffect(() => {
-    if (!currentBook) {
-      setVolumesWithChapters(new Set());
-      return;
-    }
-    const load = async () => {
-      const allChapters = await db.chapters.where('bookId').equals(currentBook.id).toArray();
-      const volumeIds = new Set<string>();
-      allChapters.forEach(c => { if (c.volumeId) volumeIds.add(c.volumeId); });
-      setVolumesWithChapters(volumeIds);
-    };
-    load();
-  }, [currentBook?.id, outlineRefreshTrigger]);
+  // 从 BookOutlineTree 回调获取哪些卷包含章节（替代原来的独立数据库查询）
+  const handleVolumesWithChaptersChange = useCallback((volumeIds: Set<string>) => {
+    setVolumesWithChapters(volumeIds);
+  }, []);
 
   // 大纲提炼
   const handleOutlineExtract = async (volume: Volume) => {
@@ -842,7 +846,7 @@ ${chapterContents}
         }, 150);
       }
 
-      setOutlineRefreshTrigger(prev => prev + 1);
+      triggerOutlineRefresh();
       showToast('大纲提炼完成', 'success');
     } catch (error) {
       console.error('大纲提炼失败:', error);
@@ -914,7 +918,7 @@ ${chapterContents}
       if (updated) {
         setCurrentOutlineVolume(updated);
       }
-      setOutlineRefreshTrigger(prev => prev + 1);
+      triggerOutlineRefresh();
       showToast('本卷大纲已覆盖', 'success');
     } catch (error) {
       console.error('覆盖大纲失败:', error);
@@ -1201,14 +1205,12 @@ ${chapterContents}
         createdAt: Date.now(),
         updatedAt: Date.now(),
       });
-      // 更新书籍总字数
-      const allChapters = await db.chapters.where('bookId').equals(currentBook.id).toArray();
-      const totalWords = allChapters.reduce((sum, ch) => sum + ch.wordCount, 0);
-      await db.books.update(currentBook.id, { totalWords, updatedAt: Date.now() });
+      // 增量更新书籍总字数
+      await adjustBookTotalWords(currentBook.id, wordCount);
       const updatedBook = await db.books.get(currentBook.id);
       if (updatedBook) setCurrentBook(updatedBook);
       showToast(`章节「${title}」已录入本卷`, 'success');
-      setOutlineRefreshTrigger(prev => prev + 1);
+      triggerOutlineRefresh();
     } catch (error) {
       console.error('录入章节失败:', error);
       showToast('录入章节失败', 'error');
@@ -1361,7 +1363,7 @@ ${chapterContents}
     // 保存到卷
     try {
       await db.volumes.update(volumeId, { outline: result });
-      setOutlineRefreshTrigger(prev => prev + 1);
+      triggerOutlineRefresh();
     } catch (err) {
       console.error('保存卷大纲失败:', err);
     }
@@ -1459,17 +1461,24 @@ ${chapterContents}
       
       refreshDebounceTimerRef.current = setTimeout(async () => {
         console.log('[字数更新] 防抖触发，开始更新数据库');
-        
+
         // 更新数据库中的 wordCount
         try {
           await db.chapters.update(currentChapter.id, {
             wordCount: newWordCount
           });
           console.log('[字数更新] ✅ 数据库更新成功');
-          
-          // ⭐ 触发增量更新：递增 trigger，通知 BookOutlineTree 从数据库重新加载
-          setOutlineRefreshTrigger(prev => prev + 1);
-          console.log('[字数更新] 📢 触发大纲树刷新，trigger:', outlineRefreshTrigger + 1);
+
+          // 增量更新书籍总字数
+          if (currentBook) {
+            const delta = newWordCount - lastBookUpdatedWordCountRef.current;
+            await adjustBookTotalWords(currentBook.id, delta);
+            lastBookUpdatedWordCountRef.current = newWordCount;
+          }
+
+          // 通过 prop 通知 BookOutlineTree 更新对应章节的字数显示，而非触发整棵树重载
+          setChapterWordCountUpdates(prev => ({ ...prev, [currentChapter.id]: newWordCount }));
+          console.log('[字数更新] 📢 通知大纲树更新字数显示');
         } catch (error) {
           console.error('[字数更新] ❌ 数据库更新失败:', error);
         }
@@ -1504,7 +1513,7 @@ ${chapterContents}
         console.log('[标题更新] ✅ 数据库更新成功');
         
         // 触发大纲树刷新
-        setOutlineRefreshTrigger(prev => prev + 1);
+        triggerOutlineRefresh();
       } catch (error) {
         console.error('[标题更新] ❌ 数据库更新失败:', error);
       }
@@ -1525,16 +1534,20 @@ ${chapterContents}
     setSaveStatus('saving');
 
     try {
+      // 保存前记录旧字数，用于增量更新（使用 ref 确保与书籍总字数同步）
+      const oldWordCount = lastBookUpdatedWordCountRef.current;
+
       // 保存章节版本快照
       console.log('[保存] 步骤1: 保存版本快照...');
-      const versionId = await saveChapterVersion(currentChapter.id, editorContent, countWords(editorContent, wordCountSettings));
+      const newWordCount = countWords(editorContent, wordCountSettings);
+      const versionId = await saveChapterVersion(currentChapter.id, editorContent, newWordCount);
       console.log('[保存] 版本ID:', versionId);
 
       // 更新章节内容到 IndexedDB
       console.log('[保存] 步骤2: 更新章节内容...');
       const updateResult = await db.chapters.update(currentChapter.id, {
         content: editorContent,
-        wordCount: countWords(editorContent, wordCountSettings),
+        wordCount: newWordCount,
         updatedAt: Date.now(),
       });
       console.log('[保存] 更新结果:', updateResult);
@@ -1550,16 +1563,13 @@ ${chapterContents}
       console.log('[保存] 步骤4: 清理旧版本...');
       await cleanupOldVersions(currentChapter.id, 10);
 
-      // 更新书籍总字数
+      // 增量更新书籍总字数
       if (currentBook) {
-        console.log('[保存] 步骤5: 更新书籍总字数...');
-        const allChapters = await db.chapters.where('bookId').equals(currentBook.id).toArray();
-        const totalWords = allChapters.reduce((sum, ch) => sum + ch.wordCount, 0);
-        await db.books.update(currentBook.id, {
-          totalWords,
-          updatedAt: Date.now(),
-        });
-        console.log('[保存] 书籍总字数:', totalWords);
+        console.log('[保存] 步骤5: 增量更新书籍总字数...');
+        const delta = newWordCount - oldWordCount;
+        await adjustBookTotalWords(currentBook.id, delta);
+        lastBookUpdatedWordCountRef.current = newWordCount;
+        console.log('[保存] 字数变化:', delta, '旧:', oldWordCount, '新:', newWordCount);
       }
 
       setSaveStatus('saved');
@@ -1673,6 +1683,7 @@ ${chapterContents}
     const chapter = await db.chapters.get(chapterId);
     if (!chapter) return;
     setCurrentChapter(chapter);
+    lastBookUpdatedWordCountRef.current = chapter.wordCount || 0;
   };
 
   const handleBookReplaceAll = async (
@@ -2236,13 +2247,15 @@ ${chapterContents}
                     setSaveStatus('saved');
                   }}
                   onVolumeChange={async () => {
-                    setOutlineRefreshTrigger(prev => prev + 1);
+                    triggerOutlineRefresh();
                     // 刷新 currentBook 以更新 totalWords
                     if (currentBook?.id) {
                       const updated = await db.books.get(currentBook.id);
                       if (updated) setCurrentBook(updated);
                     }
                   }}
+                  onVolumesWithChaptersChange={handleVolumesWithChaptersChange}
+                  chapterWordCountUpdates={chapterWordCountUpdates}
                   activeChapterId={currentChapter?.id || null}
                   onInsertMaterial={handleInsertMaterial}
                   onMaterialSelect={handleMaterialSelect}
