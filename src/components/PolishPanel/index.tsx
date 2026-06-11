@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { Sparkles, StopCircle, Check, RotateCcw } from 'lucide-react';
 import type { Book, Chapter } from '../../types';
 
@@ -26,6 +26,27 @@ export const PolishPanel: React.FC<PolishPanelProps> = ({
   const [isPolishing, setIsPolishing] = useState(false);
   const [polishedText, setPolishedText] = useState('');
   const abortRef = useRef<AbortController | null>(null);
+  const polishTextareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // 持久化 textarea 高度
+  useEffect(() => {
+    const textarea = polishTextareaRef.current;
+    if (!textarea) return;
+    const savedHeight = localStorage.getItem('polishTextareaHeight');
+    if (savedHeight) {
+      textarea.style.height = savedHeight + 'px';
+    }
+    const observer = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const height = entry.contentRect.height;
+        if (height > 0) {
+          localStorage.setItem('polishTextareaHeight', String(Math.round(height)));
+        }
+      }
+    });
+    observer.observe(textarea);
+    return () => observer.disconnect();
+  }, []);
 
   const handleStartPolish = useCallback(async () => {
     if (!editorContent.trim()) {
@@ -130,6 +151,7 @@ export const PolishPanel: React.FC<PolishPanelProps> = ({
             润色指令（可选）
           </div>
           <textarea
+            ref={polishTextareaRef}
             style={{
               width: '100%',
               padding: '6px 8px',

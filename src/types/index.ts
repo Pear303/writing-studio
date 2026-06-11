@@ -551,6 +551,27 @@ export interface ImportResult {
   errors: string[];
 }
 
+export interface LocalStorageSettings {
+  fontSettings?: any;
+  customFontMetaList?: any[];
+  wordCountSettings?: WordCountSettings;
+  autoSaveInterval?: number;
+  editorFontSize?: number;
+  startupWindowMode?: 'maximized' | 'fullscreen';
+  chapterDetailDisplay?: 'nameOnly' | 'nameAndExcerpt' | 'nameAndWordCount' | 'full';
+  volumeDetailInfo?: 'none' | 'counts' | 'countsAndWords';
+  agentApiUrl?: string;
+  lastBackupExportPath?: string;
+  lastBackupImportPath?: string;
+  continueWritingWordCountTarget?: number;
+  continuationWordCount?: number;
+  pipelineActiveTab?: string;
+  pipelineSelectedVolumeId?: string;
+  lineHeight?: string;
+  sidebarWidth?: number;
+  rightPanelWidth?: number;
+}
+
 export interface FullExportData {
   version: string;
   exportedAt: number;
@@ -569,12 +590,16 @@ export interface FullExportData {
   recycleBinItems: RecycleBinItem[];
   bookDeconstructions: BookDeconstructionResult[];
   imitationOutlines: ImitationOutline[];
+  pipelineSessions: PipelineSession[];
+  pipelinePromptTemplates: PipelinePromptTemplate[];
+  vibePresets: VibePreset[];
   users: any[];
   userSettings: any[];
   formattingSettings: Record<string, FormattingSettings>;
   writingGoal: WritingGoal | null;
   pomodoro: PomodoroState | null;
   theme: Theme;
+  localSettings: LocalStorageSettings;
   metadata: {
     lastExportPath: string | null;
     lastImportPath: string | null;

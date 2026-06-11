@@ -73,7 +73,10 @@ export const Step2Outline: React.FC<Step2OutlineProps> = ({
   const [additions, setAdditions] = useState('');
   const [deletions, setDeletions] = useState('');
   const [modifications, setModifications] = useState('');
-  const [previewHeight, setPreviewHeight] = useState(200);
+  const [previewHeight, setPreviewHeight] = useState(() => {
+    const saved = localStorage.getItem('step2PreviewHeight');
+    return saved ? Number(saved) : 200;
+  });
   const [isDragging, setIsDragging] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -202,16 +205,17 @@ export const Step2Outline: React.FC<Step2OutlineProps> = ({
     const startY = e.clientY;
     const startHeight = previewHeight;
 
-    const handleMouseMove = (moveEvent: MouseEvent) => {
-      const delta = moveEvent.clientY - startY;
-      const newHeight = Math.max(60, Math.min(startHeight + delta, 600));
-      setPreviewHeight(newHeight);
-    };
-
     const handleMouseUp = () => {
       setIsDragging(false);
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handleMouseUp);
+    };
+
+    const handleMouseMove = (moveEvent: MouseEvent) => {
+      const delta = moveEvent.clientY - startY;
+      const newHeight = Math.max(60, Math.min(startHeight + delta, 600));
+      setPreviewHeight(newHeight);
+      localStorage.setItem('step2PreviewHeight', String(newHeight));
     };
 
     document.addEventListener('mousemove', handleMouseMove);

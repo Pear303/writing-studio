@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Play, Pause, X, SkipForward, RotateCcw, MessageSquare, CheckCircle, AlertCircle, Loader2, ChevronDown, ChevronRight, Plus, Trash2 } from 'lucide-react';
 import type { PipelineAutoState, PipelineAutoStep, PipelineIntervention, Book, Volume, VibePreset } from '../../types';
 import {
@@ -157,6 +157,7 @@ export const VibeWritingPanel: React.FC<VibeWritingPanelProps> = ({
   const [newPresetName, setNewPresetName] = useState('');
   const [newPresetContent, setNewPresetContent] = useState('');
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const vibeTextareaRef = useRef<HTMLTextAreaElement>(null);
 
   // 加载预设
   const loadPresets = useCallback(async () => {
@@ -170,6 +171,28 @@ export const VibeWritingPanel: React.FC<VibeWritingPanelProps> = ({
   useEffect(() => {
     loadPresets();
   }, [loadPresets]);
+
+  // 持久化 textarea 高度
+  useEffect(() => {
+    const textarea = vibeTextareaRef.current;
+    if (!textarea) return;
+    // 恢复保存的高度
+    const savedHeight = localStorage.getItem('vibeTextareaHeight');
+    if (savedHeight) {
+      textarea.style.height = savedHeight + 'px';
+    }
+    // 监听尺寸变化并保存
+    const observer = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const height = entry.contentRect.height;
+        if (height > 0) {
+          localStorage.setItem('vibeTextareaHeight', String(Math.round(height)));
+        }
+      }
+    });
+    observer.observe(textarea);
+    return () => observer.disconnect();
+  }, []);
 
   // 切换预设
   const handleTogglePreset = async (preset: VibePreset) => {
@@ -242,6 +265,7 @@ export const VibeWritingPanel: React.FC<VibeWritingPanelProps> = ({
         <div className="px-4 pb-3">
           <div className="flex gap-2">
             <textarea
+              ref={vibeTextareaRef}
               className="flex-1 text-sm px-3 py-2 rounded resize-y"
               style={{
                 backgroundColor: 'var(--color-vscode-input-bg)',

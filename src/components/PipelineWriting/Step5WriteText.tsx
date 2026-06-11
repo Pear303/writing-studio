@@ -92,7 +92,10 @@ export const Step5WriteText: React.FC<Step5WriteTextProps> = ({
   const [additions, setAdditions] = useState('');
   const [deletions, setDeletions] = useState('');
   const [modifications, setModifications] = useState('');
-  const [previewHeight, setPreviewHeight] = useState(200);
+  const [previewHeight, setPreviewHeight] = useState(() => {
+    const saved = localStorage.getItem('step5PreviewHeight');
+    return saved ? Number(saved) : 200;
+  });
   const [isDragging, setIsDragging] = useState(false);
   const [showMaterialPicker, setShowMaterialPicker] = useState(false);
   const [materials, setMaterials] = useState<Material[]>([]);
@@ -669,16 +672,17 @@ export const Step5WriteText: React.FC<Step5WriteTextProps> = ({
     const startY = e.clientY;
     const startHeight = previewHeight;
 
-    const handleMouseMove = (moveEvent: MouseEvent) => {
-      const delta = moveEvent.clientY - startY;
-      const newHeight = Math.max(60, Math.min(startHeight + delta, 600));
-      setPreviewHeight(newHeight);
-    };
-
     const handleMouseUp = () => {
       setIsDragging(false);
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handleMouseUp);
+    };
+
+    const handleMouseMove = (moveEvent: MouseEvent) => {
+      const delta = moveEvent.clientY - startY;
+      const newHeight = Math.max(60, Math.min(startHeight + delta, 600));
+      setPreviewHeight(newHeight);
+      localStorage.setItem('step5PreviewHeight', String(newHeight));
     };
 
     document.addEventListener('mousemove', handleMouseMove);

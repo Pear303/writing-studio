@@ -93,6 +93,7 @@ interface SidebarProps {
   }, onChunk: (chunk: string) => void, signal: AbortSignal) => Promise<void>;
   onAppendToEditor?: (content: string) => void;
   onGenerateOutline?: (volumeId: string, volumeName: string) => Promise<string>;
+  onGenerateChapterOutline?: (chapterId: string, chapterTitle: string) => Promise<string>;
   // 润色相关
   onPolish?: (params: {
     chapterContent: string;
@@ -171,6 +172,7 @@ export const Sidebar = ({
   onContinueWriting,
   onAppendToEditor,
   onGenerateOutline,
+  onGenerateChapterOutline,
   onPolish,
   onReplaceEditorContent,
   onStartDeconstruction,
@@ -331,6 +333,9 @@ export const Sidebar = ({
               onContinueWriting={onContinueWriting || (async () => {})}
               onAppendToEditor={onAppendToEditor}
               onGenerateOutline={onGenerateOutline}
+              onGenerateChapterOutline={onGenerateChapterOutline}
+              onChapterSelect={onChapterSelect}
+              onBookSelect={onBookSelect}
               showToast={showToast}
             />
           ) : activeActivity === 'polish' ? (

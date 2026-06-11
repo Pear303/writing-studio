@@ -1,7 +1,7 @@
 import Dexie, { Table } from 'dexie';
 import bcrypt from 'bcryptjs';
 import { v4 as uuidv4 } from 'uuid';
-import type { Book, Volume, Chapter, Material, AIConversation, ChapterVersion, LLMConfig, QARecord, FullExportData, ImportResult, FormattingSettings, WritingGoal, PomodoroState, Theme, PipelineSession, VibePreset, PipelinePromptTemplate, VibePipelineHistory, RecycleBinItem, BookDeconstructionResult, ImitationOutline } from '../types';
+import type { Book, Volume, Chapter, Material, AIConversation, ChapterVersion, LLMConfig, QARecord, FullExportData, ImportResult, FormattingSettings, WritingGoal, PomodoroState, Theme, PipelineSession, VibePreset, PipelinePromptTemplate, VibePipelineHistory, RecycleBinItem, BookDeconstructionResult, ImitationOutline, LocalStorageSettings } from '../types';
 import { DEFAULT_VIBE_PRESETS } from '../types';
 export type { LLMConfig };
 
@@ -302,7 +302,64 @@ export const exportLocalSettings = (): Record<string, any> => {
   return result;
 };
 
-// 导出完整数据
+// 导出 localStorage 中的通用设置项
+const exportLocalStorageSettings = (): LocalStorageSettings => {
+  const s: LocalStorageSettings = {};
+  const readJSON = (key: string) => {
+    const v = localStorage.getItem(key);
+    if (v) { try { return JSON.parse(v); } catch { return undefined; } }
+    return undefined;
+  };
+  const readStr = (key: string) => localStorage.getItem(key) || undefined;
+  const readNum = (key: string) => {
+    const v = localStorage.getItem(key);
+    return v ? Number(v) : undefined;
+  };
+
+  s.fontSettings = readJSON('fontSettings');
+  s.customFontMetaList = readJSON('customFontMetaList');
+  s.wordCountSettings = readJSON('wordCountSettings');
+  s.autoSaveInterval = readNum('autoSaveInterval');
+  s.editorFontSize = readNum('editorFontSize');
+  s.startupWindowMode = readStr('startupWindowMode') as LocalStorageSettings['startupWindowMode'];
+  s.chapterDetailDisplay = readStr('chapterDetailDisplay') as LocalStorageSettings['chapterDetailDisplay'];
+  s.volumeDetailInfo = readStr('volumeDetailInfo') as LocalStorageSettings['volumeDetailInfo'];
+  s.agentApiUrl = readStr('agentApiUrl');
+  s.lastBackupExportPath = readStr('lastBackupExportPath');
+  s.lastBackupImportPath = readStr('lastBackupImportPath');
+  s.continueWritingWordCountTarget = readNum('continueWritingWordCountTarget');
+  s.continuationWordCount = readNum('continuationWordCount');
+  s.pipelineActiveTab = readStr('pipelineActiveTab');
+  s.pipelineSelectedVolumeId = readStr('pipelineSelectedVolumeId');
+  s.lineHeight = readStr('lineHeight');
+  s.sidebarWidth = readNum('sidebarWidth');
+  s.rightPanelWidth = readNum('rightPanelWidth');
+
+  return s;
+};
+
+// 导入 localStorage 中的通用设置项
+const importLocalStorageSettings = (s?: LocalStorageSettings) => {
+  if (!s) return;
+  if (s.fontSettings !== undefined) localStorage.setItem('fontSettings', JSON.stringify(s.fontSettings));
+  if (s.customFontMetaList !== undefined) localStorage.setItem('customFontMetaList', JSON.stringify(s.customFontMetaList));
+  if (s.wordCountSettings !== undefined) localStorage.setItem('wordCountSettings', JSON.stringify(s.wordCountSettings));
+  if (s.autoSaveInterval !== undefined) localStorage.setItem('autoSaveInterval', String(s.autoSaveInterval));
+  if (s.editorFontSize !== undefined) localStorage.setItem('editorFontSize', String(s.editorFontSize));
+  if (s.startupWindowMode !== undefined) localStorage.setItem('startupWindowMode', s.startupWindowMode);
+  if (s.chapterDetailDisplay !== undefined) localStorage.setItem('chapterDetailDisplay', s.chapterDetailDisplay);
+  if (s.volumeDetailInfo !== undefined) localStorage.setItem('volumeDetailInfo', s.volumeDetailInfo);
+  if (s.agentApiUrl !== undefined) localStorage.setItem('agentApiUrl', s.agentApiUrl);
+  if (s.lastBackupExportPath !== undefined) localStorage.setItem('lastBackupExportPath', s.lastBackupExportPath);
+  if (s.lastBackupImportPath !== undefined) localStorage.setItem('lastBackupImportPath', s.lastBackupImportPath);
+  if (s.continueWritingWordCountTarget !== undefined) localStorage.setItem('continueWritingWordCountTarget', String(s.continueWritingWordCountTarget));
+  if (s.continuationWordCount !== undefined) localStorage.setItem('continuationWordCount', String(s.continuationWordCount));
+  if (s.pipelineActiveTab !== undefined) localStorage.setItem('pipelineActiveTab', s.pipelineActiveTab);
+  if (s.pipelineSelectedVolumeId !== undefined) localStorage.setItem('pipelineSelectedVolumeId', s.pipelineSelectedVolumeId);
+  if (s.lineHeight !== undefined) localStorage.setItem('lineHeight', s.lineHeight);
+  if (s.sidebarWidth !== undefined) localStorage.setItem('sidebarWidth', String(s.sidebarWidth));
+  if (s.rightPanelWidth !== undefined) localStorage.setItem('rightPanelWidth', String(s.rightPanelWidth));
+};
 export const exportAllData = async (): Promise<string> => {
   const books = await db.books.toArray();
   const volumes = await db.volumes.toArray();
@@ -344,12 +401,16 @@ export const exportAllData = async (): Promise<string> => {
     recycleBinItems: await db.recycleBin.toArray(),
     bookDeconstructions: await db.bookDeconstructions.toArray(),
     imitationOutlines: await db.imitationOutlines.toArray(),
+    pipelineSessions: await db.pipelineSessions.toArray(),
+    pipelinePromptTemplates: await db.pipelinePromptTemplates.toArray(),
+    vibePresets: await db.vibePresets.toArray(),
     users,
     userSettings,
     formattingSettings,
     writingGoal,
     pomodoro,
     theme,
+    localSettings: exportLocalStorageSettings(),
     metadata: {
       lastExportPath,
       lastImportPath,
@@ -368,7 +429,7 @@ export const importAllData = async (jsonData: string, mergeMode: boolean = true)
 
   if (!mergeMode) {
     await db.transaction('rw', 
-      [db.books, db.volumes, db.chapters, db.materials, db.aiConversations, db.chapterVersions, db.llmConfigs, db.qaRecords, db.users, db.userSettings, db.chapterStateCommits, db.antiPatterns, db.vibePipelineHistory, db.recycleBin, db.bookDeconstructions, db.imitationOutlines],
+      [db.books, db.volumes, db.chapters, db.materials, db.aiConversations, db.chapterVersions, db.llmConfigs, db.qaRecords, db.users, db.userSettings, db.chapterStateCommits, db.antiPatterns, db.vibePipelineHistory, db.recycleBin, db.bookDeconstructions, db.imitationOutlines, db.pipelineSessions, db.pipelinePromptTemplates, db.vibePresets],
       async () => {
         await db.books.clear();
         await db.volumes.clear();
@@ -386,6 +447,9 @@ export const importAllData = async (jsonData: string, mergeMode: boolean = true)
         await db.recycleBin.clear();
         await db.bookDeconstructions.clear();
         await db.imitationOutlines.clear();
+        await db.pipelineSessions.clear();
+        await db.pipelinePromptTemplates.clear();
+        await db.vibePresets.clear();
         
         if (data.books?.length) {
           await db.books.bulkAdd(data.books.map(b => ({ ...b, userId: b.userId || importUserId })));
@@ -407,6 +471,9 @@ export const importAllData = async (jsonData: string, mergeMode: boolean = true)
         if (data.recycleBinItems?.length) await db.recycleBin.bulkAdd(data.recycleBinItems);
         if (data.bookDeconstructions?.length) await db.bookDeconstructions.bulkAdd(data.bookDeconstructions);
         if (data.imitationOutlines?.length) await db.imitationOutlines.bulkAdd(data.imitationOutlines);
+        if (data.pipelineSessions?.length) await db.pipelineSessions.bulkAdd(data.pipelineSessions);
+        if (data.pipelinePromptTemplates?.length) await db.pipelinePromptTemplates.bulkAdd(data.pipelinePromptTemplates);
+        if (data.vibePresets?.length) await db.vibePresets.bulkAdd(data.vibePresets);
       }
     );
     
@@ -418,12 +485,13 @@ export const importAllData = async (jsonData: string, mergeMode: boolean = true)
     if (data.theme) localStorage.setItem(THEME_KEY, data.theme);
     if (data.metadata?.lastExportPath) localStorage.setItem(LAST_EXPORT_PATH_KEY, data.metadata.lastExportPath);
     if (data.metadata?.lastImportPath) localStorage.setItem(LAST_IMPORT_PATH_KEY, data.metadata.lastImportPath);
+    importLocalStorageSettings(data.localSettings);
     
     return result;
   }
   
   await db.transaction('rw', 
-    [db.books, db.volumes, db.chapters, db.materials, db.aiConversations, db.chapterVersions, db.llmConfigs, db.qaRecords, db.users, db.userSettings, db.chapterStateCommits, db.antiPatterns, db.vibePipelineHistory, db.recycleBin, db.bookDeconstructions, db.imitationOutlines],
+    [db.books, db.volumes, db.chapters, db.materials, db.aiConversations, db.chapterVersions, db.llmConfigs, db.qaRecords, db.users, db.userSettings, db.chapterStateCommits, db.antiPatterns, db.vibePipelineHistory, db.recycleBin, db.bookDeconstructions, db.imitationOutlines, db.pipelineSessions, db.pipelinePromptTemplates, db.vibePresets],
     async () => {
       const existingBookIds = new Set((await db.books.toArray()).map(b => b.id));
       const existingVolumeIds = new Set((await db.volumes.toArray()).map(v => v.id));
@@ -538,6 +606,21 @@ export const importAllData = async (jsonData: string, mergeMode: boolean = true)
         await db.imitationOutlines.put(im);
         result.added++;
       }
+
+      for (const session of data.pipelineSessions || []) {
+        await db.pipelineSessions.put(session);
+        result.added++;
+      }
+
+      for (const template of data.pipelinePromptTemplates || []) {
+        await db.pipelinePromptTemplates.put(template);
+        result.added++;
+      }
+
+      for (const preset of data.vibePresets || []) {
+        await db.vibePresets.put(preset);
+        result.added++;
+      }
     }
   );
   
@@ -574,6 +657,7 @@ export const importAllData = async (jsonData: string, mergeMode: boolean = true)
   
   if (data.theme) localStorage.setItem(THEME_KEY, data.theme);
   if (data.metadata?.lastExportPath) localStorage.setItem(LAST_EXPORT_PATH_KEY, data.metadata.lastExportPath);
+  importLocalStorageSettings(data.localSettings);
   
   return result;
 };

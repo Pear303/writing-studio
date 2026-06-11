@@ -56,7 +56,10 @@ const EDITOR_MIN_WIDTH = 400;    // 编辑器最小宽度
 function App() {
   const [activeActivity, setActiveActivity] = useState<ActivityId>('books');
   const [isSidebarVisible, setIsSidebarVisible] = useState(true);
-  const [sidebarWidth, setSidebarWidth] = useState(SIDEBAR_DEFAULT_WIDTH);
+  const [sidebarWidth, setSidebarWidth] = useState(() => {
+    const saved = localStorage.getItem('sidebarWidth');
+    return saved ? Number(saved) : SIDEBAR_DEFAULT_WIDTH;
+  });
   const [isResizing, setIsResizing] = useState(false);
   const [editorContent, setEditorContent] = useState('');
   const [wordCount, setWordCount] = useState(0);
@@ -133,12 +136,18 @@ function App() {
     applyStartupWindowMode();
   }, []);
 
-  const [formattingSettings, setFormattingSettings] = useState<FormattingSettings>({
-    paragraphSpacing: '1em',
-    firstLineIndent: '2char',
-    clearExtraBlankLines: true,
-    clearExtraSpaces: true,
-    convertPunctuation: false,
+  const [formattingSettings, setFormattingSettings] = useState<FormattingSettings>(() => {
+    const saved = localStorage.getItem('formattingSettings');
+    if (saved) {
+      try { return JSON.parse(saved); } catch {}
+    }
+    return {
+      paragraphSpacing: '1em',
+      firstLineIndent: '2char',
+      clearExtraBlankLines: true,
+      clearExtraSpaces: true,
+      convertPunctuation: false,
+    };
   });
 
   const [wordCountSettings, setWordCountSettings] = useState<WordCountSettings>(() => {
@@ -150,7 +159,7 @@ function App() {
   });
 
   // 行间距（编辑器实时预览用）
-  const [lineHeight, setLineHeight] = useState('1.5');
+  const [lineHeight, setLineHeight] = useState(() => localStorage.getItem('lineHeight') || '1.5');
 
   // 刷新目录树
   const [outlineRefreshTrigger, setOutlineRefreshTrigger] = useState(0);
@@ -163,18 +172,31 @@ function App() {
   // 新增状态
   const [isFullScreen, setIsFullScreen] = useState(false); // 专注模式
   const [agentSyncing, setAgentSyncing] = useState(false);
-  const [writingGoal, setWritingGoal] = useState<WritingGoal>({
-    dailyTarget: 3000,
-    chapterTarget: 5000,
-    enabled: false,
+  const [writingGoal, setWritingGoal] = useState<WritingGoal>(() => {
+    const saved = localStorage.getItem('writingGoal');
+    if (saved) {
+      try { return JSON.parse(saved); } catch {}
+    }
+    return { dailyTarget: 3000, chapterTarget: 5000, enabled: false };
   });
-  const [pomodoro, setPomodoro] = useState<PomodoroState>({
-    isRunning: false,
-    timeLeft: 25 * 60, // 25分钟
-    mode: 'work',
-    workDuration: 25,
-    breakDuration: 5,
-    completedSessions: 0,
+  const [pomodoro, setPomodoro] = useState<PomodoroState>(() => {
+    const saved = localStorage.getItem('pomodoroState');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        return { ...parsed, isRunning: false }; // 恢复时不自动启动
+      } catch {
+        // 解析失败用默认值
+      }
+    }
+    return {
+      isRunning: false,
+      timeLeft: 25 * 60,
+      mode: 'work',
+      workDuration: 25,
+      breakDuration: 5,
+      completedSessions: 0,
+    };
   });
   const [todayWordCount, setTodayWordCount] = useState(0); // 今日已写字数
 
@@ -182,7 +204,10 @@ function App() {
   const [tabs, setTabs] = useState<TabItem[]>([]);
   const [activeTabId, setActiveTabId] = useState<string | null>(null);
   const [isRightPanelVisible, setIsRightPanelVisible] = useState(true);
-  const [rightPanelWidth, setRightPanelWidth] = useState(240);
+  const [rightPanelWidth, setRightPanelWidth] = useState(() => {
+    const saved = localStorage.getItem('rightPanelWidth');
+    return saved ? Number(saved) : 240;
+  });
   const [rightActivity, setRightActivity] = useState<'preview' | 'outline' | 'qa'>('preview');
   const [isRightResizing, setIsRightResizing] = useState(false);
   const [volumesWithChapters, setVolumesWithChapters] = useState<Set<string>>(new Set());
@@ -217,6 +242,7 @@ function App() {
     setIsRightResizing(false);
     document.body.style.cursor = '';
     document.body.style.userSelect = '';
+    localStorage.setItem('rightPanelWidth', String(rightPanelWidth));
   };
 
   useEffect(() => {
@@ -326,16 +352,6 @@ function App() {
 
   // ========== 写作目标管理 ==========
   useEffect(() => {
-    // 加载写作目标设置
-    const saved = localStorage.getItem('writingGoal');
-    if (saved) {
-      try {
-        setWritingGoal(JSON.parse(saved));
-      } catch (e) {
-        console.error('加载写作目标失败:', e);
-      }
-    }
-    
     // 加载今日字数统计
     const today = new Date().toDateString();
     const savedDate = localStorage.getItem('writingGoalDate');
@@ -348,6 +364,11 @@ function App() {
       localStorage.setItem('writingGoalDate', today);
     }
   }, []);
+
+  // 写作目标持久化
+  useEffect(() => {
+    localStorage.setItem('writingGoal', JSON.stringify(writingGoal));
+  }, [writingGoal]);
 
   // 更新今日字数并检查目标
   useEffect(() => {
@@ -436,6 +457,11 @@ function App() {
       timeLeft: prev.mode === 'work' ? prev.breakDuration * 60 : prev.workDuration * 60,
     }));
   };
+
+  // 番茄钟状态持久化
+  useEffect(() => {
+    localStorage.setItem('pomodoroState', JSON.stringify(pomodoro));
+  }, [pomodoro]);
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -545,6 +571,7 @@ function App() {
     setIsResizing(false);
     document.body.style.cursor = '';
     document.body.style.userSelect = '';
+    localStorage.setItem('sidebarWidth', String(sidebarWidth));
   };
 
   useEffect(() => {
@@ -1366,6 +1393,25 @@ ${chapterContents}
       triggerOutlineRefresh();
     } catch (err) {
       console.error('保存卷大纲失败:', err);
+    }
+    return result;
+  };
+
+  const handleGenerateChapterOutlineForContinue = async (chapterId: string, chapterTitle: string): Promise<string> => {
+    if (!currentBook) throw new Error('请先选择书籍');
+    await initPipelineLLM();
+    const result = await novelLLMService.generatePipelineOutline({
+      genres: [],
+      plotType: '',
+      protagonistIdentity: '',
+      customPrompt: `为《${currentBook.name}》的章节「${chapterTitle}」生成详细大纲`,
+      tone: '',
+    });
+    // 保存到章节的 detailedOutline
+    try {
+      await db.chapters.update(chapterId, { detailedOutline: result });
+    } catch (err) {
+      console.error('保存章节大纲失败:', err);
     }
     return result;
   };
@@ -2210,7 +2256,10 @@ ${chapterContents}
         currentChapter={currentChapter}
         lineHeight={lineHeight}
         paragraphSpacingValue={formattingSettings.paragraphSpacing}
-        onLineHeightChange={setLineHeight}
+        onLineHeightChange={(value: string) => {
+          setLineHeight(value);
+          localStorage.setItem('lineHeight', value);
+        }}
         onParagraphSpacingChange={(value) => {
           setFormattingSettings(prev => ({ ...prev, paragraphSpacing: value }));
         }}
@@ -2339,6 +2388,7 @@ ${chapterContents}
                   onContinueWriting={handleContinueWritingSidebar}
                   onAppendToEditor={handleAppendToEditor}
                   onGenerateOutline={handleGenerateOutlineForContinue}
+                  onGenerateChapterOutline={handleGenerateChapterOutlineForContinue}
                   onPolish={handlePolishSidebar}
                   onReplaceEditorContent={handleReplaceEditorContent}
                 />
