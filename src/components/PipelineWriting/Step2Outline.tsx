@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Copy, Upload, Loader2, RefreshCw, ExternalLink, XCircle } from 'lucide-react';
 import type { PipelineStep1Config, Volume, PipelineStep2State, OutlineRound } from '../../types';
 import { ConfirmDialog } from '../ConfirmDialog';
@@ -199,16 +199,22 @@ export const Step2Outline: React.FC<Step2OutlineProps> = ({
     }
   };
 
+  const dragStateRef = useRef<{ startY: number; startHeight: number } | null>(null);
+
   const handleDragStart = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
+    dragStateRef.current = { startY: e.clientY, startHeight: previewHeight };
     setIsDragging(true);
-    const startY = e.clientY;
-    const startHeight = previewHeight;
+  }, [previewHeight]);
+
+  // 拖拽期间由 isDragging 驱动注册/注销 document 监听器，卸载时自动清理
+  useEffect(() => {
+    if (!isDragging || !dragStateRef.current) return;
+    const { startY, startHeight } = dragStateRef.current;
 
     const handleMouseUp = () => {
       setIsDragging(false);
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
+      dragStateRef.current = null;
     };
 
     const handleMouseMove = (moveEvent: MouseEvent) => {
@@ -220,7 +226,11 @@ export const Step2Outline: React.FC<Step2OutlineProps> = ({
 
     document.addEventListener('mousemove', handleMouseMove);
     document.addEventListener('mouseup', handleMouseUp);
-  }, [previewHeight]);
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isDragging]);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
@@ -241,7 +251,7 @@ export const Step2Outline: React.FC<Step2OutlineProps> = ({
 
       {isWorking && (
         <div style={{ textAlign: 'center', padding: '40px 16px' }}>
-          <Loader2 size={32} style={{ color: 'var(--color-vscode-active)', animation: 'spin 1s linear infinite', margin: '0 auto 12px' }} />
+          <Loader2 size={32} className="animate-spin" style={{ color: 'var(--color-vscode-active)', margin: '0 auto 12px' }} />
           <p style={{ fontSize: '13px', color: 'var(--color-vscode-text)', opacity: 0.7 }}>
             正在回炉重造，请稍候...
           </p>
@@ -255,7 +265,6 @@ export const Step2Outline: React.FC<Step2OutlineProps> = ({
               取消生成
             </button>
           )}
-          <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
         </div>
       )}
 
@@ -385,7 +394,7 @@ export const Step2Outline: React.FC<Step2OutlineProps> = ({
                 disabled={isWorking}
                 onClick={handleRefine}
               >
-                {isWorking ? <Loader2 size={13} style={{ animation: 'spin 1s linear infinite' }} /> : <RefreshCw size={13} />}
+                {isWorking ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />}
                 回炉重造
               </button>
             </div>
@@ -403,10 +412,6 @@ export const Step2Outline: React.FC<Step2OutlineProps> = ({
         onConfirm={confirmOverwrite}
         onCancel={() => setShowConfirm(false)}
       />
-
-      {isWorking && (
-        <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
-      )}
     </div>
   );
 };

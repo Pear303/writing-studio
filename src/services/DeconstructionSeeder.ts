@@ -65,7 +65,9 @@ export class DeconstructionSeeder {
         for (const ch of chs) {
           await db.chapters.update(ch.id, { bookId });
         }
-        const commits = await db.chapterStateCommits.where('bookId').equals(newBookId).toArray();
+        // 拆书过程中的 chapterStateCommits 挂在 result.id（deconstructionId）下（见 BookDeconstructor.runPhase2），
+        // 迁移到最终 bookId，保证事实提取状态与书籍一致
+        const commits = await db.chapterStateCommits.where('bookId').equals(result.id).toArray();
         for (const commit of commits) {
           await db.chapterStateCommits.update(commit.id, { bookId });
         }

@@ -82,9 +82,20 @@ function findAllMatches(
       const text = node.text || '';
       const searchIn = caseSensitive ? text : text.toLowerCase();
       let idx = 0;
-      while ((idx = searchIn.indexOf(term, idx)) !== -1) {
-        matches.push({ from: pos + idx, to: pos + idx + searchTerm.length });
-        idx += searchTerm.length;
+      if (caseSensitive || searchIn.length === text.length) {
+        // 快速路径：toLowerCase 不改变长度时，indexOf 位置与原文一一对应
+        while ((idx = searchIn.indexOf(term, idx)) !== -1) {
+          matches.push({ from: pos + idx, to: pos + idx + searchTerm.length });
+          idx += searchTerm.length;
+        }
+      } else {
+        // 慢路径：toLowerCase 改变了字符串长度（罕见 Unicode 字符），逐字符滑动窗口不区分大小写匹配
+        for (let i = 0; i <= text.length - searchTerm.length; i++) {
+          if (text.slice(i, i + searchTerm.length).toLowerCase() === term) {
+            matches.push({ from: pos + i, to: pos + i + searchTerm.length });
+            i += searchTerm.length - 1;
+          }
+        }
       }
     }
     return true;

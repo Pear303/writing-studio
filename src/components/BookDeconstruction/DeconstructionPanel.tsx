@@ -30,7 +30,7 @@ export const DeconstructionPanel: React.FC<DeconstructionPanelProps> = ({
     if (!defaultConfig) {
       throw new Error('请先配置 LLM（在 AI 助手中设置）');
     }
-    const apiKey = decodeApiKey(defaultConfig.apiKey);
+    const apiKey = await decodeApiKey(defaultConfig.apiKey);
     novelLLMService.init(new Map(), {
       apiKey,
       baseUrl: defaultConfig.apiUrl.replace(/\/chat\/completions\/?$/, '').replace(/\/$/, ''),
@@ -118,9 +118,9 @@ export const DeconstructionPanel: React.FC<DeconstructionPanelProps> = ({
     setSelectedDecon(result);
     await loadDeconstructions();
 
-    const llmCall = async (prompt: string): Promise<string> => {
+    const llmCall = async (prompt: string, signal?: AbortSignal): Promise<string> => {
       await ensureLLMInit();
-      const res = await novelLLMService.generateRaw(prompt, undefined, { maxTokens: 16000 });
+      const res = await novelLLMService.generateRaw(prompt, undefined, { maxTokens: 16000, signal });
       return res.content;
     };
 
@@ -160,9 +160,9 @@ export const DeconstructionPanel: React.FC<DeconstructionPanelProps> = ({
       return;
     }
 
-    const llmCall = async (prompt: string): Promise<string> => {
+    const llmCall = async (prompt: string, signal?: AbortSignal): Promise<string> => {
       await ensureLLMInit();
-      const res = await novelLLMService.generateRaw(prompt, undefined, { maxTokens: 16000 });
+      const res = await novelLLMService.generateRaw(prompt, undefined, { maxTokens: 16000, signal });
       return res.content;
     };
 
@@ -410,9 +410,9 @@ export const DeconstructionPanel: React.FC<DeconstructionPanelProps> = ({
                   </span>
                   <div className="flex items-center gap-1.5">
                     <span className={`text-[10px] px-1.5 py-0.5 rounded ${
-                      decon.status === 'completed' ? 'bg-green-500/20 text-green-400' :
-                      decon.status === 'failed' ? 'bg-red-500/20 text-red-400' :
-                      'bg-yellow-500/20 text-yellow-400'
+                      decon.status === 'completed' ? 'bg-vscode-success/20 text-vscode-success' :
+                      decon.status === 'failed' ? 'bg-vscode-danger/20 text-vscode-danger' :
+                      'bg-vscode-warning/20 text-vscode-warning'
                     }`}>
                       {decon.status === 'completed' ? '已完成' :
                        decon.status === 'failed' ? '失败' : '进行中'}

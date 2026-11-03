@@ -33,10 +33,29 @@ export class SkeletonExtractor {
 
   async extract(
     chapters: Array<{ index: number; title: string; content: string }>,
-    llmCall: (prompt: string) => Promise<string>,
+    llmCall: (prompt: string, signal?: AbortSignal) => Promise<string>,
     onProgress: (batch: number, totalBatches: number) => void,
     abortSignal?: AbortSignal,
   ): Promise<BookSkeleton> {
+    if (chapters.length === 0) {
+      // 空数据：直接返回空骨架，避免空批次调用 LLM
+      return {
+        meta: {
+          title: '',
+          genre: '',
+          subGenres: [],
+          coreTone: '',
+          estimatedWordCount: 0,
+        },
+        coreConflict: '',
+        themes: [],
+        chapterSkeletons: [],
+        suspenseLines: [],
+        structureType: '',
+        structureDescription: '',
+      };
+    }
+
     const totalBatches = Math.ceil(chapters.length / this.BATCH_SIZE);
     let skeleton: Partial<BookSkeleton> = {
       meta: {
@@ -128,6 +147,7 @@ export class SkeletonExtractor {
       skeleton.suspenseLines!,
       skeleton.meta!,
       llmCall,
+      abortSignal,
     );
 
     for (const update of finalizeResult.suspenseLineUpdates) {
@@ -235,7 +255,8 @@ export class SkeletonExtractor {
     batchStart: number,
     batchEnd: number,
     chapterTexts: string,
-    llmCall: (prompt: string) => Promise<string>,
+    llmCall: (prompt: string, signal?: AbortSignal) => Promise<string>,
+    abortSignal?: AbortSignal,
   ): Promise<SkeletonExtractResult> {
     const prompt = this.buildFirstBatchPrompt(batchStart, batchEnd, chapterTexts);
 
@@ -247,7 +268,7 @@ export class SkeletonExtractor {
       metadata: { batchStart, batchEnd },
     });
 
-    const raw = await llmCall(prompt);
+    const raw = await llmCall(prompt, abortSignal);
     return this.parseResult<SkeletonExtractResult>(raw);
   }
 
@@ -256,10 +277,11 @@ export class SkeletonExtractor {
     batchEnd: number,
     chapterTexts: string,
     existingSkeleton: string,
-    llmCall: (prompt: string) => Promise<string>,
+    llmCall: (prompt: string, signal?: AbortSignal) => Promise<string>,
+    abortSignal?: AbortSignal,
   ): Promise<SkeletonMergeResult> {
     const prompt = this.buildMergePrompt(batchStart, batchEnd, chapterTexts, existingSkeleton);
-    const raw = await llmCall(prompt);
+    const raw = await llmCall(prompt, abortSignal);
     return this.parseResult<SkeletonMergeResult>(raw);
   }
 
@@ -267,10 +289,11 @@ export class SkeletonExtractor {
     chapterSkeletons: ChapterSkeleton[],
     suspenseLines: SuspenseLine[],
     meta: BookSkeleton['meta'],
-    llmCall: (prompt: string) => Promise<string>,
+    llmCall: (prompt: string, signal?: AbortSignal) => Promise<string>,
+    abortSignal?: AbortSignal,
   ): Promise<SkeletonFinalizeResult> {
     const prompt = this.buildFinalizePrompt(chapterSkeletons, suspenseLines, meta);
-    const raw = await llmCall(prompt);
+    const raw = await llmCall(prompt, abortSignal);
     return this.parseResult<SkeletonFinalizeResult>(raw);
   }
 

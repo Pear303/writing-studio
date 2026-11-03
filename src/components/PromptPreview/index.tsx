@@ -30,18 +30,18 @@ export const PromptPreviewPanel: React.FC<PromptPreviewPanelProps> = ({ isOpen, 
   };
   
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+    <div className="modal-overlay">
       <div className="bg-vscode-sidebar border border-vscode-border rounded-lg w-[800px] max-h-[80vh] flex flex-col shadow-2xl">
         <div className="flex items-center justify-between px-4 py-3 border-b border-vscode-border">
           <div>
             <h2 className="text-lg font-semibold text-vscode-text">当前写作阶段</h2>
             {loaded ? (
-              <span className="text-sm text-green-400 flex items-center gap-1">
+              <span className="text-sm text-vscode-success flex items-center gap-1">
                 <CheckCircle size={14} />
                 {STAGE_NAMES[currentStage] || '空闲中'}
               </span>
             ) : (
-              <span className="text-sm text-yellow-400 flex items-center gap-1">
+              <span className="text-sm text-vscode-warning flex items-center gap-1">
                 <AlertCircle size={14} />
                 提示词加载中...
               </span>
@@ -116,7 +116,7 @@ export const PromptIndicator: React.FC<PromptIndicatorProps> = ({ onOpenPreview 
       className="flex items-center gap-1.5 px-2 py-1 text-xs bg-vscode-active/20 hover:bg-vscode-active/30 rounded transition-colors"
       title="点击查看当前使用的提示词"
     >
-      <div className={`w-2 h-2 rounded-full ${loaded ? 'bg-green-400' : 'bg-yellow-400'}`} />
+      <div className={`w-2 h-2 rounded-full ${loaded ? 'bg-vscode-success' : 'bg-vscode-warning'}`} />
       <span className="text-vscode-text">
         {loaded ? `${stageName} (${promptCount})` : '加载中...'}
       </span>

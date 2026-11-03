@@ -1,6 +1,7 @@
 import json
 import time
 import asyncio
+import logging
 import threading
 from fastapi import APIRouter
 from fastapi.responses import StreamingResponse
@@ -8,36 +9,48 @@ from pydantic import BaseModel
 from langchain_core.callbacks import BaseCallbackHandler
 from langchain_core.messages import AIMessage
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter()
 
 _agent = None
 _executor_pool = None
 
-# ── 执行状态 ──
-# stream_text: 当前 LLM 调用的流式文本（每次 on_llm_start 时重置）
-# stream_gen:  流式生成序号（每次 on_llm_start 时递增，前端据此判断是否需重置）
-# stream_sent: 已发送的 stream_text 字符数（实现增量推送）
-# reply:       最终回复（agent 执行完毕后由 result["output"] 覆盖）
-_execution_state = {
-    "running": False,
-    "events": [],
-    "tokens": {"input": 0, "output": 0, "total": 0},
-    "reply": "",
-    "stream_text": "",
-    "stream_gen": 0,
-    "stream_sent": 0,
-}
-_state_lock = threading.Lock()
+
+class ExecutionState:
+    """单次请求的执行状态（含独立锁）。
+
+    此前模块级全局 dict 会被并发请求共享导致状态污染，
+    现改为每个请求独立创建，由 run_agent_sync 与 _sse_generator 共同持有。
+    """
+
+    def __init__(self):
+        self.lock = threading.Lock()
+        self.data = {
+            "running": False,
+            "events": [],
+            "tokens": {"input": 0, "output": 0, "total": 0},
+            "reply": "",
+            "tool_calls": [],
+            # stream_text: 当前 LLM 调用的流式文本（每次 on_llm_start 时重置）
+            # stream_gen:  流式生成序号（每次 on_llm_start 时递增，前端据此判断是否需重置）
+            # stream_sent: 已发送的 stream_text 字符数（实现增量推送）
+            "stream_text": "",
+            "stream_gen": 0,
+            "stream_sent": 0,
+        }
+
+
+# 最近一次请求的执行状态引用（供 /state 兜底接口查询，串行池下即当前/最近请求）
+_last_state: ExecutionState | None = None
 
 
 def set_agent(agent_instance):
     global _agent, _executor_pool
     _agent = agent_instance
     from concurrent.futures import ThreadPoolExecutor
-    _executor_pool = ThreadPoolExecutor(max_workers=2, thread_name_prefix="agent")
-    # 将执行状态引用注入子代理工具模块，使子代理内部事件也能透传到前端
-    from agent.lc_tools import set_chat_state_ref
-    set_chat_state_ref((_execution_state, _state_lock))
+    # max_workers=1：串行执行 LLM 调用，避免并发请求之间的状态竞争
+    _executor_pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="agent")
 
 
 class ChatRequest(BaseModel):
@@ -49,7 +62,8 @@ class ChatRequest(BaseModel):
 class _RunCollector(BaseCallbackHandler):
     """主 Agent 执行回调：收集事件、流式文本、token 用量。"""
 
-    def __init__(self):
+    def __init__(self, state: ExecutionState):
+        self._state = state
         self.ai_messages = []
         self.tool_calls = []
         self.token_usage = {"input": 0, "output": 0, "total": 0}
@@ -60,17 +74,17 @@ class _RunCollector(BaseCallbackHandler):
         return f"agent_{int(time.time() * 1000)}_{self._correlation_counter}"
 
     def _push_event(self, event_type, data):
-        with _state_lock:
+        with self._state.lock:
             evt = {"type": event_type, **data}
-            _execution_state["events"].append(evt)
+            self._state.data["events"].append(evt)
 
     def on_llm_start(self, serialized, prompts, **kwargs):
         # 每次 LLM 调用开始：递增 generation，重置流式文本
         self._current_llm_correlation_id = self._next_correlation_id()
-        with _state_lock:
-            _execution_state["stream_gen"] += 1
-            _execution_state["stream_text"] = ""
-            _execution_state["stream_sent"] = 0
+        with self._state.lock:
+            self._state.data["stream_gen"] += 1
+            self._state.data["stream_text"] = ""
+            self._state.data["stream_sent"] = 0
         # 推送结构化提示词供前端 Debug 面板追踪
         # 尝试从 kwargs 中提取 messages（ChatModel 会传入）
         structured_messages = []
@@ -99,8 +113,8 @@ class _RunCollector(BaseCallbackHandler):
 
     def on_llm_new_token(self, token: str, **kwargs):
         # 增量追加到当前 generation 的流式文本
-        with _state_lock:
-            _execution_state["stream_text"] += token
+        with self._state.lock:
+            self._state.data["stream_text"] += token
 
     def on_llm_end(self, response, **kwargs):
         response_preview = ""
@@ -160,20 +174,35 @@ class _RunCollector(BaseCallbackHandler):
             })
 
 
-def run_agent_sync(message: str, session_id: str | None = None, subagent: str | None = None):
-    # 如果指定了 session_id，切换到该会话
+def run_agent_sync(message: str, session_id: str | None = None, subagent: str | None = None, state: ExecutionState | None = None):
+    """在线程池中同步执行一次 Agent 调用，状态写入独立于请求的 state。
+
+    线程池为串行（max_workers=1），故此处对 memory_store 会话切换/恢复是安全的。
+    """
+    global _last_state
+    if state is None:
+        state = ExecutionState()
+    _last_state = state
+
+    # 将执行状态引用注入子代理工具模块，使子代理内部事件也能透传到前端
+    from agent.lc_tools import set_chat_state_ref
+    set_chat_state_ref((state.data, state.lock))
+
+    # 如果指定了 session_id，切换到该会话；串行执行下先记录原会话，执行完恢复
+    original_session = None
     if session_id and _agent:
+        original_session = _agent.memory_store.current_session_id
         _agent.memory_store.switch_session(session_id)
 
-    with _state_lock:
-        _execution_state["running"] = True
-        _execution_state["events"] = []
-        _execution_state["reply"] = ""
-        _execution_state["stream_text"] = ""
-        _execution_state["stream_gen"] = 0
-        _execution_state["stream_sent"] = 0
+    with state.lock:
+        state.data["running"] = True
+        state.data["events"] = []
+        state.data["reply"] = ""
+        state.data["stream_text"] = ""
+        state.data["stream_gen"] = 0
+        state.data["stream_sent"] = 0
 
-    collector = _RunCollector()
+    collector = _RunCollector(state)
     try:
         if subagent:
             from agent.subagents import dispatch
@@ -194,31 +223,44 @@ def run_agent_sync(message: str, session_id: str | None = None, subagent: str | 
             )
         else:
             _agent.memory_store.append_history("assistant", reply)
-        _agent._maybe_compact()
+        # 历史压缩失败不应中断主流程
+        try:
+            _agent._maybe_compact()
+        except Exception as e:
+            logger.warning("历史压缩失败（已忽略）: %s", e)
 
-        with _state_lock:
-            _execution_state["reply"] = reply
-            _execution_state["tokens"] = collector.token_usage
-            _execution_state["tool_calls"] = collector.tool_calls
+        with state.lock:
+            state.data["reply"] = reply
+            state.data["tokens"] = collector.token_usage
+            state.data["tool_calls"] = collector.tool_calls
     except Exception as e:
-        with _state_lock:
-            _execution_state["events"].append({"type": "error", "message": str(e)})
+        with state.lock:
+            state.data["events"].append({"type": "error", "message": str(e)})
     finally:
-        with _state_lock:
-            _execution_state["running"] = False
+        with state.lock:
+            state.data["running"] = False
+        # 恢复原会话，避免影响后续请求
+        if original_session is not None:
+            try:
+                _agent.memory_store.switch_session(original_session)
+            except Exception:
+                pass
 
 
-async def _sse_generator(request: ChatRequest):
+async def _sse_generator(request: ChatRequest, state: ExecutionState):
     """SSE 事件生成器：将 Agent 执行过程流式推送到前端。"""
     loop = asyncio.get_event_loop()
-    loop.run_in_executor(_executor_pool, run_agent_sync, request.message, request.session_id, request.subagent)
+    loop.run_in_executor(_executor_pool, run_agent_sync, request.message, request.session_id, request.subagent, state)
 
     # ── 等待 Agent 线程启动（running 变为 True） ──
-    # 解决竞态条件：若不等待，首轮 running=False 会立即发 done 退出
+    # 解决竞态条件：若不等待，首轮 running=False 会立即发 done 退出。
+    # 若等待期间已出现 error/done 事件，立即结束等待并交给主循环输出。
     for _ in range(200):  # 最多等 10 秒
         await asyncio.sleep(0.05)
-        with _state_lock:
-            if _execution_state["running"]:
+        with state.lock:
+            if state.data["running"]:
+                break
+            if any(evt.get("type") in ("error", "done") for evt in state.data["events"]):
                 break
     else:
         yield f"data: {json.dumps({'type': 'error', 'message': 'Agent 启动超时'}, ensure_ascii=False)}\n\n"
@@ -230,12 +272,12 @@ async def _sse_generator(request: ChatRequest):
     while True:
         await asyncio.sleep(0.05)
 
-        with _state_lock:
-            events = list(_execution_state["events"])
-            running = _execution_state["running"]
-            stream_text = _execution_state["stream_text"]
-            stream_gen = _execution_state["stream_gen"]
-            stream_sent = _execution_state["stream_sent"]
+        with state.lock:
+            events = list(state.data["events"])
+            running = state.data["running"]
+            stream_text = state.data["stream_text"]
+            stream_gen = state.data["stream_gen"]
+            stream_sent = state.data["stream_sent"]
 
         # ── 1. 发送新增事件 ──
         for evt in events[last_idx:]:
@@ -246,8 +288,8 @@ async def _sse_generator(request: ChatRequest):
         # ── 2. 增量推送流式文本（只发新增部分） ──
         if len(stream_text) > stream_sent:
             new_text = stream_text[stream_sent:]
-            with _state_lock:
-                _execution_state["stream_sent"] = len(stream_text)
+            with state.lock:
+                state.data["stream_sent"] = len(stream_text)
             yield f"data: {json.dumps({'type': 'reply_token', 'content': new_text, 'gen': stream_gen}, ensure_ascii=False)}\n\n"
             last_keepalive = time.time()
 
@@ -259,17 +301,17 @@ async def _sse_generator(request: ChatRequest):
         # ── 4. 检查是否完成 ──
         if not running:
             # 排空最后可能残留的事件
-            with _state_lock:
-                remaining = list(_execution_state["events"][last_idx:])
+            with state.lock:
+                remaining = list(state.data["events"][last_idx:])
             for evt in remaining:
                 yield f"data: {json.dumps(evt, ensure_ascii=False)}\n\n"
 
-            with _state_lock:
+            with state.lock:
                 done_evt = {
                     "type": "done",
-                    "reply": _execution_state["reply"],
-                    "tokens": _execution_state["tokens"],
-                    "tool_calls": _execution_state.get("tool_calls", []),
+                    "reply": state.data["reply"],
+                    "tokens": state.data["tokens"],
+                    "tool_calls": state.data.get("tool_calls", []),
                 }
             yield f"data: {json.dumps(done_evt, ensure_ascii=False)}\n\n"
             break
@@ -277,8 +319,9 @@ async def _sse_generator(request: ChatRequest):
 
 @router.post("")
 async def chat_stream(request: ChatRequest):
+    state = ExecutionState()
     return StreamingResponse(
-        _sse_generator(request),
+        _sse_generator(request, state),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
@@ -286,10 +329,13 @@ async def chat_stream(request: ChatRequest):
 
 @router.get("/state")
 async def get_state():
-    with _state_lock:
+    state = _last_state
+    if state is None:
+        return {"running": False, "events": [], "reply": "", "tokens": {"input": 0, "output": 0, "total": 0}}
+    with state.lock:
         return {
-            "running": _execution_state["running"],
-            "events": _execution_state["events"],
-            "reply": _execution_state["reply"],
-            "tokens": _execution_state["tokens"],
+            "running": state.data["running"],
+            "events": state.data["events"],
+            "reply": state.data["reply"],
+            "tokens": state.data["tokens"],
         }

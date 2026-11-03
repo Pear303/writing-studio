@@ -5,6 +5,7 @@ import { generateToken, saveToken } from '../../auth/token';
 import { useUser } from '../../auth/UserContext';
 import { createUserFolders } from '../../utils/userDataManager';
 import type { SMTPConfig } from '../../db';
+import { decryptSecret } from '../../auth/encryption';
 
 interface RegisterPageProps {
   onSwitchToLogin: () => void;
@@ -68,7 +69,7 @@ export const RegisterPage = ({ onSwitchToLogin, onSuccess, initialUsername, onUs
                 port: smtpConfig.port,
                 secure: smtpConfig.secure,
                 username: smtpConfig.username,
-                password: smtpConfig.password,
+                password: await decryptSecret(smtpConfig.password),
                 from_email: smtpConfig.fromEmail,
               },
               toEmail: email,

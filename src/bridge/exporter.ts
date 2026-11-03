@@ -16,6 +16,11 @@ export interface ExportManifest {
     volumeCount: number;
     chapterCount: number;
   }>;
+  failures?: Array<{
+    id: string;
+    name: string;
+    error: string;
+  }>;
 }
 
 const PENDING_DIR_NAME = 'pending';
@@ -131,20 +136,36 @@ export async function exportAllBooksForAgent(targetDir?: string): Promise<string
     books: [],
   };
 
+  // 单书失败不中断整体导出：记录失败清单，继续导出其它书
+  const failures: NonNullable<ExportManifest['failures']> = [];
+
   for (const book of books) {
-    const volumes = await db.volumes.where('bookId').equals(book.id).toArray();
-    const chapters = await db.chapters.where('bookId').equals(book.id).toArray();
+    try {
+      const volumes = await db.volumes.where('bookId').equals(book.id).toArray();
+      const chapters = await db.chapters.where('bookId').equals(book.id).toArray();
 
-    manifest.books.push({
-      id: book.id,
-      name: book.name,
-      status: book.status,
-      totalWords: book.totalWords,
-      volumeCount: volumes.length,
-      chapterCount: chapters.length,
-    });
+      manifest.books.push({
+        id: book.id,
+        name: book.name,
+        status: book.status,
+        totalWords: book.totalWords,
+        volumeCount: volumes.length,
+        chapterCount: chapters.length,
+      });
 
-    await exportBookForAgent(book.id, dataDir);
+      await exportBookForAgent(book.id, dataDir);
+    } catch (err) {
+      failures.push({
+        id: book.id,
+        name: book.name,
+        error: err instanceof Error ? err.message : String(err),
+      });
+      console.error(`[AgentExporter] 导出书籍 ${book.name}(${book.id}) 失败:`, err);
+    }
+  }
+
+  if (failures.length > 0) {
+    manifest.failures = failures;
   }
 
   await writeJson(await join(dataDir, 'manifest.json'), manifest);
@@ -159,23 +180,29 @@ export async function exportCurrentBookForAgent(bookId: string | null): Promise<
   await ensureDir(await join(dataDir, 'books'));
   await ensureDir(await getPendingDir());
 
+  // 归属校验（exportBookForAgent 内部同样校验，双保险）
+  const currentUserId = getCurrentUserId();
+  const book = await db.books.get(bookId);
+  if (book && currentUserId && book.userId && book.userId !== currentUserId) {
+    throw new Error(`无权导出书籍: ${book.name}（归属其他用户）`);
+  }
+
   await exportBookForAgent(bookId, dataDir);
 
-  const userId = getCurrentUserId();
-  const book = await db.books.get(bookId);
-  if (!book) return null;
+  const bookAfterExport = await db.books.get(bookId);
+  if (!bookAfterExport) return null;
 
   const volumes = await db.volumes.where('bookId').equals(bookId).toArray();
   const chapters = await db.chapters.where('bookId').equals(bookId).toArray();
 
   const manifest: ExportManifest = {
     exportedAt: Date.now(),
-    userId,
+    userId: currentUserId,
     books: [{
-      id: book.id,
-      name: book.name,
-      status: book.status,
-      totalWords: book.totalWords,
+      id: bookAfterExport.id,
+      name: bookAfterExport.name,
+      status: bookAfterExport.status,
+      totalWords: bookAfterExport.totalWords,
       volumeCount: volumes.length,
       chapterCount: chapters.length,
     }],

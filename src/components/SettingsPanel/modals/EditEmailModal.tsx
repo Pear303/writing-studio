@@ -113,7 +113,7 @@ export const EditEmailModal = ({ isOpen, onClose }: EditEmailModalProps) => {
         />
       )}
       <div className="fixed inset-0 z-50 flex items-center justify-center">
-        <div className="absolute inset-0 bg-black/50" onClick={handleClose} />
+        <div className="absolute inset-0" style={{ backgroundColor: 'var(--color-modal-overlay)' }} onClick={handleClose} />
         <div className="relative bg-vscode-sidebar border border-vscode-border rounded-lg p-6 w-full max-w-md mx-4">
           <button
             onClick={handleClose}

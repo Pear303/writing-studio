@@ -56,7 +56,7 @@ const ContinuationModal: React.FC<{
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ backgroundColor: 'var(--color-modal-overlay)' }}>
       <div
         className="bg-vscode-sidebar border border-vscode-border"
         style={{ width: '400px', borderRadius: '6px', boxShadow: '0 8px 24px rgba(0,0,0,0.2)' }}
@@ -85,7 +85,7 @@ const ContinuationModal: React.FC<{
                   className="px-3 py-1 text-xs border rounded-sm transition-colors"
                   style={{
                     borderColor: wordCount === n ? 'var(--color-vscode-active)' : 'var(--color-vscode-border)',
-                    backgroundColor: wordCount === n ? 'rgba(0,122,204,0.15)' : 'transparent',
+                    backgroundColor: wordCount === n ? 'var(--color-vscode-active-light)' : 'transparent',
                     color: wordCount === n ? 'var(--color-vscode-active)' : 'var(--color-vscode-text)',
                   }}
                 >
@@ -144,7 +144,6 @@ const ContinuationModal: React.FC<{
           )}
         </div>
 
-        <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
       </div>
     </div>
   );
@@ -164,7 +163,7 @@ const PolishModal: React.FC<{
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ backgroundColor: 'var(--color-modal-overlay)' }}>
       <div
         className="bg-vscode-sidebar border border-vscode-border"
         style={{ width: '400px', borderRadius: '6px', boxShadow: '0 8px 24px rgba(0,0,0,0.2)' }}
@@ -270,6 +269,14 @@ export const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>
   const abortControllerRef = useRef<AbortController | null>(null);
   const streamBufferRef = useRef<string>('');
   const insertPosRef = useRef<number | null>(null);
+
+  // 组件卸载时中止进行中的续写/润色请求
+  useEffect(() => {
+    return () => {
+      abortControllerRef.current?.abort();
+      polishAbortRef.current?.abort();
+    };
+  }, []);
 
   const editor = useEditor({
     extensions: [

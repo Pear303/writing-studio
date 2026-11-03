@@ -9,8 +9,6 @@ import { v4 as uuidv4 } from 'uuid';
 export type ImitationProgressCallback = (progress: GenerateProgress) => void;
 
 export class ImitationService {
-  private abortControllers = new Map<string, AbortController>();
-
   /**
    * 启动仿写生成
    */

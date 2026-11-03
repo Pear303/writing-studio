@@ -173,7 +173,7 @@ export const FontSelector: React.FC<FontSelectorProps> = ({
                           e.stopPropagation();
                           onDeleteFont(font);
                         }}
-                        className="p-1 hover:text-red-400 text-vscode-text opacity-50 hover:opacity-100 shrink-0"
+                        className="p-1 hover:text-vscode-danger text-vscode-text opacity-50 hover:opacity-100 shrink-0"
                         title="删除字体"
                       >
                         <Trash2 size={12} />
@@ -205,7 +205,7 @@ export const FontSelector: React.FC<FontSelectorProps> = ({
                   className="hidden"
                 />
                 {error && (
-                  <div className="px-3 py-1 text-xs text-red-400">{error}</div>
+                  <div className="px-3 py-1 text-xs text-vscode-danger">{error}</div>
                 )}
               </>
             )}

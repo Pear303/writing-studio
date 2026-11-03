@@ -313,20 +313,28 @@ ${newChaptersSummary}
   private validateStep2(result: Step2Result, expectedLength: number): void {
     if (!result.pacingCurve?.length) throw new Error('Step 2 结果缺少节奏曲线');
     if (result.pacingCurve.length !== expectedLength) {
-      debugLogger.log({ source: 'service', category: 'deconstruction', direction: 'imitation-validate', metadata: { note: `节奏点数(${result.pacingCurve.length})与章节数(${expectedLength})不一致，将补齐` } });
-      // 补齐缺失的节奏点
-      while (result.pacingCurve.length < expectedLength) {
-        const lastPace = result.pacingCurve[result.pacingCurve.length - 1];
-        result.pacingCurve.push({
-          chapterIndex: result.pacingCurve.length,
-          tension: lastPace?.tension || 5,
-          pace: lastPace?.pace || 'moderate',
-          note: '自动补充',
-        });
+      if (result.pacingCurve.length > expectedLength) {
+        // 节奏点超出章节数：裁剪到 expectedLength，避免多余节奏点
+        debugLogger.log({ source: 'service', category: 'deconstruction', direction: 'imitation-validate', metadata: { note: `节奏点数(${result.pacingCurve.length})超出章节数(${expectedLength})，将裁剪` } });
+        result.pacingCurve = result.pacingCurve.slice(0, expectedLength);
+      } else {
+        debugLogger.log({ source: 'service', category: 'deconstruction', direction: 'imitation-validate', metadata: { note: `节奏点数(${result.pacingCurve.length})与章节数(${expectedLength})不一致，将补齐` } });
+        // 补齐缺失的节奏点
+        while (result.pacingCurve.length < expectedLength) {
+          const lastPace = result.pacingCurve[result.pacingCurve.length - 1];
+          result.pacingCurve.push({
+            chapterIndex: result.pacingCurve.length,
+            tension: lastPace?.tension || 5,
+            pace: lastPace?.pace || 'moderate',
+            note: '自动补充',
+          });
+        }
       }
     }
   }
 
+  // 注意：withRetry 的指数退避 sleep 不可被外部中断（本调用链无 abort 信号上下文，
+  // 如需支持取消，需在 generate() 入口引入 AbortSignal 并用 Promise.race 实现可取消 sleep）。
   private async withRetry<T>(fn: () => Promise<T>, maxRetries: number): Promise<T> {
     let lastError: Error | null = null;
     for (let attempt = 0; attempt <= maxRetries; attempt++) {

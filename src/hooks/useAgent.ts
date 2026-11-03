@@ -25,6 +25,14 @@ function setApiUrl(url: string): void {
   localStorage.setItem('agentApiUrl', url);
 }
 
+// 附加鉴权头：从 localStorage['agentApiToken'] 读取 token，
+// 没有则不附加（服务端在 token 未配置时允许空 token 直连，向后兼容）
+function authHeaders(extra: Record<string, string> = {}): Record<string, string> {
+  const token = localStorage.getItem('agentApiToken');
+  if (!token) return extra;
+  return { ...extra, Authorization: `Bearer ${token}` };
+}
+
 function generateId(): string {
   return `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 }
@@ -133,7 +141,7 @@ export function useAgent() {
   const switchSession = useCallback(async (sessionId: string) => {
     const apiUrl = getApiUrl();
     try {
-      const res = await fetch(`${apiUrl}/api/history/${sessionId}`);
+      const res = await fetch(`${apiUrl}/api/history/${sessionId}`, { headers: authHeaders() });
       if (!res.ok) return;
       const data = await res.json();
       const messages: AgentMessage[] = [];

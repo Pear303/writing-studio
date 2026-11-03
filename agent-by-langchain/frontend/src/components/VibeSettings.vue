@@ -98,7 +98,7 @@ function removePrompt(idx) {
 
 async function loadSettings() {
   try {
-    const res = await fetch('/api/vibe-settings')
+    const res = await fetch('/api/vibe-settings', { headers: authHeaders() })
     const data = await res.json()
     presetSteps.value = data.preset_steps || []
     excludedSteps.value = data.excluded_steps || []

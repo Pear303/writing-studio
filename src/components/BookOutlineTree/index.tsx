@@ -8,7 +8,7 @@ import { VersionHistory } from '../VersionHistory';
 import { Toast, type ToastType } from '../Toast';
 import type { Book, Volume, Chapter } from '../../types';
 import { db, saveChapterVersion, cleanupOldVersions, updateChapterTitle, updateVolumeName, adjustBookTotalWords } from '../../db';
-import { generateId, countWords, computeChapterDisplayTitle, stripAutoNumberPrefix } from '../../utils/helpers';
+import { generateId, countWords, computeChapterDisplayTitle, stripAutoNumberPrefix, generateAutoNumberPrefix } from '../../utils/helpers';
 import { save } from '@tauri-apps/plugin-dialog';
 import { writeTextFile } from '@tauri-apps/plugin-fs';
 
@@ -31,19 +31,23 @@ interface SortableTreeNodeProps {
   level: number;
   isExpanded?: boolean;
   isActive?: boolean;
-  onToggle?: () => void;
-  onClick?: () => void;
-  onContextMenu?: (e: React.MouseEvent) => void;
+  onToggle?: (volumeId: string) => void;
+  onChapterClick?: (chapter: Chapter) => void;
+  onContextMenu?: (e: React.MouseEvent, type: 'volume' | 'chapter', data: Volume | Chapter) => void;
   hasChildren?: boolean;
   isLast?: boolean;
   displayTitle?: string;
-  dropTarget?: { id: string; type: 'volume' | 'chapter'; position: DropPosition } | null;
+  isDropTarget?: boolean;
+  dropPosition?: DropPosition | null;
   excerpt?: string;
   chapterWordCount?: number;
   volumeDetail?: string;
+  isDragActive?: boolean;
+  onDragHandleActivate?: () => void;
 }
 
-const SortableTreeNode: React.FC<SortableTreeNodeProps> = ({
+// 拖拽模式：挂载 useSortable hook，支持拖拽排序
+const SortableTreeNodeInner = React.memo<Omit<SortableTreeNodeProps, 'isDragActive'>>(({
   id,
   type,
   data,
@@ -51,15 +55,17 @@ const SortableTreeNode: React.FC<SortableTreeNodeProps> = ({
   isExpanded,
   isActive,
   onToggle,
-  onClick,
+  onChapterClick,
   onContextMenu,
   hasChildren,
   isLast,
   displayTitle,
-  dropTarget,
+  isDropTarget: isDropTargetProp,
+  dropPosition,
   excerpt,
   chapterWordCount,
   volumeDetail,
+  onDragHandleActivate,
 }) => {
   const {
     attributes,
@@ -71,8 +77,22 @@ const SortableTreeNode: React.FC<SortableTreeNodeProps> = ({
     data: { type },
   });
 
-  const isDropTarget = dropTarget?.id === id;
-  const dropPosition = isDropTarget ? dropTarget.position : null;
+  // 稳定的 onClick：卷节点无操作，章节节点调用 onChapterClick
+  const handleClick = useCallback(() => {
+    if (type === 'chapter' && onChapterClick) {
+      onChapterClick(data as Chapter);
+    }
+  }, [type, onChapterClick, data]);
+
+  // 稳定的 onToggle：调用 onToggle(volumeId)
+  const handleToggle = useCallback(() => {
+    if (onToggle) onToggle(id);
+  }, [onToggle, id]);
+
+  // 稳定的 onContextMenu
+  const handleContextMenuStable = useCallback((e: React.MouseEvent) => {
+    if (onContextMenu) onContextMenu(e, type, data);
+  }, [onContextMenu, type, data]);
 
   return (
     <TreeNode
@@ -82,22 +102,95 @@ const SortableTreeNode: React.FC<SortableTreeNodeProps> = ({
       level={level}
       isExpanded={isExpanded}
       isActive={isActive}
-      onToggle={onToggle}
-      onClick={onClick}
-      onContextMenu={onContextMenu}
+      onToggle={handleToggle}
+      onClick={type === 'chapter' ? handleClick : undefined}
+      onContextMenu={handleContextMenuStable}
       hasChildren={hasChildren}
       isLast={isLast}
       displayTitle={displayTitle}
       isDragging={isDragging}
       dragHandleProps={{ ...listeners, ...attributes }}
       dropPosition={dropPosition}
-      isDropTarget={isDropTarget}
+      isDropTarget={isDropTargetProp}
       excerpt={excerpt}
       chapterWordCount={chapterWordCount}
       volumeDetail={volumeDetail}
+      onDragHandleActivate={onDragHandleActivate}
     />
   );
-};
+});
+
+// 非拖拽模式：纯渲染，无 useSortable hook，大幅减少运行时开销
+const PlainTreeNode = React.memo<Omit<SortableTreeNodeProps, 'isDragActive'>>(({
+  id,
+  type,
+  data,
+  level,
+  isExpanded,
+  isActive,
+  onToggle,
+  onChapterClick,
+  onContextMenu,
+  hasChildren,
+  isLast,
+  displayTitle,
+  excerpt,
+  chapterWordCount,
+  volumeDetail,
+  onDragHandleActivate,
+}) => {
+  // 稳定的 onClick
+  const handleClick = useCallback(() => {
+    if (type === 'chapter' && onChapterClick) {
+      onChapterClick(data as Chapter);
+    }
+  }, [type, onChapterClick, data]);
+
+  // 稳定的 onToggle
+  const handleToggle = useCallback(() => {
+    if (onToggle) onToggle(id);
+  }, [onToggle, id]);
+
+  // 稳定的 onContextMenu
+  const handleContextMenuStable = useCallback((e: React.MouseEvent) => {
+    if (onContextMenu) onContextMenu(e, type, data);
+  }, [onContextMenu, type, data]);
+
+  return (
+    <TreeNode
+      type={type}
+      data={data}
+      level={level}
+      isExpanded={isExpanded}
+      isActive={isActive}
+      onToggle={handleToggle}
+      onClick={type === 'chapter' ? handleClick : undefined}
+      onContextMenu={handleContextMenuStable}
+      hasChildren={hasChildren}
+      isLast={isLast}
+      displayTitle={displayTitle}
+      isDragging={false}
+      dragHandleProps={undefined}
+      dropPosition={null}
+      isDropTarget={false}
+      excerpt={excerpt}
+      chapterWordCount={chapterWordCount}
+      volumeDetail={volumeDetail}
+      onDragHandleActivate={onDragHandleActivate}
+    />
+  );
+});
+
+// 条件渲染入口：根据 isDragActive 选择轻量模式或拖拽模式
+const SortableTreeNode = React.memo<SortableTreeNodeProps>(({
+  isDragActive,
+  ...rest
+}) => {
+  if (isDragActive) {
+    return <SortableTreeNodeInner {...rest} />;
+  }
+  return <PlainTreeNode {...rest} />;
+});
 
 export const BookOutlineTree = ({ book, onChapterSelect, onChapterDeselect, onBookDeselect, onVolumeChange, onVolumesWithChaptersChange, activeChapterId, refreshTrigger, chapterWordCountUpdates }: BookOutlineTreeProps) => {
   const [volumes, setVolumes] = useState<Volume[]>([]);
@@ -107,21 +200,60 @@ export const BookOutlineTree = ({ book, onChapterSelect, onChapterDeselect, onBo
   const [numberingFormat, setNumberingFormat] = useState<'arabic' | 'chinese'>(book.numberingFormat || 'arabic');
   const [numberingScope, setNumberingScope] = useState<'global' | 'volume'>(book.numberingScope || 'global');
   
-  // 从 localStorage 读取目录树显示设置
-  const chapterDetailDisplay = (() => {
+  // 从 localStorage 读取目录树显示设置（useState 以响应设置面板变更）
+  const [chapterDetailDisplay, setChapterDetailDisplay] = useState<'nameOnly' | 'nameAndExcerpt' | 'nameAndWordCount' | 'full'>(() => {
     try {
       const saved = localStorage.getItem('chapterDetailDisplay');
       if (saved === 'nameOnly' || saved === 'nameAndExcerpt' || saved === 'nameAndWordCount' || saved === 'full') return saved;
     } catch {}
-    return 'nameOnly' as const;
-  })();
-  const volumeDetailInfo = (() => {
+    return 'nameOnly';
+  });
+  const [volumeDetailInfo, setVolumeDetailInfo] = useState<'none' | 'counts' | 'countsAndWords'>(() => {
     try {
       const saved = localStorage.getItem('volumeDetailInfo');
       if (saved === 'none' || saved === 'counts' || saved === 'countsAndWords') return saved;
     } catch {}
-    return 'none' as const;
-  })();
+    return 'none';
+  });
+
+  // 监听设置变更：CustomEvent（同标签页）+ StorageEvent（跨标签页）
+  useEffect(() => {
+    const handleSettingsChanged = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail?.key === 'chapterDetailDisplay') {
+        const val = detail.value as typeof chapterDetailDisplay;
+        if (val === 'nameOnly' || val === 'nameAndExcerpt' || val === 'nameAndWordCount' || val === 'full') {
+          setChapterDetailDisplay(val);
+        }
+      }
+      if (detail?.key === 'volumeDetailInfo') {
+        const val = detail.value as typeof volumeDetailInfo;
+        if (val === 'none' || val === 'counts' || val === 'countsAndWords') {
+          setVolumeDetailInfo(val);
+        }
+      }
+    };
+    const handleStorageEvent = (e: StorageEvent) => {
+      if (e.key === 'chapterDetailDisplay' && e.newValue) {
+        const val = e.newValue as typeof chapterDetailDisplay;
+        if (val === 'nameOnly' || val === 'nameAndExcerpt' || val === 'nameAndWordCount' || val === 'full') {
+          setChapterDetailDisplay(val);
+        }
+      }
+      if (e.key === 'volumeDetailInfo' && e.newValue) {
+        const val = e.newValue as typeof volumeDetailInfo;
+        if (val === 'none' || val === 'counts' || val === 'countsAndWords') {
+          setVolumeDetailInfo(val);
+        }
+      }
+    };
+    window.addEventListener('settings-changed', handleSettingsChanged);
+    window.addEventListener('storage', handleStorageEvent);
+    return () => {
+      window.removeEventListener('settings-changed', handleSettingsChanged);
+      window.removeEventListener('storage', handleStorageEvent);
+    };
+  }, []);
   
   const [contextMenu, setContextMenu] = useState<{
     x: number;
@@ -183,9 +315,23 @@ export const BookOutlineTree = ({ book, onChapterSelect, onChapterDeselect, onBo
   const autoNumberPanelRef = useRef<HTMLDivElement>(null);
   const autoNumberBtnRef = useRef<HTMLButtonElement>(null);
 
+  // 拖拽按需激活：非拖拽状态下不挂载 useSortable，减少 350+ hook 的运行时开销
+  const [isDragActive, setIsDragActive] = useState(false);
+  const activateDrag = useCallback(() => setIsDragActive(true), []);
+
+  // 安全超时：防止异常退出导致 isDragActive 卡在 true
+  useEffect(() => {
+    if (isDragActive) {
+      const timer = setTimeout(() => setIsDragActive(false), 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [isDragActive]);
+
   // Sticky breadcrumb 状态
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [stickyVolumes, setStickyVolumes] = useState<Array<{ id: string; name: string; level: number }>>([]);
+  const rafRef = useRef<number>(0);
+  const lastStickyIdsRef = useRef<string>('');
 
   const openAutoNumberPanel = () => {
     if (autoNumberBtnRef.current) {
@@ -195,64 +341,82 @@ export const BookOutlineTree = ({ book, onChapterSelect, onChapterDeselect, onBo
     setShowAutoNumberPanel(true);
   };
 
-  // Sticky breadcrumb: 滚动时计算当前可见区域上方的卷节点链
+  // 按 ID 索引卷，用于 O(1) 查表（需在 updateStickyBreadcrumb 之前定义）
+  const volumeById = useMemo(() => {
+    const map = new Map<string, Volume>();
+    for (const v of volumes) map.set(v.id, v);
+    return map;
+  }, [volumes]);
+
+  // Sticky breadcrumb: 滚动时计算当前可见区域上方的卷节点链（RAF 节流 + 浅比较避免无效渲染）
   const updateStickyBreadcrumb = useCallback(() => {
-    const container = scrollContainerRef.current;
-    if (!container) return;
+    cancelAnimationFrame(rafRef.current);
+    rafRef.current = requestAnimationFrame(() => {
+      const container = scrollContainerRef.current;
+      if (!container) return;
 
-    const scrollTop = container.scrollTop;
-    const containerRect = container.getBoundingClientRect();
+      const scrollTop = container.scrollTop;
+      const containerRect = container.getBoundingClientRect();
 
-    // 找到所有卷节点 DOM 元素（按 DOM 顺序，即树的实际顺序）
-    const volumeNodes = container.querySelectorAll('[data-node-type="volume"]');
-    const volumeEntries: Array<{ id: string; name: string; level: number; relativeTop: number }> = [];
+      // 找到所有卷节点 DOM 元素（按 DOM 顺序，即树的实际顺序）
+      const volumeNodes = container.querySelectorAll('[data-node-type="volume"]');
+      const volumeEntries: Array<{ id: string; name: string; level: number; relativeTop: number }> = [];
 
-    volumeNodes.forEach((node) => {
-      const el = node as HTMLElement;
-      const id = el.dataset.nodeId!;
-      const level = parseInt(el.dataset.nodeLevel || '0', 10);
-      const vol = volumes.find(v => v.id === id);
-      if (vol) {
-        const rect = el.getBoundingClientRect();
-        const relativeTop = rect.top - containerRect.top + scrollTop;
-        volumeEntries.push({
-          id,
-          name: vol.name,
-          level,
-          relativeTop,
-        });
+      volumeNodes.forEach((node) => {
+        const el = node as HTMLElement;
+        const id = el.dataset.nodeId!;
+        const level = parseInt(el.dataset.nodeLevel || '0', 10);
+        const vol = volumeById.get(id);
+        if (vol) {
+          const rect = el.getBoundingClientRect();
+          const relativeTop = rect.top - containerRect.top + scrollTop;
+          volumeEntries.push({
+            id,
+            name: vol.name,
+            level,
+            relativeTop,
+          });
+        }
+      });
+
+      // 找到所有已滚出视口上方的卷节点
+      const scrolledPast = volumeEntries.filter(v => v.relativeTop + 30 < scrollTop);
+
+      if (scrolledPast.length === 0) {
+        if (lastStickyIdsRef.current !== '') {
+          lastStickyIdsRef.current = '';
+          setStickyVolumes([]);
+        }
+        return;
+      }
+
+      // 取 DOM 顺序中最后一个已滚过的卷节点（即当前视口最接近的卷）
+      const lastScrolled = scrolledPast[scrolledPast.length - 1];
+
+      // 从该卷向上构建祖先链，用 volumeById O(1) 查表
+      const chain: Array<{ id: string; name: string; level: number }> = [];
+      let current: Volume | undefined = volumeById.get(lastScrolled.id);
+      while (current) {
+        let lvl = 0;
+        let ancestor = current;
+        while (ancestor.parentId) {
+          lvl++;
+          const parent = volumeById.get(ancestor.parentId);
+          if (!parent) break;
+          ancestor = parent;
+        }
+        chain.unshift({ id: current.id, name: current.name, level: lvl });
+        current = current?.parentId ? volumeById.get(current.parentId) : undefined;
+      }
+
+      // 浅比较：只有链路 ID 序列变化时才 setState，避免无效重渲染
+      const idsKey = chain.map(c => c.id).join(',');
+      if (idsKey !== lastStickyIdsRef.current) {
+        lastStickyIdsRef.current = idsKey;
+        setStickyVolumes(chain);
       }
     });
-
-    // 找到所有已滚出视口上方的卷节点
-    const scrolledPast = volumeEntries.filter(v => v.relativeTop + 30 < scrollTop);
-
-    if (scrolledPast.length === 0) {
-      setStickyVolumes([]);
-      return;
-    }
-
-    // 取 DOM 顺序中最后一个已滚过的卷节点（即当前视口最接近的卷）
-    const lastScrolled = scrolledPast[scrolledPast.length - 1];
-
-    // 从该卷向上构建祖先链，确保父子关系正确
-    const chain: Array<{ id: string; name: string; level: number }> = [];
-    let current: Volume | undefined = volumes.find(v => v.id === lastScrolled.id);
-    while (current) {
-      let lvl = 0;
-      let ancestor = current;
-      while (ancestor.parentId) {
-        lvl++;
-        const parent = volumes.find(v => v.id === ancestor.parentId);
-        if (!parent) break;
-        ancestor = parent;
-      }
-      chain.unshift({ id: current.id, name: current.name, level: lvl });
-      current = current?.parentId ? volumes.find(v => v.id === current?.parentId) : undefined;
-    }
-
-    setStickyVolumes(chain);
-  }, [volumes]);
+  }, [volumeById]);
 
   useEffect(() => {
     const container = scrollContainerRef.current;
@@ -295,11 +459,20 @@ export const BookOutlineTree = ({ book, onChapterSelect, onChapterDeselect, onBo
   };
 
   // 加载卷和章节数据
-  const EXPANDED_VOLUMES_KEY = `expanded_volumes_${book.id}`;
+  const EXPANDED_VOLUMES_KEY = `expandedVolumes_${book.id}`;
+  const LEGACY_EXPANDED_KEY = `expanded_volumes_${book.id}`;
 
   const loadExpandedVolumes = (allVolumes: Volume[]): Set<string> => {
     try {
-      const saved = localStorage.getItem(EXPANDED_VOLUMES_KEY);
+      let saved = localStorage.getItem(EXPANDED_VOLUMES_KEY);
+      // 迁移旧 key
+      if (!saved) {
+        saved = localStorage.getItem(LEGACY_EXPANDED_KEY);
+        if (saved) {
+          localStorage.setItem(EXPANDED_VOLUMES_KEY, saved);
+          localStorage.removeItem(LEGACY_EXPANDED_KEY);
+        }
+      }
       if (saved) {
         const savedIds: string[] = JSON.parse(saved);
         const volumeIds = new Set(allVolumes.map(v => v.id));
@@ -317,7 +490,7 @@ export const BookOutlineTree = ({ book, onChapterSelect, onChapterDeselect, onBo
 
   useEffect(() => {
     loadData();
-  }, [book.id, book, refreshTrigger]);
+  }, [book.id, refreshTrigger, chapterDetailDisplay]);
 
   // 消费字数更新 prop，仅更新对应章节的 wordCount，不重载整棵树
   useEffect(() => {
@@ -354,14 +527,35 @@ export const BookOutlineTree = ({ book, onChapterSelect, onChapterDeselect, onBo
       onVolumesWithChaptersChange?.(volumeIds);
 
       const restored = loadExpandedVolumes(allVolumes);
+      // 合并待展开项（如新建卷后需要自动展开）
+      const pending = pendingExpandRef.current;
+      if (pending.size > 0) {
+        for (const id of pending) restored.add(id);
+        pending.clear();
+        saveExpandedVolumes(restored);
+      }
       setExpandedVolumes(restored);
     } catch (error) {
       console.error('[BookOutlineTree] 加载大纲数据失败:', error);
     }
   };
 
-  const toggleVolume = (volumeId: string) => {
-    const newExpanded = new Set(expandedVolumes);
+  // 用 ref 保存最新 state/props，使回调引用稳定不变（React.memo 优化前提）
+  const expandedVolumesRef = useRef(expandedVolumes);
+  expandedVolumesRef.current = expandedVolumes;
+
+  // 记录需要展开但尚未持久化的卷 ID，防止 loadData 异步覆盖
+  const pendingExpandRef = useRef<Set<string>>(new Set());
+
+  const onChapterSelectRef = useRef(onChapterSelect);
+  onChapterSelectRef.current = onChapterSelect;
+
+  const handleChapterClick = useCallback((chapter: Chapter) => {
+    onChapterSelectRef.current(chapter);
+  }, []);
+
+  const toggleVolume = useCallback((volumeId: string) => {
+    const newExpanded = new Set(expandedVolumesRef.current);
     if (newExpanded.has(volumeId)) {
       newExpanded.delete(volumeId);
     } else {
@@ -369,26 +563,87 @@ export const BookOutlineTree = ({ book, onChapterSelect, onChapterDeselect, onBo
     }
     setExpandedVolumes(newExpanded);
     saveExpandedVolumes(newExpanded);
-  };
+  }, []);
+
+  // 预构建索引 Map，避免渲染路径中重复 filter
+  const volumesByParent = useMemo(() => {
+    const map = new Map<string | null, Volume[]>();
+    for (const v of volumes) {
+      const key = v.parentId || null;
+      if (!map.has(key)) map.set(key, []);
+      map.get(key)!.push(v);
+    }
+    for (const [, group] of map) {
+      group.sort((a, b) => a.order - b.order);
+    }
+    return map;
+  }, [volumes]);
+
+  const chaptersByVolume = useMemo(() => {
+    const map = new Map<string | null, Chapter[]>();
+    for (const c of chapters) {
+      const key = c.volumeId || null;
+      if (!map.has(key)) map.set(key, []);
+      map.get(key)!.push(c);
+    }
+    for (const [, group] of map) {
+      group.sort((a, b) => a.order - b.order);
+    }
+    return map;
+  }, [chapters]);
+
+  const rootVolumes = useMemo(() => {
+    return volumesByParent.get(null) || [];
+  }, [volumesByParent]);
+
+  // 只收集当前可见（已展开）的节点 ID，减少 dnd-kit 排序上下文开销
+  const visibleItemIds = useMemo(() => {
+    const ids: string[] = [];
+    // 草稿箱章节始终可见
+    (chaptersByVolume.get(null) || []).forEach(c => ids.push(c.id));
+
+    const traverse = (parentVolumes: Volume[]) => {
+      for (const v of parentVolumes) {
+        ids.push(v.id);
+        if (expandedVolumes.has(v.id)) {
+          const childVols = volumesByParent.get(v.id) || [];
+          const chaps = chaptersByVolume.get(v.id) || [];
+          // 按 order 混合排序
+          const mixed = [
+            ...childVols.map(cv => ({ id: cv.id, order: cv.order, isVolume: true })),
+            ...chaps.map(c => ({ id: c.id, order: c.order, isVolume: false })),
+          ].sort((a, b) => a.order - b.order);
+          for (const item of mixed) {
+            if (item.isVolume) {
+              const childVol = childVols.find(cv => cv.id === item.id);
+              if (childVol) traverse([childVol]);
+            } else {
+              ids.push(item.id);
+            }
+          }
+        }
+      }
+    };
+    traverse(rootVolumes);
+    return ids;
+  }, [volumesByParent, chaptersByVolume, rootVolumes, expandedVolumes]);
 
   // 获取未归入任何卷的章节（草稿箱）
-  const draftChapters = chapters.filter((c) => c.volumeId === null);
+  const draftChapters = chaptersByVolume.get(null) || [];
 
   // 获取指定卷的章节
   const getVolumeChapters = (volumeId: string) => {
-    return chapters
-      .filter((c) => c.volumeId === volumeId)
-      .sort((a, b) => a.order - b.order);
+    return chaptersByVolume.get(volumeId) || [];
   };
 
   // 获取根卷（没有父卷的卷）
   const getRootVolumes = () => {
-    return volumes.filter(v => !v.parentId);
+    return rootVolumes;
   };
 
   // 获取子卷
   const getChildVolumes = (parentId: string) => {
-    return volumes.filter(v => v.parentId === parentId);
+    return volumesByParent.get(parentId) || [];
   };
 
   // 获取章节开头摘要（前80字）
@@ -406,8 +661,8 @@ export const BookOutlineTree = ({ book, onChapterSelect, onChapterDeselect, onBo
     const computeStats = (volumeId: string): { childVolumeCount: number; chapterCount: number; totalWordCount: number } => {
       if (map.has(volumeId)) return map.get(volumeId)!;
 
-      const childVols = volumes.filter(v => v.parentId === volumeId);
-      const directChapters = chapters.filter(c => c.volumeId === volumeId);
+      const childVols = volumesByParent.get(volumeId) || [];
+      const directChapters = chaptersByVolume.get(volumeId) || [];
       let chapterCount = directChapters.length;
       let totalWordCount = directChapters.reduce((sum, c) => sum + (c.wordCount || 0), 0);
 
@@ -424,27 +679,89 @@ export const BookOutlineTree = ({ book, onChapterSelect, onChapterDeselect, onBo
 
     volumes.forEach(v => computeStats(v.id));
     return map;
-  }, [volumes, chapters]);
+  }, [volumes, volumesByParent, chaptersByVolume]);
+
+  // 预计算所有章节的显示标题，避免每个节点单独排序（O(N²logN) → O(NlogN)）
+  const chapterDisplayTitleMap = useMemo(() => {
+    const map = new Map<string, string>();
+    if (!autoNumbering) {
+      chapters.forEach(ch => map.set(ch.id, ch.title));
+      return map;
+    }
+    const format = numberingFormat || 'arabic';
+    const scope = numberingScope || 'global';
+    const sortedChapters = [...chapters].sort((a, b) => a.createdAt - b.createdAt);
+
+    if (scope === 'global') {
+      let idx = 0;
+      for (const ch of sortedChapters) {
+        if (ch.autoNumberExcluded) {
+          map.set(ch.id, ch.title);
+        } else {
+          idx++;
+          map.set(ch.id, `${generateAutoNumberPrefix(idx, format)} ${ch.title}`);
+        }
+      }
+    } else {
+      // scope === 'volume'：按 volumeId 分组
+      const byVolume = new Map<string, Chapter[]>();
+      for (const ch of sortedChapters) {
+        const key = ch.volumeId || '__draft__';
+        if (!byVolume.has(key)) byVolume.set(key, []);
+        byVolume.get(key)!.push(ch);
+      }
+      for (const [, group] of byVolume) {
+        let idx = 0;
+        for (const ch of group) {
+          if (ch.autoNumberExcluded) {
+            map.set(ch.id, ch.title);
+          } else {
+            idx++;
+            map.set(ch.id, `${generateAutoNumberPrefix(idx, format)} ${ch.title}`);
+          }
+        }
+      }
+    }
+    return map;
+  }, [chapters, autoNumbering, numberingFormat, numberingScope]);
+
+  // 预计算每个卷的混合排序子项（子卷+章节按 order 排序），避免 renderVolumeTree 中重复创建临时数组
+  const volumeChildrenMap = useMemo(() => {
+    const map = new Map<string, Array<{ type: 'volume'; data: Volume; order: number } | { type: 'chapter'; data: Chapter; order: number }>>();
+    for (const v of volumes) {
+      const childVols = volumesByParent.get(v.id) || [];
+      const chaps = chaptersByVolume.get(v.id) || [];
+      const mixed = [
+        ...childVols.map(cv => ({ type: 'volume' as const, data: cv, order: cv.order })),
+        ...chaps.map(c => ({ type: 'chapter' as const, data: c, order: c.order })),
+      ].sort((a, b) => a.order - b.order);
+      map.set(v.id, mixed);
+    }
+    return map;
+  }, [volumes, volumesByParent, chaptersByVolume]);
+
+  // 预计算每个卷的详细信息字符串，避免渲染时重复构建（保护 React.memo 浅比较）
+  const volumeDetailMap = useMemo(() => {
+    if (volumeDetailInfo === 'none') return new Map<string, string>();
+    const map = new Map<string, string>();
+    for (const v of volumes) {
+      const stats = volumeStatsMap.get(v.id) || { childVolumeCount: 0, chapterCount: 0, totalWordCount: 0 };
+      const parts: string[] = [];
+      if (stats.childVolumeCount > 0) parts.push(`${stats.childVolumeCount}子卷`);
+      parts.push(`${stats.chapterCount}章`);
+      if (volumeDetailInfo === 'countsAndWords') parts.push(`${stats.totalWordCount}字`);
+      map.set(v.id, parts.join(' · '));
+    }
+    return map;
+  }, [volumes, volumeStatsMap, volumeDetailInfo]);
 
   const getVolumeStats = (volumeId: string): { childVolumeCount: number; chapterCount: number; totalWordCount: number } => {
     return volumeStatsMap.get(volumeId) || { childVolumeCount: 0, chapterCount: 0, totalWordCount: 0 };
   };
 
-  // 构建卷节点详细信息字符串
-  const buildVolumeDetail = (volumeId: string): string | undefined => {
-    if (volumeDetailInfo === 'none') return undefined;
-    const stats = getVolumeStats(volumeId);
-    const parts: string[] = [];
-    if (stats.childVolumeCount > 0) parts.push(`${stats.childVolumeCount}子卷`);
-    parts.push(`${stats.chapterCount}章`);
-    if (volumeDetailInfo === 'countsAndWords') parts.push(`${stats.totalWordCount}字`);
-    return parts.join(' · ');
-  };
-
   const renderVolumeTree = (volume: Volume, level: number = 0, isLast: boolean = false) => {
-    const childVolumes = getChildVolumes(volume.id);
-    const volumeChapters = getVolumeChapters(volume.id);
-    const hasChildren = childVolumes.length > 0 || volumeChapters.length > 0;
+    const mixed = volumeChildrenMap.get(volume.id) || [];
+    const hasChildren = mixed.length > 0;
 
     return (
       <div key={volume.id}>
@@ -456,19 +773,18 @@ export const BookOutlineTree = ({ book, onChapterSelect, onChapterDeselect, onBo
           isExpanded={expandedVolumes.has(volume.id)}
           hasChildren={hasChildren}
           isLast={isLast}
-          onToggle={() => toggleVolume(volume.id)}
-          onContextMenu={(e) => handleContextMenu(e, 'volume', volume)}
-          dropTarget={dropTarget}
-          volumeDetail={buildVolumeDetail(volume.id)}
+          onToggle={toggleVolume}
+          onContextMenu={handleContextMenu}
+          isDropTarget={dropTarget?.id === volume.id}
+          dropPosition={dropTarget?.id === volume.id ? dropTarget.position : null}
+          volumeDetail={volumeDetailMap.get(volume.id)}
+          isDragActive={isDragActive}
+          onDragHandleActivate={activateDrag}
         />
 
         {expandedVolumes.has(volume.id) && (
           <>
             {(() => {
-              // 将子卷和章节按 order 混合排序后渲染
-              const volumeItems = childVolumes.map(v => ({ type: 'volume' as const, data: v, order: v.order }));
-              const chapterItems = volumeChapters.map(c => ({ type: 'chapter' as const, data: c, order: c.order }));
-              const mixed = [...volumeItems, ...chapterItems].sort((a, b) => a.order - b.order);
               const lastIndex = mixed.length - 1;
               return mixed.map((item, index) => {
                 const isLastItem = index === lastIndex;
@@ -485,12 +801,15 @@ export const BookOutlineTree = ({ book, onChapterSelect, onChapterDeselect, onBo
                     level={level + 1}
                     isActive={activeChapterId === chapter.id}
                     isLast={isLastItem}
-                    onClick={() => onChapterSelect(chapter)}
-                    onContextMenu={(e) => handleContextMenu(e, 'chapter', chapter)}
-                    displayTitle={computeChapterDisplayTitle(chapter, chapters, { ...book, autoNumbering, numberingFormat, numberingScope })}
-                    dropTarget={dropTarget}
+                    onChapterClick={handleChapterClick}
+                    onContextMenu={handleContextMenu}
+                    displayTitle={chapterDisplayTitleMap.get(chapter.id) || chapter.title}
+                    isDropTarget={dropTarget?.id === chapter.id}
+                    dropPosition={dropTarget?.id === chapter.id ? dropTarget.position : null}
                     excerpt={(chapterDetailDisplay === 'nameAndExcerpt' || chapterDetailDisplay === 'full') ? getChapterExcerpt(chapter) : undefined}
                     chapterWordCount={(chapterDetailDisplay === 'nameAndWordCount' || chapterDetailDisplay === 'full') ? (chapter.wordCount || 0) : undefined}
+                    isDragActive={isDragActive}
+                    onDragHandleActivate={activateDrag}
                   />
                 );
               });
@@ -502,14 +821,14 @@ export const BookOutlineTree = ({ book, onChapterSelect, onChapterDeselect, onBo
   };
 
   // 处理右键菜单
-  const handleContextMenu = (
+  const handleContextMenu = useCallback((
     e: React.MouseEvent,
     type: 'book' | 'volume' | 'chapter',
     data?: Volume | Chapter
   ) => {
     e.preventDefault();
     setContextMenu({ x: e.clientX, y: e.clientY, type, data });
-  };
+  }, []);
 
   // 关闭右键菜单
   const closeContextMenu = () => {
@@ -521,20 +840,26 @@ export const BookOutlineTree = ({ book, onChapterSelect, onChapterDeselect, onBo
     const name = prompt('请输入卷名:');
     if (!name) return;
 
+    // order 取同一父级下最大值 +1，避免与已有卷的 order 冲突
+    const siblingOrders = volumes
+      .filter(v => v.parentId === (parentVolumeId || null))
+      .map(v => v.order);
+    const newOrder = Math.max(...siblingOrders, -1) + 1;
+
     const newVolume: Volume = {
       id: generateId(),
       bookId: book.id,
       parentId: parentVolumeId || null,
       name,
-      order: volumes.length,
+      order: newOrder,
     };
 
     try {
       await db.volumes.add(newVolume);
-      setExpandedVolumes((prev) => new Set(prev).add(newVolume.id));
-      // 如果有父卷，也要展开父卷
+      // 记录待展开项，由 loadData 合并（避免异步覆盖）
+      pendingExpandRef.current.add(newVolume.id);
       if (parentVolumeId) {
-        setExpandedVolumes((prev) => new Set(prev).add(parentVolumeId));
+        pendingExpandRef.current.add(parentVolumeId);
       }
       loadData();
       onVolumeChange?.();
@@ -574,7 +899,7 @@ export const BookOutlineTree = ({ book, onChapterSelect, onChapterDeselect, onBo
       };
       try {
         await db.volumes.add(newVolume);
-        if (parentId) setExpandedVolumes((prev) => new Set(prev).add(parentId));
+        if (parentId) pendingExpandRef.current.add(parentId);
         loadData();
         onVolumeChange?.();
         showToast('卷创建成功', 'success');
@@ -611,7 +936,7 @@ export const BookOutlineTree = ({ book, onChapterSelect, onChapterDeselect, onBo
 
     try {
       await db.volumes.add(newVolume);
-      if (parentId) setExpandedVolumes((prev) => new Set(prev).add(parentId));
+      if (parentId) pendingExpandRef.current.add(parentId);
       loadData();
       onVolumeChange?.();
       showToast('卷创建成功', 'success');
@@ -627,7 +952,8 @@ export const BookOutlineTree = ({ book, onChapterSelect, onChapterDeselect, onBo
     if (!title) return;
 
     const siblings = chapters.filter(c => c.volumeId === volumeId).sort((a, b) => a.order - b.order);
-    let insertOrder = siblings.length;
+    // order 取同一父级下最大值 +1，避免与已有章节的 order 冲突
+    let insertOrder = Math.max(...siblings.map(s => s.order), -1) + 1;
 
     if (position && referenceChapterId) {
       const refIndex = siblings.findIndex(c => c.id === referenceChapterId);
@@ -638,7 +964,7 @@ export const BookOutlineTree = ({ book, onChapterSelect, onChapterDeselect, onBo
           insertOrder = siblings[refIndex].order + 1;
         }
         for (let i = 0; i < siblings.length; i++) {
-          if (siblings[i].order >= insertOrder && siblings[i].id !== referenceChapterId) {
+          if (siblings[i].order >= insertOrder) {
             await db.chapters.update(siblings[i].id, { order: siblings[i].order + 1 });
           }
         }
@@ -701,7 +1027,7 @@ export const BookOutlineTree = ({ book, onChapterSelect, onChapterDeselect, onBo
         order: newOrder,
       });
       // 展开前一个同级卷
-      setExpandedVolumes((prev) => new Set(prev).add(prevSibling.id));
+      pendingExpandRef.current.add(prevSibling.id);
       loadData();
       onVolumeChange?.();
       showToast(`卷「${volume.name}」已右进为「${prevSibling.name}」的子卷`, 'success');
@@ -872,12 +1198,15 @@ export const BookOutlineTree = ({ book, onChapterSelect, onChapterDeselect, onBo
     try {
       if (renameModal.type === 'volume') {
         await updateVolumeName(renameModal.target.id, newName);
+        // 增量更新，避免全量重载
+        setVolumes(prev => prev.map(v => v.id === renameModal.target.id ? { ...v, name: newName } : v));
         showToast('卷重命名成功', 'success');
       } else {
         await updateChapterTitle(renameModal.target.id, newName);
+        // 增量更新：更新 title 并重新计算显示标题
+        setChapters(prev => prev.map(ch => ch.id === renameModal.target.id ? { ...ch, title: newName } : ch));
         showToast('章节重命名成功', 'success');
       }
-      loadData();
       onVolumeChange?.();
       setRenameModal(null);
     } catch (error) {
@@ -950,7 +1279,10 @@ export const BookOutlineTree = ({ book, onChapterSelect, onChapterDeselect, onBo
         autoNumberExcluded: newExcluded,
         title: newTitle,
       });
-      loadData();
+      // 增量更新，避免全量重载
+      setChapters(prev => prev.map(ch =>
+        ch.id === chapter.id ? { ...ch, autoNumberExcluded: newExcluded, title: newTitle } : ch
+      ));
       showToast(newExcluded ? '已排除自动序号' : '已恢复自动序号', 'success');
     } catch (error) {
       console.error('切换章节自动序号排除失败:', error);
@@ -1152,14 +1484,24 @@ export const BookOutlineTree = ({ book, onChapterSelect, onChapterDeselect, onBo
             updatedAt: Date.now(),
           });
         }
+        // 增量更新，避免全量重载
+        const orderMap = new Map(reorderModal.items.map((item, idx) => [item.id, idx]));
+        setChapters(prev => prev.map(ch => {
+          const newOrder = orderMap.get(ch.id);
+          return newOrder !== undefined ? { ...ch, order: newOrder } : ch;
+        }));
       } else {
-        // 卷：更新 order 字段
         for (let i = 0; i < reorderModal.items.length; i++) {
           await db.volumes.update(reorderModal.items[i].id, { order: i });
         }
+        // 增量更新
+        const orderMap = new Map(reorderModal.items.map((item, idx) => [item.id, idx]));
+        setVolumes(prev => prev.map(v => {
+          const newOrder = orderMap.get(v.id);
+          return newOrder !== undefined ? { ...v, order: newOrder } : v;
+        }));
       }
       setReorderModal(null);
-      loadData();
       onVolumeChange?.();
       showToast('顺序已更新', 'success');
     } catch (error) {
@@ -1200,10 +1542,18 @@ export const BookOutlineTree = ({ book, onChapterSelect, onChapterDeselect, onBo
   };
 
   // 恢复版本后的回调
-  const handleVersionRestored = (content: string, wordCount: number) => {
-    // 通知父组件更新编辑器内容
-    console.log('版本已恢复，需要更新编辑器');
-    // TODO: 通过回调通知 App.tsx 更新编辑器
+  const handleVersionRestored = async (content: string, wordCount: number) => {
+    // 刷新目录树中的字数显示
+    if (showVersionHistory) {
+      setChapters(prev => prev.map(ch =>
+        ch.id === showVersionHistory ? { ...ch, wordCount } : ch
+      ));
+    }
+    // 通知父组件刷新编辑器内容
+    const restoredChapter = showVersionHistory ? await db.chapters.get(showVersionHistory) : null;
+    if (restoredChapter && onChapterSelect) {
+      onChapterSelect(restoredChapter);
+    }
   };
 
   const sensors = useSensors(
@@ -1214,11 +1564,13 @@ export const BookOutlineTree = ({ book, onChapterSelect, onChapterDeselect, onBo
     })
   );
 
-  const getDescendantVolumeIds = (volumeId: string, allVolumes: Volume[]): Set<string> => {
+  const getDescendantVolumeIds = (volumeId: string, altVolumes?: Volume[]): Set<string> => {
     const result = new Set<string>([volumeId]);
-    const children = allVolumes.filter(v => v.parentId === volumeId);
+    const children = altVolumes
+      ? altVolumes.filter(v => v.parentId === volumeId)
+      : (volumesByParent.get(volumeId) || []);
     for (const child of children) {
-      const childDescendants = getDescendantVolumeIds(child.id, allVolumes);
+      const childDescendants = getDescendantVolumeIds(child.id, altVolumes);
       childDescendants.forEach(id => result.add(id));
     }
     return result;
@@ -1268,7 +1620,7 @@ export const BookOutlineTree = ({ book, onChapterSelect, onChapterDeselect, onBo
     }
 
     if (draggedItem.type === 'volume' && overData.type === 'volume') {
-      const descendants = getDescendantVolumeIds(draggedItem.id, volumes);
+      const descendants = getDescendantVolumeIds(draggedItem.id);
       if (descendants.has(over.id as string)) {
         currentOverRef.current = null;
         setDropTarget(null);
@@ -1297,6 +1649,7 @@ export const BookOutlineTree = ({ book, onChapterSelect, onChapterDeselect, onBo
 
     if (!over || !draggedItem) {
       setDraggedItem(null);
+      setIsDragActive(false);
       setDropTarget(null);
       return;
     }
@@ -1304,12 +1657,14 @@ export const BookOutlineTree = ({ book, onChapterSelect, onChapterDeselect, onBo
     const overData = over.data.current;
     if (!overData) {
       setDraggedItem(null);
+      setIsDragActive(false);
       setDropTarget(null);
       return;
     }
 
     if (draggedItem.id === over.id as string) {
       setDraggedItem(null);
+      setIsDragActive(false);
       setDropTarget(null);
       return;
     }
@@ -1389,7 +1744,7 @@ export const BookOutlineTree = ({ book, onChapterSelect, onChapterDeselect, onBo
           const targetVolume = volumes.find(v => v.id === over.id as string);
           if (!targetVolume) return;
 
-          const descendants = getDescendantVolumeIds(volume.id, volumes);
+          const descendants = getDescendantVolumeIds(volume.id);
           if (descendants.has(targetVolume.id)) {
             showToast('不能将卷移动到自身或其后代卷内', 'error');
           } else {
@@ -1435,6 +1790,7 @@ export const BookOutlineTree = ({ book, onChapterSelect, onChapterDeselect, onBo
       showToast('移动失败，请重试', 'error');
     } finally {
       setDraggedItem(null);
+      setIsDragActive(false);
       setDropTarget(null);
       dragMouseYRef.current = null;
       currentOverRef.current = null;
@@ -1443,6 +1799,7 @@ export const BookOutlineTree = ({ book, onChapterSelect, onChapterDeselect, onBo
 
   const handleDndDragCancel = () => {
     setDraggedItem(null);
+    setIsDragActive(false);
     setDropTarget(null);
     dragMouseYRef.current = null;
     currentOverRef.current = null;
@@ -1509,9 +1866,9 @@ export const BookOutlineTree = ({ book, onChapterSelect, onChapterDeselect, onBo
             )}
 
             {level === 0 ? (
-              <FolderOpen size={16} className="mr-2 text-yellow-500 flex-shrink-0" />
+              <FolderOpen size={16} className="mr-2 text-vscode-text opacity-40 flex-shrink-0" />
             ) : (
-              <Folder size={16} className="mr-2 text-yellow-600 flex-shrink-0" />
+              <Folder size={16} className="mr-2 text-vscode-text opacity-40 flex-shrink-0" />
             )}
 
             <span className="text-sm text-vscode-text truncate flex-1 min-w-0">{volume.name}</span>
@@ -1580,7 +1937,7 @@ export const BookOutlineTree = ({ book, onChapterSelect, onChapterDeselect, onBo
               onClick={() => showAutoNumberPanel ? setShowAutoNumberPanel(false) : openAutoNumberPanel()}
               className={`icon-btn transition-all duration-200 ${
                 autoNumbering 
-                  ? 'text-blue-400 bg-blue-500/20 dark:bg-blue-500/30 ring-1 ring-blue-400/50 dark:ring-blue-400/60 shadow-sm' 
+                  ? 'text-vscode-active bg-vscode-active/20 ring-1 ring-vscode-active/50 shadow-sm' 
                   : 'text-vscode-text hover:bg-vscode-hover'
               }`}
               title="自动序号设置"
@@ -1688,7 +2045,7 @@ export const BookOutlineTree = ({ book, onChapterSelect, onChapterDeselect, onBo
         onDragCancel={handleDndDragCancel}
       >
         <SortableContext
-          items={[...volumes.map(v => v.id), ...chapters.map(c => c.id)]}
+          items={visibleItemIds}
           strategy={verticalListSortingStrategy}
         >
           <div className="flex-1 relative overflow-hidden">
@@ -1699,7 +2056,7 @@ export const BookOutlineTree = ({ book, onChapterSelect, onChapterDeselect, onBo
                   <React.Fragment key={vol.id}>
                     {idx > 0 && <ChevronRight size={12} className="mx-1 text-vscode-text opacity-30 flex-shrink-0" />}
                     <div className="flex items-center min-w-0">
-                      <Folder size={13} className="mr-1 text-yellow-500 flex-shrink-0" />
+                      <Folder size={13} className="mr-1 text-vscode-text opacity-40 flex-shrink-0" />
                       <span className="text-xs text-vscode-text truncate">{vol.name}</span>
                     </div>
                   </React.Fragment>
@@ -1723,12 +2080,15 @@ export const BookOutlineTree = ({ book, onChapterSelect, onChapterDeselect, onBo
                     data={chapter}
                     level={1}
                     isActive={activeChapterId === chapter.id}
-                    onClick={() => onChapterSelect(chapter)}
-                    onContextMenu={(e) => handleContextMenu(e, 'chapter', chapter)}
-                    displayTitle={computeChapterDisplayTitle(chapter, chapters, { ...book, autoNumbering, numberingFormat, numberingScope })}
-                    dropTarget={dropTarget}
+                    onChapterClick={handleChapterClick}
+                    onContextMenu={handleContextMenu}
+                    displayTitle={chapterDisplayTitleMap.get(chapter.id) || chapter.title}
+                    isDropTarget={dropTarget?.id === chapter.id}
+                    dropPosition={dropTarget?.id === chapter.id ? dropTarget.position : null}
                     excerpt={(chapterDetailDisplay === 'nameAndExcerpt' || chapterDetailDisplay === 'full') ? getChapterExcerpt(chapter) : undefined}
                     chapterWordCount={(chapterDetailDisplay === 'nameAndWordCount' || chapterDetailDisplay === 'full') ? (chapter.wordCount || 0) : undefined}
+                    isDragActive={isDragActive}
+                    onDragHandleActivate={activateDrag}
                   />
                 ))}
               </div>
@@ -1762,7 +2122,7 @@ export const BookOutlineTree = ({ book, onChapterSelect, onChapterDeselect, onBo
                   ? volumes.find(v => v.id === draggedItem.id)?.name
                   : (() => {
                       const ch = chapters.find(c => c.id === draggedItem.id);
-                      return ch ? computeChapterDisplayTitle(ch, chapters, { ...book, autoNumbering, numberingFormat, numberingScope }) : undefined;
+                      return ch ? (chapterDisplayTitleMap.get(ch.id) || ch.title) : undefined;
                     })()
               }
             />
@@ -1919,7 +2279,7 @@ export const BookOutlineTree = ({ book, onChapterSelect, onChapterDeselect, onBo
 
       {/* 重命名模态框 */}
       {renameModal && renameModal.isOpen && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+        <div className="modal-overlay">
           <div 
             className="bg-vscode-sidebar border border-vscode-border w-[400px] flex flex-col"
             style={{ borderRadius: '2px' }}
@@ -1969,7 +2329,7 @@ export const BookOutlineTree = ({ book, onChapterSelect, onChapterDeselect, onBo
 
       {/* 章节：移动到... 模态框 */}
       {moveChapterModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+        <div className="modal-overlay">
           <div 
             className="bg-vscode-sidebar border border-vscode-border w-[480px] max-h-[70vh] flex flex-col"
             style={{ borderRadius: '2px' }}
@@ -2014,12 +2374,12 @@ export const BookOutlineTree = ({ book, onChapterSelect, onChapterDeselect, onBo
                     ) : (
                       <ChevronRight size={14} className="mr-1 text-vscode-text opacity-40" />
                     )}
-                    <BookOpen size={16} className="mr-2 text-blue-400 flex-shrink-0" />
+                    <BookOpen size={16} className="mr-2 text-vscode-text opacity-40 flex-shrink-0" />
                     <span className="text-sm text-vscode-text font-medium">{book.name}</span>
                   </div>
 
                   {moveChapterModal.expandedBookIds.has(book.id) && (
-                    <div className="ml-4 border-l border-gray-600/50 pl-2">
+                    <div className="ml-4 border-l border-vscode-border/50 pl-2">
                       {renderVolumeTreeNodes(
                         moveChapterModal.allVolumesMap[book.id]?.filter(v => !v.parentId) || [],
                         moveChapterModal.allVolumesMap[book.id] || [],
@@ -2047,7 +2407,7 @@ export const BookOutlineTree = ({ book, onChapterSelect, onChapterDeselect, onBo
 
       {/* 卷：移动分卷到... 模态框 */}
       {moveVolumeModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+        <div className="modal-overlay">
           <div 
             className="bg-vscode-sidebar border border-vscode-border w-[520px] max-h-[75vh] flex flex-col"
             style={{ borderRadius: '2px' }}
@@ -2084,7 +2444,7 @@ export const BookOutlineTree = ({ book, onChapterSelect, onChapterDeselect, onBo
                       ) : (
                         <ChevronRight size={14} className="mr-1 text-vscode-text opacity-40" />
                       )}
-                      <BookOpen size={16} className="mr-2 text-blue-400 flex-shrink-0" />
+                      <BookOpen size={16} className="mr-2 text-vscode-text opacity-40 flex-shrink-0" />
                       <span className="text-sm text-vscode-text font-medium">{book.name}</span>
                     </div>
                     <button
@@ -2110,7 +2470,7 @@ export const BookOutlineTree = ({ book, onChapterSelect, onChapterDeselect, onBo
                   </div>
 
                   {moveVolumeModal.expandedBookIds.has(book.id) && (
-                    <div className="ml-4 border-l border-gray-600/50 pl-2">
+                    <div className="ml-4 border-l border-vscode-border/50 pl-2">
                       {(() => {
                         // 过滤掉被移动的卷及其所有后代，防止移动到自身
                         const excludeIds = getDescendantVolumeIds(
@@ -2157,7 +2517,7 @@ export const BookOutlineTree = ({ book, onChapterSelect, onChapterDeselect, onBo
 
       {/* 顺序调整模态框 */}
       {reorderModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+        <div className="modal-overlay">
           <div 
             className="bg-vscode-sidebar border border-vscode-border w-[480px] max-h-[70vh] flex flex-col"
             style={{ borderRadius: '2px' }}

@@ -122,9 +122,9 @@ export const SkeletonTab: React.FC<SkeletonTabProps> = ({ skeleton }) => {
                 </span>
                 <span className="text-vscode-text opacity-50">{sl.hookType}</span>
                 {sl.resolvedInChapter != null ? (
-                  <span className="text-green-400 text-[10px]">已解决(第{sl.resolvedInChapter}章)</span>
+                  <span className="text-vscode-success text-[10px]">已解决(第{sl.resolvedInChapter}章)</span>
                 ) : (
-                  <span className="text-yellow-400 text-[10px]">未解决</span>
+                  <span className="text-vscode-warning text-[10px]">未解决</span>
                 )}
               </div>
               <p className="text-vscode-text">{sl.description}</p>

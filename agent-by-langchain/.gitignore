@@ -5,6 +5,9 @@ __pycache__/
 *.pyo
 .DS_Store
 
+# API 鉴权 token（服务启动时自动生成，禁止提交）
+.api_token
+
 # 个人自学
 memory/
 learning/

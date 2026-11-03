@@ -403,7 +403,7 @@ const SessionItem: React.FC<{
       {hovering && (
         <button
           onClick={e => { e.stopPropagation(); onDelete(); }}
-          className="p-0.5 rounded hover:bg-red-500/20"
+          className="p-0.5 rounded hover:bg-vscode-danger/20"
           style={{ color: 'var(--color-danger, #dc2626)', flexShrink: 0 }}
           title="删除会话"
         >

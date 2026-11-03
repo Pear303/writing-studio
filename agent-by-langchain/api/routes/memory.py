@@ -1,4 +1,5 @@
 """Memory API — 读写 MEMORY.md 和 USER.md"""
+import re
 import sys
 from pathlib import Path
 from fastapi import APIRouter
@@ -12,6 +13,9 @@ if str(PROJECT_ROOT) not in sys.path:
 
 MEMORY_FILE = PROJECT_ROOT / "memory" / "MEMORY.md"
 USER_FILE = PROJECT_ROOT / "templates" / "USER.md"
+
+# 情景记忆日期参数格式校验（防止路径拼接越界）
+_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 
 class ContentRequest(BaseModel):
@@ -67,6 +71,8 @@ async def get_episodes():
 @router.get("/episodes/{date}")
 async def get_episode(date: str):
     """获取指定日期的情景记忆"""
+    if not _DATE_RE.match(date):
+        return {"error": "日期格式必须为 YYYY-MM-DD"}, 400
     episode_file = PROJECT_ROOT / "memory" / f"{date}.md"
     if not episode_file.exists():
         return {"content": "", "error": "未找到该日期的情景记忆"}

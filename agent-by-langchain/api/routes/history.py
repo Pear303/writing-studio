@@ -1,5 +1,6 @@
 """会话管理 API — 会话的增删改查及历史记录获取"""
 import json
+import re
 from pathlib import Path
 from fastapi import APIRouter
 from pydantic import BaseModel
@@ -10,6 +11,9 @@ router = APIRouter()
 PROJECT_ROOT = Path(__file__).parent.parent.parent
 HISTORY_FILE = PROJECT_ROOT / "memory" / "history.jsonl"
 SESSIONS_FILE = PROJECT_ROOT / "memory" / "sessions.json"
+
+# 会话 ID 字符白名单（用于路径拼接前校验，防止越界）
+_SESSION_ID_RE = re.compile(r"^[A-Za-z0-9_\-]{1,64}$")
 
 
 def _load_sessions() -> list[dict]:
@@ -171,6 +175,9 @@ async def update_session(session_id: str, req: UpdateSessionRequest):
 @router.delete("/{session_id}")
 async def delete_session(session_id: str):
     """删除会话及其所有历史记录。"""
+    if not _SESSION_ID_RE.match(session_id):
+        return {"error": "会话 ID 非法（仅允许字母/数字/下划线/连字符）"}, 400
+
     sessions = _load_sessions()
     target = None
     for s in sessions:

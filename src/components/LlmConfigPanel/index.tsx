@@ -206,7 +206,7 @@ export const LlmConfigPanel = ({ onClose, onConfigChange }: LlmConfigPanelProps)
         id: editingId || '',
         name: formData.name.trim(),
         provider: formData.provider,
-        apiKey: encodeApiKey(formData.apiKey.trim()),
+        apiKey: await encodeApiKey(formData.apiKey.trim()),
         apiUrl: formData.apiUrl.trim(),
         model: formData.model.trim(),
         isDefault: formData.isDefault,
@@ -225,12 +225,13 @@ export const LlmConfigPanel = ({ onClose, onConfigChange }: LlmConfigPanelProps)
     }
   };
 
-  const handleEdit = (config: LLMConfig) => {
+  const handleEdit = async (config: LLMConfig) => {
     setEditingId(config.id);
+    const apiKey = await decodeApiKey(config.apiKey);
     setFormData({
       name: config.name,
       provider: config.provider,
-      apiKey: decodeApiKey(config.apiKey),
+      apiKey,
       apiUrl: config.apiUrl,
       model: config.model,
       isDefault: config.isDefault,
@@ -433,7 +434,7 @@ export const LlmConfigPanel = ({ onClose, onConfigChange }: LlmConfigPanelProps)
                       </button>
                       <button
                         onClick={() => handleDelete(config.id)}
-                        className="p-1 rounded hover:bg-vscode-border text-red-500 opacity-50 hover:opacity-100"
+                        className="p-1 rounded hover:bg-vscode-border text-vscode-danger opacity-50 hover:opacity-100"
                         title="删除"
                       >
                         <Trash2 size={14} />
@@ -636,14 +637,14 @@ export const LlmConfigPanel = ({ onClose, onConfigChange }: LlmConfigPanelProps)
 
         <div className="mt-4 p-3 rounded bg-vscode-border/30">
           <h4 className="text-xs font-medium text-vscode-text mb-2 flex items-center gap-1.5">
-            <Lightbulb size={14} className="text-yellow-500" />
+            <Lightbulb size={14} className="text-vscode-warning" />
             快速入门
           </h4>
           <ul className="text-xs text-vscode-text opacity-60 space-y-1">
             <li>• 选择提供商并填写 API Key</li>
             <li>• 大多数提供商使用官方默认配置即可</li>
             <li>• Azure 用户需要填写自定义端点</li>
-            <li>• 配置已 Base64 加密存储，安全可靠</li>
+            <li>• 配置已 AES-GCM 加密存储，安全可靠</li>
           </ul>
           {preset?.docsUrl && (
             <a

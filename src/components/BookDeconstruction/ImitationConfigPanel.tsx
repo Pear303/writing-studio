@@ -134,9 +134,9 @@ export const ImitationConfigPanel: React.FC<ImitationConfigPanelProps> = ({
               value={config.protagonistName}
               onChange={e => updateConfig('protagonistName', e.target.value)}
               placeholder="输入主角姓名"
-              className={`input-field mt-1 w-full text-sm ${errors.protagonistName ? 'border-red-500' : ''}`}
+              className={`input-field mt-1 w-full text-sm ${errors.protagonistName ? 'border-vscode-danger' : ''}`}
             />
-            {errors.protagonistName && <span className="text-red-400 text-xs mt-1">{errors.protagonistName}</span>}
+            {errors.protagonistName && <span className="text-vscode-danger text-xs mt-1">{errors.protagonistName}</span>}
           </label>
 
           {/* 主角人设 */}
@@ -147,9 +147,9 @@ export const ImitationConfigPanel: React.FC<ImitationConfigPanelProps> = ({
               onChange={e => updateConfig('protagonistDescription', e.target.value)}
               placeholder="描述主角的性格、背景、动机等"
               rows={3}
-              className={`input-field mt-1 w-full text-sm resize-none ${errors.protagonistDescription ? 'border-red-500' : ''}`}
+              className={`input-field mt-1 w-full text-sm resize-none ${errors.protagonistDescription ? 'border-vscode-danger' : ''}`}
             />
-            {errors.protagonistDescription && <span className="text-red-400 text-xs mt-1">{errors.protagonistDescription}</span>}
+            {errors.protagonistDescription && <span className="text-vscode-danger text-xs mt-1">{errors.protagonistDescription}</span>}
           </label>
 
           {/* 核心冲突 */}
@@ -160,9 +160,9 @@ export const ImitationConfigPanel: React.FC<ImitationConfigPanelProps> = ({
               onChange={e => updateConfig('coreConflict', e.target.value)}
               placeholder="描述新书的核心冲突"
               rows={2}
-              className={`input-field mt-1 w-full text-sm resize-none ${errors.coreConflict ? 'border-red-500' : ''}`}
+              className={`input-field mt-1 w-full text-sm resize-none ${errors.coreConflict ? 'border-vscode-danger' : ''}`}
             />
-            {errors.coreConflict && <span className="text-red-400 text-xs mt-1">{errors.coreConflict}</span>}
+            {errors.coreConflict && <span className="text-vscode-danger text-xs mt-1">{errors.coreConflict}</span>}
           </label>
 
           {/* 题材/世界观 */}
@@ -173,9 +173,9 @@ export const ImitationConfigPanel: React.FC<ImitationConfigPanelProps> = ({
               value={config.genre}
               onChange={e => updateConfig('genre', e.target.value)}
               placeholder="如：仙侠、都市、科幻..."
-              className={`input-field mt-1 w-full text-sm ${errors.genre ? 'border-red-500' : ''}`}
+              className={`input-field mt-1 w-full text-sm ${errors.genre ? 'border-vscode-danger' : ''}`}
             />
-            {errors.genre && <span className="text-red-400 text-xs mt-1">{errors.genre}</span>}
+            {errors.genre && <span className="text-vscode-danger text-xs mt-1">{errors.genre}</span>}
           </label>
         </section>
 

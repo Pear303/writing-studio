@@ -25,41 +25,44 @@ export class BookStructureWriter {
     const userId = await getCurrentUserId();
     const bookId = generateId();
 
-    await db.books.add({
-      id: bookId,
-      name: bookName,
-      userId: userId || 'unknown',
-      totalWords: chapters.reduce((sum, ch) => sum + (ch.estimatedWordCount || 0), 0),
-      status: 'ongoing',
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-    });
-
-    // 创建默认卷
-    const volumeId = generateId();
-    await db.volumes.add({
-      id: volumeId,
-      bookId,
-      name: options?.volumeName || '正文',
-      order: 0,
-      outline: options?.volumeOutline,
-    });
-
-    // 创建章节
-    for (const ch of chapters) {
-      await db.chapters.add({
-        id: generateId(),
-        bookId,
-        volumeId,
-        title: ch.title,
-        content: '',
-        order: ch.order,
-        detailedOutline: ch.detailedOutline,
-        wordCount: ch.estimatedWordCount || 0,
+    // book/volume/chapter 写入包在同一事务中，保证原子性
+    await db.transaction('rw', [db.books, db.volumes, db.chapters], async () => {
+      await db.books.add({
+        id: bookId,
+        name: bookName,
+        userId: userId || 'unknown',
+        totalWords: chapters.reduce((sum, ch) => sum + (ch.estimatedWordCount || 0), 0),
+        status: 'ongoing',
         createdAt: Date.now(),
         updatedAt: Date.now(),
       });
-    }
+
+      // 创建默认卷
+      const volumeId = generateId();
+      await db.volumes.add({
+        id: volumeId,
+        bookId,
+        name: options?.volumeName || '正文',
+        order: 0,
+        outline: options?.volumeOutline,
+      });
+
+      // 创建章节
+      for (const ch of chapters) {
+        await db.chapters.add({
+          id: generateId(),
+          bookId,
+          volumeId,
+          title: ch.title,
+          content: '',
+          order: ch.order,
+          detailedOutline: ch.detailedOutline,
+          wordCount: ch.estimatedWordCount || 0,
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        });
+      }
+    });
 
     return bookId;
   }

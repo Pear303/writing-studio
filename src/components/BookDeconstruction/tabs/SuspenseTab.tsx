@@ -26,9 +26,9 @@ const qualityLabels: Record<string, string> = {
 };
 
 const statusColors: Record<string, string> = {
-  resolved: 'text-green-400',
-  open: 'text-yellow-400',
-  abandoned: 'text-gray-400',
+  resolved: 'text-vscode-success',
+  open: 'text-vscode-warning',
+  abandoned: 'text-vscode-text opacity-50',
 };
 
 export const SuspenseTab: React.FC<SuspenseTabProps> = ({ skeleton, crossAnalysis }) => {

@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs';
 import { v4 as uuidv4 } from 'uuid';
 import type { Book, Volume, Chapter, Material, AIConversation, ChapterVersion, LLMConfig, QARecord, FullExportData, ImportResult, FormattingSettings, WritingGoal, PomodoroState, Theme, PipelineSession, VibePreset, PipelinePromptTemplate, VibePipelineHistory, RecycleBinItem, BookDeconstructionResult, ImitationOutline, LocalStorageSettings } from '../types';
 import { DEFAULT_VIBE_PRESETS } from '../types';
+import { encryptSecret, decryptSecret } from '../auth/encryption';
 export type { LLMConfig };
 
 // bcrypt 盐值轮数（cost factor）
@@ -285,6 +286,9 @@ const THEME_KEY = 'theme';
 const LAST_EXPORT_PATH_KEY = 'lastExportPath';
 const LAST_IMPORT_PATH_KEY = 'lastImportPath';
 
+// 导出数据当前版本
+const CURRENT_VERSION = '2.0';
+
 // 导出所有本地设置
 export const exportLocalSettings = (): Record<string, any> => {
   const result: Record<string, FormattingSettings> = {};
@@ -334,6 +338,28 @@ const exportLocalStorageSettings = (): LocalStorageSettings => {
   s.lineHeight = readStr('lineHeight');
   s.sidebarWidth = readNum('sidebarWidth');
   s.rightPanelWidth = readNum('rightPanelWidth');
+  // 写作目标相关日期/计数（App.tsx 写入的字符串键）
+  s.writingGoalDate = readStr('writingGoalDate');
+  s.todayWordCount = readStr('todayWordCount');
+  s.lastWordCount = readStr('lastWordCount');
+  // 卷展开状态（expandedVolumes_{bookId}，按前缀收集）
+  const expandedVolumes: Record<string, string[]> = {};
+  for (const key of Object.keys(localStorage)) {
+    if (key.startsWith('expandedVolumes_')) {
+      const v = localStorage.getItem(key);
+      if (v) {
+        try {
+          const parsed = JSON.parse(v);
+          expandedVolumes[key] = Array.isArray(parsed) ? parsed : [];
+        } catch {
+          // 忽略无法解析的值
+        }
+      }
+    }
+  }
+  if (Object.keys(expandedVolumes).length > 0) {
+    s.expandedVolumes = expandedVolumes;
+  }
 
   return s;
 };
@@ -359,6 +385,14 @@ const importLocalStorageSettings = (s?: LocalStorageSettings) => {
   if (s.lineHeight !== undefined) localStorage.setItem('lineHeight', s.lineHeight);
   if (s.sidebarWidth !== undefined) localStorage.setItem('sidebarWidth', String(s.sidebarWidth));
   if (s.rightPanelWidth !== undefined) localStorage.setItem('rightPanelWidth', String(s.rightPanelWidth));
+  if (s.writingGoalDate !== undefined) localStorage.setItem('writingGoalDate', s.writingGoalDate);
+  if (s.todayWordCount !== undefined) localStorage.setItem('todayWordCount', s.todayWordCount);
+  if (s.lastWordCount !== undefined) localStorage.setItem('lastWordCount', s.lastWordCount);
+  if (s.expandedVolumes) {
+    for (const [key, value] of Object.entries(s.expandedVolumes)) {
+      localStorage.setItem(key, JSON.stringify(value));
+    }
+  }
 };
 export const exportAllData = async (): Promise<string> => {
   const books = await db.books.toArray();
@@ -422,12 +456,30 @@ export const exportAllData = async (): Promise<string> => {
 
 // 合并式导入数据
 export const importAllData = async (jsonData: string, mergeMode: boolean = true): Promise<ImportResult> => {
-  const data: FullExportData = JSON.parse(jsonData);
+  const parsedData = JSON.parse(jsonData) as FullExportData;
+  // 版本校验：与 CURRENT_VERSION 比较，明显不兼容的旧版本拒绝导入
+  const dataVersion = (parsedData as { version?: unknown })?.version;
+  const currentMajor = parseInt(String(CURRENT_VERSION).split('.')[0] || '', 10);
+  if (typeof dataVersion === 'number' && dataVersion < Number(CURRENT_VERSION)) {
+    throw new Error(`导入失败：数据文件版本过旧（version=${dataVersion}），无法兼容导入（当前版本 ${CURRENT_VERSION}）`);
+  }
+  if (typeof dataVersion === 'string') {
+    const major = parseInt(dataVersion.split('.')[0] || '', 10);
+    if (!Number.isNaN(major) && !Number.isNaN(currentMajor) && major < currentMajor - 1) {
+      throw new Error(`导入失败：数据文件版本过旧（version=${dataVersion}），无法兼容导入（当前版本 ${CURRENT_VERSION}）`);
+    }
+  }
+  const data: FullExportData = parsedData;
   const result: ImportResult = { added: 0, updated: 0, skipped: 0, errors: [] };
   
   const importUserId = getCurrentUserId() || undefined;
 
   if (!mergeMode) {
+    // 非合并模式：清空前备份当前用户数据，导入后若当前用户不存在则重建
+    const currentUserId = getCurrentUserId();
+    const currentUserBackup = currentUserId ? await db.users.get(currentUserId) : undefined;
+    const currentSettingsBackup = currentUserId ? await db.userSettings.get(currentUserId) : undefined;
+
     await db.transaction('rw', 
       [db.books, db.volumes, db.chapters, db.materials, db.aiConversations, db.chapterVersions, db.llmConfigs, db.qaRecords, db.users, db.userSettings, db.chapterStateCommits, db.antiPatterns, db.vibePipelineHistory, db.recycleBin, db.bookDeconstructions, db.imitationOutlines, db.pipelineSessions, db.pipelinePromptTemplates, db.vibePresets],
       async () => {
@@ -486,6 +538,18 @@ export const importAllData = async (jsonData: string, mergeMode: boolean = true)
     if (data.metadata?.lastExportPath) localStorage.setItem(LAST_EXPORT_PATH_KEY, data.metadata.lastExportPath);
     if (data.metadata?.lastImportPath) localStorage.setItem(LAST_IMPORT_PATH_KEY, data.metadata.lastImportPath);
     importLocalStorageSettings(data.localSettings);
+
+    // 导入后若当前用户不存在则重建（含其设置）
+    if (currentUserId && currentUserBackup) {
+      const existing = await db.users.get(currentUserId);
+      if (!existing) {
+        await db.users.add(currentUserBackup);
+        if (currentSettingsBackup) {
+          await db.userSettings.add(currentSettingsBackup);
+        }
+        result.added++;
+      }
+    }
     
     return result;
   }
@@ -551,8 +615,15 @@ export const importAllData = async (jsonData: string, mergeMode: boolean = true)
       }
       
       for (const material of data.materials || []) {
-        await db.materials.put({ ...material, userId: material.userId || importUserId });
-        result.added++;
+        const m = { ...material, userId: material.userId || importUserId };
+        const exists = await db.materials.get(material.id);
+        if (exists) {
+          await db.materials.update(material.id, m);
+          result.updated++;
+        } else {
+          await db.materials.add(m);
+          result.added++;
+        }
       }
       
       for (const conv of data.aiConversations || []) {
@@ -714,9 +785,20 @@ export const setDefaultLLMConfig = async (id: string): Promise<void> => {
   });
 };
 
-export const encodeApiKey = (apiKey: string): string => btoa(apiKey);
+// LLM API Key 加密（AES-GCM，Web Crypto）
+export const encodeApiKey = async (apiKey: string): Promise<string> => {
+  if (!apiKey) return '';
+  return await encryptSecret(apiKey);
+};
 
-export const decodeApiKey = (encoded: string): string => {
+// LLM API Key 解密（兼容旧格式：aes 解密失败或非 aes 前缀时回退 base64/明文）
+export const decodeApiKey = async (encoded: string): Promise<string> => {
+  if (!encoded) return '';
+  if (encoded.startsWith('aes:')) {
+    const decrypted = await decryptSecret(encoded);
+    if (decrypted) return decrypted;
+  }
+  // 旧格式兼容：base64 解码失败则视为明文原样返回
   try {
     return atob(encoded);
   } catch {

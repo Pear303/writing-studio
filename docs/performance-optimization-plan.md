@@ -1,6 +1,6 @@
 # 书籍页面加载性能优化计划
 
-> 适用项目：writing-studio-private
+> 适用项目：writing-studio
 > 创建日期：2026-06-10
 > 状态：待实施
 

@@ -31,11 +31,20 @@ export const VolumeTree = ({ book, onVolumeSelect, onChapterSelect, activeVolume
   } | null>(null);
   const [expandedChapterId, setExpandedChapterId] = useState<string | null>(null);
 
-  const EXPANDED_VOLUMES_KEY = `expanded_volumes_volumetree_${book.id}`;
+  const EXPANDED_VOLUMES_KEY = `expandedVolumes_volumetree_${book.id}`;
+  const LEGACY_EXPANDED_KEY = `expanded_volumes_volumetree_${book.id}`;
 
   const loadExpandedIds = (allVolumes: Volume[]): Set<string> => {
     try {
-      const saved = localStorage.getItem(EXPANDED_VOLUMES_KEY);
+      let saved = localStorage.getItem(EXPANDED_VOLUMES_KEY);
+      // 迁移旧 key
+      if (!saved) {
+        saved = localStorage.getItem(LEGACY_EXPANDED_KEY);
+        if (saved) {
+          localStorage.setItem(EXPANDED_VOLUMES_KEY, saved);
+          localStorage.removeItem(LEGACY_EXPANDED_KEY);
+        }
+      }
       if (saved) {
         const savedIds: string[] = JSON.parse(saved);
         const volumeIds = new Set(allVolumes.map(v => v.id));
@@ -53,7 +62,7 @@ export const VolumeTree = ({ book, onVolumeSelect, onChapterSelect, activeVolume
 
   useEffect(() => {
     loadData();
-  }, [book.id, book, refreshTrigger]);
+  }, [book.id, refreshTrigger]);
 
   const loadData = async () => {
     try {
@@ -146,7 +155,7 @@ export const VolumeTree = ({ book, onVolumeSelect, onChapterSelect, activeVolume
         <div
           className={`flex items-center py-1.5 px-2 cursor-pointer transition-colors duration-150 ${
             isActive
-              ? 'bg-blue-600/20 text-vscode-text'
+              ? 'bg-vscode-active/20 text-vscode-text'
               : 'hover:bg-vscode-active/10 text-vscode-text'
           }`}
           style={{ paddingLeft: level * 16 + 8 }}
@@ -168,22 +177,22 @@ export const VolumeTree = ({ book, onVolumeSelect, onChapterSelect, activeVolume
           )}
 
           {level === 0 ? (
-            <FolderOpen size={16} className="mr-2 text-yellow-500 flex-shrink-0" />
+            <FolderOpen size={16} className="mr-2 text-vscode-text opacity-40 flex-shrink-0" />
           ) : (
-            <Folder size={16} className="mr-2 text-yellow-600 flex-shrink-0" />
+            <Folder size={16} className="mr-2 text-vscode-text opacity-40 flex-shrink-0" />
           )}
 
           <span className="text-sm truncate min-w-0 flex-1">{volume.name}</span>
 
           {hasOutline && (
-            <span className="text-xs text-green-400 mr-1 flex-shrink-0" title="已设置大纲">
+            <span className="text-xs text-vscode-success mr-1 flex-shrink-0" title="已设置大纲">
               大纲
             </span>
           )}
 
           {isActive && (
             <span className="flex-shrink-0 mr-1" title="正在编辑大纲">
-              <Edit3 size={12} className="text-blue-400" />
+              <Edit3 size={12} className="text-vscode-text opacity-40" />
             </span>
           )}
         </div>
@@ -202,7 +211,7 @@ export const VolumeTree = ({ book, onVolumeSelect, onChapterSelect, activeVolume
                   <div
                     className={`flex items-center py-1.5 px-2 cursor-pointer transition-colors duration-150 ${
                       isChapterActive
-                        ? 'bg-blue-600/15 text-vscode-text'
+                        ? 'bg-vscode-active/20 text-vscode-text'
                         : 'hover:bg-vscode-active/10 text-vscode-text'
                     }`}
                     style={{ paddingLeft: (level + 1) * 16 + 8 }}
@@ -215,12 +224,12 @@ export const VolumeTree = ({ book, onVolumeSelect, onChapterSelect, activeVolume
                     onContextMenu={(e) => handleChapterContextMenu(e, chapter)}
                   >
                     <span className="w-5 mr-1" />
-                    <FileText size={14} className="mr-2 text-blue-400 flex-shrink-0" />
+                    <FileText size={14} className="mr-2 text-vscode-text opacity-40 flex-shrink-0" />
 
                     <span className="text-sm truncate min-w-0 flex-1">{chapter.title}</span>
 
                     {hasDetailedOutline && (
-                      <span className="text-xs text-purple-400 flex-shrink-0" title="已设置细纲">
+                      <span className="text-xs text-vscode-active flex-shrink-0" title="已设置细纲">
                         细纲
                       </span>
                     )}

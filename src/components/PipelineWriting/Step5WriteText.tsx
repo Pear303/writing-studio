@@ -156,12 +156,6 @@ export const Step5WriteText: React.FC<Step5WriteTextProps> = ({
     return () => clearInterval(pollInterval);
   }, [step5State?.isGenerating, bookId, volumeId, onStep5StateChange]);
 
-  useEffect(() => {
-    return () => {
-      // cleanup
-    };
-  }, []);
-
   // 加载素材列表
   useEffect(() => {
     const loadMaterials = async () => {
@@ -666,16 +660,22 @@ export const Step5WriteText: React.FC<Step5WriteTextProps> = ({
     }
   };
 
+  const dragStateRef = useRef<{ startY: number; startHeight: number } | null>(null);
+
   const handleDragStart = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
+    dragStateRef.current = { startY: e.clientY, startHeight: previewHeight };
     setIsDragging(true);
-    const startY = e.clientY;
-    const startHeight = previewHeight;
+  }, [previewHeight]);
+
+  // 拖拽期间由 isDragging 驱动注册/注销 document 监听器，卸载时自动清理
+  useEffect(() => {
+    if (!isDragging || !dragStateRef.current) return;
+    const { startY, startHeight } = dragStateRef.current;
 
     const handleMouseUp = () => {
       setIsDragging(false);
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
+      dragStateRef.current = null;
     };
 
     const handleMouseMove = (moveEvent: MouseEvent) => {
@@ -687,7 +687,11 @@ export const Step5WriteText: React.FC<Step5WriteTextProps> = ({
 
     document.addEventListener('mousemove', handleMouseMove);
     document.addEventListener('mouseup', handleMouseUp);
-  }, [previewHeight]);
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isDragging]);
 
   const generatedCount = step5State?.chapters.filter(ch => ch.content).length || 0;
 
@@ -724,7 +728,7 @@ export const Step5WriteText: React.FC<Step5WriteTextProps> = ({
                 onClick={handleBatchPolish}
                 disabled={isPolishing || isWorking}
               >
-                {isPolishing ? <Loader2 size={12} style={{ animation: 'spin 1s linear infinite' }} /> : <Sparkles size={12} />}
+                {isPolishing ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
                 {isPolishing ? `润色中(${(polishingIndex ?? -1) + 1}章)` : `连续润色(${selectedPolishChapters.size}章)`}
               </button>
             )}
@@ -760,7 +764,7 @@ export const Step5WriteText: React.FC<Step5WriteTextProps> = ({
                 onClick={handleBatchGenerate}
                 disabled={isWorking || isBatchGenerating}
               >
-                {isBatchGenerating ? <Loader2 size={12} style={{ animation: 'spin 1s linear infinite' }} /> : <Zap size={12} />}
+                {isBatchGenerating ? <Loader2 size={12} className="animate-spin" /> : <Zap size={12} />}
                 {isBatchGenerating ? '批量生成中...' : '批量生成'}
               </button>
             )}
@@ -839,7 +843,7 @@ export const Step5WriteText: React.FC<Step5WriteTextProps> = ({
                   disabled={isPolishing || isWorking}
                   title="润色本章"
                 >
-                  {isPolishing && polishingIndex === currentIdx ? <Loader2 size={12} style={{ animation: 'spin 1s linear infinite' }} /> : <Sparkles size={12} />}
+                  {isPolishing && polishingIndex === currentIdx ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
                   润色
                 </button>
               )}
@@ -1135,7 +1139,7 @@ export const Step5WriteText: React.FC<Step5WriteTextProps> = ({
 
       {(isWorking || isPolishing) && (
         <div style={{ textAlign: 'center', padding: '40px 16px' }}>
-          <Loader2 size={32} style={{ color: 'var(--color-vscode-active)', animation: 'spin 1s linear infinite', margin: '0 auto 12px' }} />
+          <Loader2 size={32} className="animate-spin" style={{ color: 'var(--color-vscode-active)', margin: '0 auto 12px' }} />
           <p style={{ fontSize: '13px', color: 'var(--color-vscode-text)', opacity: 0.7 }}>
             {isPolishing
               ? `正在润色第${(polishingIndex ?? currentIdx) + 1}章，请稍候...`
@@ -1160,7 +1164,6 @@ export const Step5WriteText: React.FC<Step5WriteTextProps> = ({
               取消
             </button>
           )}
-          <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
         </div>
       )}
 
@@ -1277,7 +1280,7 @@ export const Step5WriteText: React.FC<Step5WriteTextProps> = ({
                   onClick={handleRefine}
                   disabled={isWorking}
                 >
-                  {isWorking ? <Loader2 size={13} style={{ animation: 'spin 1s linear infinite' }} /> : <RefreshCw size={13} />}
+                  {isWorking ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />}
                   回炉重造
                 </button>
               )}

@@ -154,7 +154,7 @@ export const RecycleBinPanel = ({ onRestore }: RecycleBinPanelProps) => {
         {items.length > 0 && (
           <button
             onClick={handleClearAll}
-            className="text-xs text-vscode-text opacity-60 hover:opacity-100 hover:text-red-400 transition-colors"
+            className="text-xs text-vscode-text opacity-60 hover:opacity-100 hover:text-vscode-danger transition-colors"
           >
             清空
           </button>
@@ -214,7 +214,7 @@ export const RecycleBinPanel = ({ onRestore }: RecycleBinPanelProps) => {
                           e.stopPropagation();
                           handlePermanentDelete(item);
                         }}
-                        className="p-1 rounded hover:bg-vscode-active/20 text-vscode-text opacity-60 hover:opacity-100 hover:text-red-400"
+                        className="p-1 rounded hover:bg-vscode-active/20 text-vscode-text opacity-60 hover:opacity-100 hover:text-vscode-danger"
                         title="永久删除"
                       >
                         <Trash2 size={13} />

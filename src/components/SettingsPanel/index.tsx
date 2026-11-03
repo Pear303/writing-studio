@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Download, Upload, Trash2 } from 'lucide-react';
 import { Toast, type ToastType } from '../Toast';
 import type { FormattingSettings, WordCountSettings } from '../../types';
@@ -35,7 +35,7 @@ export const SettingsPanel = ({
   onSaveFormattingSettings,
   wordCountSettings,
   onSaveWordCountSettings,
-  theme = 'dark',
+  theme = 'light',
   onThemeChange,
   autoSaveInterval: externalAutoSaveInterval,
   onAutoSaveIntervalChange,
@@ -63,6 +63,19 @@ export const SettingsPanel = ({
   const [localEditorFontSize, setLocalEditorFontSize] = useState(() => {
     return externalEditorFontSize ?? 16;
   });
+
+  // 外部（App.tsx）值变化时同步本地副本，避免设置面板显示过期值
+  useEffect(() => {
+    if (externalAutoSaveInterval !== undefined) {
+      setLocalAutoSaveInterval(externalAutoSaveInterval);
+    }
+  }, [externalAutoSaveInterval]);
+
+  useEffect(() => {
+    if (externalEditorFontSize !== undefined) {
+      setLocalEditorFontSize(externalEditorFontSize);
+    }
+  }, [externalEditorFontSize]);
   const [startupWindowMode, setStartupWindowMode] = useState<'maximized' | 'fullscreen'>(() => {
     return (localStorage.getItem('startupWindowMode') as 'maximized' | 'fullscreen') || 'maximized';
   });
@@ -364,6 +377,7 @@ export const SettingsPanel = ({
                   const val = e.target.value as 'nameOnly' | 'nameAndExcerpt' | 'nameAndWordCount' | 'full';
                   setChapterDetailDisplay(val);
                   localStorage.setItem('chapterDetailDisplay', val);
+                  window.dispatchEvent(new CustomEvent('settings-changed', { detail: { key: 'chapterDetailDisplay', value: val } }));
                 }}
                 className="w-full px-2 py-1.5 text-sm text-vscode-text focus:outline-none focus:border-vscode-active select-field"
               >
@@ -382,6 +396,7 @@ export const SettingsPanel = ({
                   const val = e.target.value as 'none' | 'counts' | 'countsAndWords';
                   setVolumeDetailInfo(val);
                   localStorage.setItem('volumeDetailInfo', val);
+                  window.dispatchEvent(new CustomEvent('settings-changed', { detail: { key: 'volumeDetailInfo', value: val } }));
                 }}
                 className="w-full px-2 py-1.5 text-sm text-vscode-text focus:outline-none focus:border-vscode-active select-field"
               >

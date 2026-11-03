@@ -6,10 +6,10 @@ interface ForeshadowingTabProps {
 }
 
 const qualityLabels: Record<string, { label: string; color: string }> = {
-  tight: { label: '紧密', color: 'text-green-400' },
-  good: { label: '良好', color: 'text-blue-400' },
-  loose: { label: '松散', color: 'text-yellow-400' },
-  orphan: { label: '未回收', color: 'text-red-400' },
+  tight: { label: '紧密', color: 'text-vscode-success' },
+  good: { label: '良好', color: 'text-vscode-active' },
+  loose: { label: '松散', color: 'text-vscode-warning' },
+  orphan: { label: '未回收', color: 'text-vscode-danger' },
 };
 
 export const ForeshadowingTab: React.FC<ForeshadowingTabProps> = ({ crossAnalysis }) => {
@@ -60,7 +60,7 @@ export const ForeshadowingTab: React.FC<ForeshadowingTabProps> = ({ crossAnalysi
                     <p className="text-vscode-text">{fp.harvested.description}</p>
                   </>
                 ) : (
-                  <div className="text-red-400/60 italic">未回收</div>
+                  <div className="text-vscode-danger/60 italic">未回收</div>
                 )}
               </div>
             </div>

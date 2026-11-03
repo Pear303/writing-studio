@@ -51,7 +51,7 @@ async function loadContent() {
   loading.value = true
   try {
     const api = apiMap[activeMemory.value]
-    const res = await fetch(api.get)
+    const res = await fetch(api.get, { headers: authHeaders() })
     const data = await res.json()
     content.value = data.content || ''
   } catch (e) {

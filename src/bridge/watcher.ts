@@ -1,6 +1,8 @@
-import { processPendingActions } from './importer';
-import { exportCurrentBookForAgent } from './exporter';
-import { db } from '../db';
+import { join } from '@tauri-apps/api/path';
+import { readDir, readTextFile, exists } from '@tauri-apps/plugin-fs';
+import { processPendingActions, type PendingAction } from './importer';
+import { exportCurrentBookForAgent, getPendingDir } from './exporter';
+import { db, getCurrentUserId } from '../db';
 
 export interface WatcherStatus {
   running: boolean;
@@ -33,10 +35,51 @@ let watcherStatus: WatcherStatus = {
 type WatcherCallback = (status: WatcherStatus) => void;
 let statusCallback: WatcherCallback | null = null;
 
+// 轮询处理中标志：防止上一次处理未结束时下一次 tick 重入
+let processing = false;
+
+// 从 pending action 文件中提取实际受影响的 bookId 集合
 async function getAffectedBookIds(): Promise<string[]> {
   try {
-    const books = await db.books.toArray();
-    return books.map(b => b.id);
+    const pendingDir = await getPendingDir();
+    if (!(await exists(pendingDir))) return [];
+
+    const entries = await readDir(pendingDir);
+    const jsonFiles = entries.filter(e => e.name?.endsWith('.json'));
+
+    const bookIds = new Set<string>();
+    const currentUserId = getCurrentUserId();
+
+    for (const entry of jsonFiles) {
+      if (!entry.name) continue;
+      try {
+        const filePath = await join(pendingDir, entry.name);
+        const content = await readTextFile(filePath);
+        const action = JSON.parse(content) as PendingAction;
+
+        let bookId: string | null = null;
+        if (action.action === 'new_chapter') {
+          bookId = action.bookId;
+        } else if (action.action === 'new_material') {
+          bookId = action.bookId || null;
+        } else if (action.action === 'update_chapter') {
+          const chapter = await db.chapters.get(action.chapterId);
+          bookId = chapter?.bookId || null;
+        }
+
+        if (bookId) {
+          // 校验书籍归属，仅重导当前用户的书
+          const book = await db.books.get(bookId);
+          if (book && (!currentUserId || !book.userId || book.userId === currentUserId)) {
+            bookIds.add(bookId);
+          }
+        }
+      } catch {
+        // 单个文件解析失败不影响其它文件
+      }
+    }
+
+    return [...bookIds];
   } catch {
     return [];
   }
@@ -49,6 +92,8 @@ export function startWatcher(intervalMs: number = DEFAULT_INTERVAL_MS): void {
   watcherStatus.intervalMs = intervalMs;
 
   watcherTimer = setInterval(async () => {
+    if (processing) return;
+    processing = true;
     try {
       const result = await processPendingActions();
       watcherStatus.lastCheckAt = Date.now();
@@ -73,6 +118,8 @@ export function startWatcher(intervalMs: number = DEFAULT_INTERVAL_MS): void {
       }
     } catch (err) {
       console.error('[AgentWatcher] 轮询出错:', err);
+    } finally {
+      processing = false;
     }
   }, intervalMs);
 }

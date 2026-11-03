@@ -91,7 +91,7 @@ export const DeconstructionProgress: React.FC<DeconstructionProgressProps> = ({
 
       {result.status === 'failed' && result.error && (
         <div className="mt-3">
-          <div className="text-xs text-red-400 bg-red-400/10 rounded px-2 py-1">
+          <div className="text-xs text-vscode-danger bg-vscode-danger/10 rounded px-2 py-1">
             错误：{result.error}
           </div>
           {onRetry && (

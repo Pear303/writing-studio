@@ -99,8 +99,8 @@ const QAHistoryPanel: React.FC<{
 
   const getTypeColor = (type: string) => {
     switch (type) {
-      case 'error': return 'text-red-500';
-      case 'warning': return 'text-yellow-500';
+      case 'error': return 'text-vscode-danger';
+      case 'warning': return 'text-vscode-warning';
       default: return 'text-vscode-text';
     }
   };
@@ -191,7 +191,7 @@ const QAHistoryPanel: React.FC<{
                       e.stopPropagation();
                       handleDeleteRecord(record);
                     }}
-                    className="p-1 hover:bg-vscode-border rounded text-red-500"
+                    className="p-1 hover:bg-vscode-border rounded text-vscode-danger"
                     title="删除"
                   >
                     <CheckCircle size={14} />

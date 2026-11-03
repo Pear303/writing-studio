@@ -45,7 +45,7 @@ export class FactExtractor {
     chapterIndex: number,
     chapterTitle: string,
     chapterContent: string,
-    llmCall: (prompt: string) => Promise<string>,
+    llmCall: (prompt: string, signal?: AbortSignal) => Promise<string>,
     correlationId?: string,
     abortSignal?: AbortSignal,
   ): Promise<ChapterFacts> {

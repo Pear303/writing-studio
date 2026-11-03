@@ -91,6 +91,14 @@ async def save_vibe_settings(request: VibeSettingsRequest):
         "active_prompt_names": request.active_prompt_names,
     }
     _save(data)
+    # 保存后热重载子代理注册表，使 pipeline_orchestrator 提示词中的 vibe 配置立即生效
+    try:
+        from agent.subagents.registry import get_active_registry
+        reg = get_active_registry()
+        if reg is not None:
+            reg._load_all()
+    except Exception as e:
+        print(f"[WARN] vibe 配置热重载失败（需重启服务生效）: {e}")
     return {"status": "ok", "message": "Vibe writing 配置已保存"}
 
 

@@ -26,6 +26,8 @@ interface TreeNodeProps {
   chapterWordCount?: number;
   /** 卷节点详细信息，如 "3子卷 · 5章 · 12000字" */
   volumeDetail?: string;
+  /** 拖拽手柄被按下时激活拖拽模式 */
+  onDragHandleActivate?: () => void;
 }
 
 export const TreeNode = forwardRef<HTMLDivElement, TreeNodeProps>(({
@@ -47,15 +49,16 @@ export const TreeNode = forwardRef<HTMLDivElement, TreeNodeProps>(({
   excerpt,
   chapterWordCount,
   volumeDetail,
+  onDragHandleActivate,
 }, ref) => {
   const paddingLeft = level * 16 + 8;
 
   const nodeTitle = displayTitle || (type === 'volume' ? (data as Volume).name : (data as Chapter).title);
 
   const bgClass = isActive
-    ? 'bg-blue-600/20'
+    ? 'bg-vscode-active/20'
     : isDropTarget && dropPosition === 'inside'
-      ? 'bg-blue-500/20 ring-1 ring-blue-400/50'
+      ? 'bg-vscode-active/20 ring-1 ring-vscode-active/50'
       : 'hover:bg-vscode-active/10';
 
   return (
@@ -63,6 +66,7 @@ export const TreeNode = forwardRef<HTMLDivElement, TreeNodeProps>(({
       data-node-type={type}
       data-node-id={data.id}
       data-node-level={level}
+      style={{ contain: 'layout style paint' }}
     >
       {level > 0 && (
         <>
@@ -87,14 +91,14 @@ export const TreeNode = forwardRef<HTMLDivElement, TreeNodeProps>(({
           className="absolute left-2 right-2 z-20"
           style={{ top: '-1px' }}
         >
-          <div className="h-0.5 bg-blue-500 rounded-full">
-            <div className="absolute -left-1 -top-[3px] w-2 h-2 bg-blue-500 rounded-full" />
+          <div className="h-0.5 bg-vscode-active rounded-full">
+            <div className="absolute -left-1 -top-[3px] w-2 h-2 bg-vscode-active rounded-full" />
           </div>
         </div>
       )}
 
       <div
-        className={`flex ${type === 'volume' ? 'items-center py-2' : 'items-start py-1.5'} px-2 cursor-pointer transition-colors duration-150 relative group ${
+        className={`flex ${type === 'volume' ? 'items-center py-2' : 'items-start py-1.5'} px-2 cursor-pointer relative group ${
           isDragging ? 'opacity-30' : ''
         } ${bgClass} ${type === 'volume' ? 'border-b border-vscode-border/30' : ''}`}
         style={{ paddingLeft, paddingRight: '12px' }}
@@ -103,8 +107,16 @@ export const TreeNode = forwardRef<HTMLDivElement, TreeNodeProps>(({
       >
         {dragHandleProps && (
           <span
-            className="mr-0.5 opacity-0 group-hover:opacity-40 hover:!opacity-100 cursor-grab active:cursor-grabbing flex-shrink-0 transition-opacity"
-            {...dragHandleProps}
+            className="mr-0.5 opacity-0 group-hover:opacity-40 hover:!opacity-100 cursor-grab active:cursor-grabbing flex-shrink-0"
+            onMouseDown={(e) => {
+              onDragHandleActivate?.();
+              dragHandleProps.onMouseDown?.(e);
+            }}
+            onTouchStart={(e) => {
+              onDragHandleActivate?.();
+              dragHandleProps.onTouchStart?.(e);
+            }}
+            {...(({ onMouseDown, onTouchStart, ...rest }) => rest)(dragHandleProps)}
           >
             <GripVertical size={12} className="text-vscode-text" />
           </span>
@@ -130,12 +142,12 @@ export const TreeNode = forwardRef<HTMLDivElement, TreeNodeProps>(({
 
         {type === 'volume' ? (
           level === 0 ? (
-            <FolderOpen size={18} className="mr-2 text-yellow-500 flex-shrink-0" />
+            <FolderOpen size={18} className="mr-2 text-vscode-text opacity-40 flex-shrink-0" />
           ) : (
-            <Folder size={18} className="mr-2 text-yellow-600 flex-shrink-0" />
+            <Folder size={18} className="mr-2 text-vscode-text opacity-40 flex-shrink-0" />
           )
         ) : (
-          <FileText size={16} className="mr-2 text-blue-400 flex-shrink-0 mt-0.5" />
+          <FileText size={16} className="mr-2 text-vscode-text opacity-40 flex-shrink-0 mt-0.5" />
         )}
 
         {type === 'volume' ? (
@@ -181,8 +193,8 @@ export const TreeNode = forwardRef<HTMLDivElement, TreeNodeProps>(({
           className="absolute left-2 right-2 z-20"
           style={{ bottom: '-1px' }}
         >
-          <div className="h-0.5 bg-blue-500 rounded-full">
-            <div className="absolute -left-1 -top-[3px] w-2 h-2 bg-blue-500 rounded-full" />
+          <div className="h-0.5 bg-vscode-active rounded-full">
+            <div className="absolute -left-1 -top-[3px] w-2 h-2 bg-vscode-active rounded-full" />
           </div>
         </div>
       )}
@@ -200,11 +212,11 @@ export const DragPreview: React.FC<{
   const nodeTitle = displayTitle || (type === 'volume' ? (data as Volume).name : (data as Chapter).title);
 
   return (
-    <div className="flex items-center py-1.5 px-3 bg-vscode-sidebar border border-blue-500/50 rounded shadow-lg opacity-90">
+    <div className="flex items-center py-1.5 px-3 bg-vscode-sidebar border border-vscode-active/50 rounded shadow-lg opacity-90">
       {type === 'volume' ? (
-        <FolderOpen size={16} className="mr-2 text-yellow-500 flex-shrink-0" />
+        <FolderOpen size={16} className="mr-2 text-vscode-text opacity-40 flex-shrink-0" />
       ) : (
-        <FileText size={16} className="mr-2 text-blue-400 flex-shrink-0" />
+        <FileText size={16} className="mr-2 text-vscode-text opacity-40 flex-shrink-0" />
       )}
       <span className="text-sm text-vscode-text truncate">
         {nodeTitle}

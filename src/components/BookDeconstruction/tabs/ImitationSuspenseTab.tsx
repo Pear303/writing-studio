@@ -24,8 +24,8 @@ export const ImitationSuspenseTab: React.FC<ImitationSuspenseTabProps> = ({ outl
           <h5 className="text-vscode-text text-sm font-medium">{line.description}</h5>
           <span className={`text-[10px] px-1.5 py-0.5 rounded ${
             isResolved
-              ? 'bg-green-500/20 text-green-400'
-              : 'bg-yellow-500/20 text-yellow-400'
+              ? 'bg-vscode-success/20 text-vscode-success'
+              : 'bg-vscode-warning/20 text-vscode-warning'
           }`}>
             {isResolved ? '已解决' : '未解决'}
           </span>

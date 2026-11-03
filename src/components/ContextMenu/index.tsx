@@ -65,7 +65,7 @@ export const ContextMenu = ({ x, y, items, onClose }: ContextMenuProps) => {
             }}
             className={`w-full px-3 py-1.5 text-sm text-left flex items-center gap-2 ${
               item.danger
-                ? 'hover:bg-red-500/10'
+                ? 'hover:bg-vscode-danger/10'
                 : 'text-vscode-text hover:bg-vscode-active/10'
             }`}
             style={{

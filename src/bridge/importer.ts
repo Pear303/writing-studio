@@ -1,13 +1,37 @@
 import { join } from '@tauri-apps/api/path';
 import { readDir, readTextFile, remove, exists } from '@tauri-apps/plugin-fs';
-import { db, getCurrentUserId } from '../db';
+import { db, getCurrentUserId, adjustBookTotalWords } from '../db';
 import { getPendingDir } from './exporter';
 import { generateId } from '../utils/helpers';
 import { countWords } from '../utils/helpers';
 import type { Chapter, Material } from '../types';
 
+// HTML 白名单标签：仅允许这些标签，其余全部剥离
+const ALLOWED_HTML_TAGS = new Set([
+  'p', 'br', 'strong', 'b', 'em', 'i', 'u', 's',
+  'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+  'ul', 'ol', 'li', 'blockquote', 'span', 'div',
+]);
+
+// 清洗 HTML：剥离非白名单标签、所有属性（含 on* 事件与 javascript: 链接）
+function sanitizeHtml(html: string): string {
+  // 先移除所有 on* 事件属性与 javascript: 链接（双保险）
+  let cleaned = html
+    .replace(/\son\w+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, '')
+    .replace(/\shref\s*=\s*["']?\s*javascript:[^"'\s>]*/gi, '');
+  // 再按白名单剥离标签（同时移除标签上的所有剩余属性）
+  cleaned = cleaned.replace(/<\s*(\/?)\s*([a-zA-Z][a-zA-Z0-9]*)([^>]*)>/g, (match, slash: string, tagName: string) => {
+    const tag = tagName.toLowerCase();
+    if (!ALLOWED_HTML_TAGS.has(tag)) return '';
+    return `<${slash}${tag}>`;
+  });
+  return cleaned;
+}
+
 function plainTextToHtml(text: string): string {
-  if (/<[a-z][\s\S]*>/i.test(text)) return text;
+  if (!text) return '';
+  // 文本已包含 HTML 标签时，做白名单清洗后透传
+  if (/<[a-z][\s\S]*>/i.test(text)) return sanitizeHtml(text);
   return text
     .split(/\n{2,}/)
     .map(para => `<p>${para.trim().replace(/\n/g, '<br>')}</p>`)
@@ -96,7 +120,6 @@ async function executeAction(action: PendingAction): Promise<void> {
 }
 
 async function executeNewChapter(action: PendingNewChapter): Promise<void> {
-  const userId = getCurrentUserId();
   const book = await db.books.get(action.bookId);
   if (!book) throw new Error(`书籍不存在: ${action.bookId}`);
 
@@ -139,11 +162,8 @@ async function executeNewChapter(action: PendingNewChapter): Promise<void> {
 
   await db.chapters.add(chapter);
 
-  const newTotal = (book.totalWords || 0) + wordCount;
-  await db.books.update(action.bookId, {
-    totalWords: newTotal,
-    updatedAt: Date.now(),
-  });
+  // 原子增量更新书籍总字数（避免竞态）
+  await adjustBookTotalWords(action.bookId, wordCount);
 }
 
 async function executeNewMaterial(action: PendingNewMaterial): Promise<void> {
@@ -189,13 +209,7 @@ async function executeUpdateChapter(action: PendingUpdateChapter): Promise<void>
     const diff = newWords - oldWords;
 
     if (diff !== 0) {
-      const book = await db.books.get(chapter.bookId);
-      if (book) {
-        await db.books.update(chapter.bookId, {
-          totalWords: Math.max(0, (book.totalWords || 0) + diff),
-          updatedAt: Date.now(),
-        });
-      }
+      await adjustBookTotalWords(chapter.bookId, diff);
     }
   }
 }

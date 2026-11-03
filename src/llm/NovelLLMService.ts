@@ -53,6 +53,18 @@ export class NovelLLMService {
     this.config = config;
   }
 
+  /** 校验服务已初始化（composer 与 config 均已设置），未初始化时抛出友好错误 */
+  private ensureInitialized(): void {
+    if (!this.composer || !this.config) {
+      throw new Error('LLM服务未初始化');
+    }
+  }
+
+  /** 是否应携带 Anthropic cache_control 字段（仅 Anthropic 兼容接口支持该字段） */
+  private shouldUseCacheControl(): boolean {
+    return !!this.config?.baseUrl && this.config.baseUrl.toLowerCase().includes('anthropic');
+  }
+
   setUserTemplateOverride(templateId: string, content: string): void {
     this.composer?.setUserTemplateOverride(templateId, content);
   }
@@ -143,11 +155,15 @@ export class NovelLLMService {
 
     const finalMessages: Array<{ role: 'system' | 'user' | 'assistant'; content: string | Array<{ type: string; text: string; cache_control?: { type: string } }> }> = [];
 
+    const withCacheControl = this.shouldUseCacheControl();
+
     if (this.sessionPrefix) {
       finalMessages.push({
         role: 'system',
         content: [
-          { type: 'text', text: this.sessionPrefix, cache_control: { type: 'ephemeral' } },
+          withCacheControl
+            ? { type: 'text', text: this.sessionPrefix, cache_control: { type: 'ephemeral' } }
+            : { type: 'text', text: this.sessionPrefix },
         ],
       });
     }
@@ -157,7 +173,9 @@ export class NovelLLMService {
         finalMessages.push({
           role: 'system',
           content: [
-            { type: 'text', text: msg.content, cache_control: { type: 'ephemeral' } },
+            withCacheControl
+              ? { type: 'text', text: msg.content, cache_control: { type: 'ephemeral' } }
+              : { type: 'text', text: msg.content },
           ],
         });
       } else {
@@ -230,10 +248,12 @@ export class NovelLLMService {
       throw error;
     } finally {
       this.currentAbortController = null;
+      // 请求结束后清理 sessionPrefix，避免旧大纲摘要注入后续请求
+      this.sessionPrefix = null;
     }
   }
   
-  async generateRaw(prompt: string, correlationId?: string, options?: { maxTokens?: number }): Promise<LLMResponse> {
+  async generateRaw(prompt: string, correlationId?: string, options?: { maxTokens?: number; signal?: AbortSignal }): Promise<LLMResponse> {
     if (!this.config) {
       throw new Error('LLM服务未初始化');
     }
@@ -265,6 +285,8 @@ export class NovelLLMService {
           temperature: 0.3,
           max_tokens: options?.maxTokens ?? 4000,
         }),
+        // 支持外部取消信号；未传入时兜底 120s 超时
+        signal: options?.signal ?? AbortSignal.timeout(120000),
       });
 
       if (!response.ok) {
@@ -327,11 +349,15 @@ export class NovelLLMService {
 
     const finalMessages: Array<{ role: 'system' | 'user' | 'assistant'; content: string | Array<{ type: string; text: string; cache_control?: { type: string } }> }> = [];
 
+    const withCacheControl = this.shouldUseCacheControl();
+
     if (this.sessionPrefix) {
       finalMessages.push({
         role: 'system',
         content: [
-          { type: 'text', text: this.sessionPrefix, cache_control: { type: 'ephemeral' } },
+          withCacheControl
+            ? { type: 'text', text: this.sessionPrefix, cache_control: { type: 'ephemeral' } }
+            : { type: 'text', text: this.sessionPrefix },
         ],
       });
     }
@@ -341,7 +367,9 @@ export class NovelLLMService {
         finalMessages.push({
           role: 'system',
           content: [
-            { type: 'text', text: msg.content, cache_control: { type: 'ephemeral' } },
+            withCacheControl
+              ? { type: 'text', text: msg.content, cache_control: { type: 'ephemeral' } }
+              : { type: 'text', text: msg.content },
           ],
         });
       } else {
@@ -473,6 +501,8 @@ export class NovelLLMService {
       });
 
       throw error;
+    } finally {
+      this.sessionPrefix = null;
     }
   }
 
@@ -524,6 +554,7 @@ async generateOutline(project: {
     step2State: PipelineStep2State,
     currentRound: OutlineRound,
   ): Promise<string> {
+    this.ensureInitialized();
     const historyLines = step2State.rounds.map((r, i) => {
       const parts: string[] = [];
       if (r.additions.trim()) parts.push(`新增：${r.additions.trim()}`);
@@ -570,6 +601,7 @@ async generateOutline(project: {
     outline: string,
     chapterCount: number,
   ): Promise<string> {
+    this.ensureInitialized();
     const variables = { outline, chapterCount };
     const userMessage = await this.composer!.renderTemplate('detailed-generate', variables);
 
@@ -764,6 +796,7 @@ async generateOutline(project: {
     step3Config: { writingStyle: string; storyLength: string; customRules: string },
     bookId?: string,
   ): Promise<string> {
+    this.ensureInitialized();
     const outlineSummary = this.extractOutlineSummary(outline, chapterIndex + 1);
 
     this.sessionPrefix = `【全书大纲摘要（固定参考）】\n${outlineSummary}`;
@@ -901,6 +934,7 @@ async generateOutline(project: {
     materialsText?: string,
     previousChapterContent?: string,
   ): Promise<string> {
+    this.ensureInitialized();
     const chapter = step5State.chapters.find(ch => ch.index === chapterIndex);
     if (!chapter) throw new Error('未找到章节');
 
@@ -1004,6 +1038,7 @@ async generateOutline(project: {
     step3Config: { writingStyle: string; storyLength: string; customRules: string },
     bookId?: string,
   ): Promise<Array<{ index: number; title: string; content: string }>> {
+    this.ensureInitialized();
     const outlineSummary = this.extractOutlineSummary(outline, 0, 2000);
 
     this.sessionPrefix = `【全书大纲摘要（固定参考）】\n${outlineSummary}`;

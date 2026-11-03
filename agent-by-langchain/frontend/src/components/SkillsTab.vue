@@ -41,7 +41,7 @@ const filteredSkills = computed(() => {
 
 async function loadSkills() {
   try {
-    const res = await fetch('/api/skills')
+    const res = await fetch('/api/skills', { headers: authHeaders() })
     const data = await res.json()
     skills.value = data.skills
   } catch (e) {

@@ -9,7 +9,7 @@ export class CrossChapterAnalyzer {
   async analyze(
     skeleton: BookSkeleton,
     chapterFacts: ChapterFacts[],
-    llmCall: (prompt: string) => Promise<string>,
+    llmCall: (prompt: string, signal?: AbortSignal) => Promise<string>,
     abortSignal?: AbortSignal,
   ): Promise<CrossChapterAnalysis> {
     if (abortSignal?.aborted) throw new Error('cancelled');
@@ -29,7 +29,7 @@ export class CrossChapterAnalyzer {
   private async analyzeSingleBatch(
     skeletonSummary: string,
     chapterFacts: ChapterFacts[],
-    llmCall: (prompt: string) => Promise<string>,
+    llmCall: (prompt: string, signal?: AbortSignal) => Promise<string>,
     abortSignal?: AbortSignal,
   ): Promise<CrossChapterAnalysis> {
     if (abortSignal?.aborted) throw new Error('cancelled');
@@ -45,14 +45,14 @@ export class CrossChapterAnalyzer {
       metadata: { chapterCount: chapterFacts.length, mode: 'single' },
     });
 
-    const raw = await llmCall(prompt);
+    const raw = await llmCall(prompt, abortSignal);
     return this.parseResult<CrossChapterAnalysis>(raw);
   }
 
   private async analyzeMultiBatch(
     skeletonSummary: string,
     chapterFacts: ChapterFacts[],
-    llmCall: (prompt: string) => Promise<string>,
+    llmCall: (prompt: string, signal?: AbortSignal) => Promise<string>,
     abortSignal?: AbortSignal,
   ): Promise<CrossChapterAnalysis> {
     const batches: ChapterFacts[][] = [];
@@ -60,8 +60,9 @@ export class CrossChapterAnalyzer {
       batches.push(chapterFacts.slice(i, i + MAX_FACTS_PER_BATCH));
     }
 
-    // 分批提取跨章分析
+    // 分批提取跨章分析：单批失败跳过该批并记录日志，仅全部失败才抛错
     const partialResults: CrossChapterAnalysis[] = [];
+    let lastError: Error | null = null;
     for (let b = 0; b < batches.length; b++) {
       if (abortSignal?.aborted) throw new Error('cancelled');
 
@@ -77,8 +78,22 @@ export class CrossChapterAnalyzer {
         metadata: { batchIndex: b, totalBatches: batches.length, chapterCount: batchFacts.length, mode: 'multi' },
       });
 
-      const raw = await llmCall(prompt);
-      partialResults.push(this.parseResult<CrossChapterAnalysis>(raw));
+      try {
+        const raw = await llmCall(prompt, abortSignal);
+        partialResults.push(this.parseResult<CrossChapterAnalysis>(raw));
+      } catch (err) {
+        lastError = err as Error;
+        debugLogger.log({
+          source: 'service',
+          category: 'deconstruction',
+          direction: `CrossChapterAnalyzer.analyze batch ${b + 1}/${batches.length} ERROR`,
+          metadata: { batchIndex: b, error: lastError.message },
+        });
+      }
+    }
+
+    if (partialResults.length === 0 && lastError) {
+      throw lastError;
     }
 
     // 合并各批次结果

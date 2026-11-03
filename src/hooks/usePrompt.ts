@@ -142,15 +142,6 @@ export function usePrompt() {
     return metadata;
   }, []);
 
-  const qualityCheck = useCallback(async (content: string, chapterContext: Partial<WritingContext>) => {
-    const qualityPrompt = buildSystemPrompt('QUALITY_CHECK', {
-      ...chapterContext,
-      selectedText: content,
-    } as WritingContext);
-    
-    return { score: 0,优点:[],改进点:[],建议:[] };
-  }, [buildSystemPrompt]);
-
   const previewPrompts = useMemo(() => {
     if (!resources.loaded) return [];
     
@@ -183,7 +174,6 @@ export function usePrompt() {
     buildSystemPrompt,
     setStage,
     getStageMetadata,
-    qualityCheck,
     previewPrompts,
   };
 }

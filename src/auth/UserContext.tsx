@@ -2,6 +2,7 @@ import { createContext, useContext, useState, useEffect, type ReactNode } from '
 import type { User } from '../db';
 import { getUserById, migrateLegacyData } from '../db';
 import { getToken, removeToken, type AuthToken, saveUserSession } from './token';
+import { clearGuestData } from './guest';
 
 interface UserContextType {
   user: User | null;
@@ -74,14 +75,25 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
     setUser(null);
     setToken(null);
     removeToken();
+    // 清理游客状态，避免登出后残留游客身份
+    clearGuestData();
   };
 
   const refreshUser = async () => {
-    if (token) {
-      const updatedUser = await getUserById(token.userId);
-      if (updatedUser) {
-        setUser(updatedUser);
-      }
+    // 重新读取并校验 token（过期/签名无效时 getToken 会清理并返回 null）
+    const freshToken = getToken();
+    if (!freshToken) {
+      logout();
+      return;
+    }
+    if (freshToken.userId !== token?.userId) {
+      setToken(freshToken);
+    }
+    const updatedUser = await getUserById(freshToken.userId);
+    if (updatedUser) {
+      setUser(updatedUser);
+    } else {
+      logout();
     }
   };
 

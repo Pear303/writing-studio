@@ -1,4 +1,5 @@
 import type { LLMProvider, LLMProviderType, LLMConfig, DialogueEntry } from '../types';
+import { decodeApiKey } from '../db';
 import {
   GlmProvider,
   QwenProvider,
@@ -27,8 +28,8 @@ export enum LlmProviderType {
 }
 
 export class LlmProviderFactory {
-  static createProvider(config: LLMConfig): LLMProvider {
-    const apiKey = this.decodeApiKey(config.apiKey);
+  static async createProvider(config: LLMConfig): Promise<LLMProvider> {
+    const apiKey = await decodeApiKey(config.apiKey);
     
     switch (config.provider) {
       case 'glm':
@@ -89,14 +90,6 @@ export class LlmProviderFactory {
         throw new Error(`Unknown provider type: ${providerType}`);
     }
   }
-
-  private static decodeApiKey(encodedKey: string): string {
-    try {
-      return atob(encodedKey);
-    } catch {
-      return encodedKey;
-    }
-  }
 }
 
 export class DialogueManager {
@@ -155,7 +148,7 @@ export async function callLLM(
   });
 
   try {
-    const provider = LlmProviderFactory.createProvider(config);
+    const provider = await LlmProviderFactory.createProvider(config);
     const result = await provider.callApi(userMessage, dialogueHistory, systemPrompt);
 
     // Debug: 记录 Provider 层 LLM 响应

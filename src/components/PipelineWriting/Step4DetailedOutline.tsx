@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Copy, Upload, Loader2, RefreshCw, CheckSquare, Square, ExternalLink, XCircle } from 'lucide-react';
 import type { PipelineStep2State, PipelineStep4State, DetailedOutlineChapter, DetailedOutlineRound } from '../../types';
 import { ConfirmDialog } from '../ConfirmDialog';
@@ -281,11 +281,18 @@ export const Step4DetailedOutline: React.FC<Step4DetailedOutlineProps> = ({
     }
   };
 
+  const dragStateRef = useRef<{ startY: number; startHeight: number } | null>(null);
+
   const handleDragStart = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
+    dragStateRef.current = { startY: e.clientY, startHeight: listHeight };
     setIsDragging(true);
-    const startY = e.clientY;
-    const startHeight = listHeight;
+  }, [listHeight]);
+
+  // 拖拽期间由 isDragging 驱动注册/注销 document 监听器，卸载时自动清理
+  useEffect(() => {
+    if (!isDragging || !dragStateRef.current) return;
+    const { startY, startHeight } = dragStateRef.current;
 
     const handleMouseMove = (moveEvent: MouseEvent) => {
       const delta = moveEvent.clientY - startY;
@@ -295,13 +302,16 @@ export const Step4DetailedOutline: React.FC<Step4DetailedOutlineProps> = ({
 
     const handleMouseUp = () => {
       setIsDragging(false);
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
+      dragStateRef.current = null;
     };
 
     document.addEventListener('mousemove', handleMouseMove);
     document.addEventListener('mouseup', handleMouseUp);
-  }, [listHeight]);
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isDragging]);
 
   const numberInputStyle: React.CSSProperties = {
     width: '60px',
@@ -381,7 +391,7 @@ export const Step4DetailedOutline: React.FC<Step4DetailedOutlineProps> = ({
 
       {isWorking && (
         <div style={{ textAlign: 'center', padding: '40px 16px' }}>
-          <Loader2 size={32} style={{ color: 'var(--color-vscode-active)', animation: 'spin 1s linear infinite', margin: '0 auto 12px' }} />
+          <Loader2 size={32} className="animate-spin" style={{ color: 'var(--color-vscode-active)', margin: '0 auto 12px' }} />
           <p style={{ fontSize: '13px', color: 'var(--color-vscode-text)', opacity: 0.7 }}>
             正在{roundCount > 0 ? '回炉重造' : '生成细纲'}，请稍候...
           </p>
@@ -395,7 +405,6 @@ export const Step4DetailedOutline: React.FC<Step4DetailedOutlineProps> = ({
               取消生成
             </button>
           )}
-          <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
         </div>
       )}
 
@@ -617,7 +626,7 @@ export const Step4DetailedOutline: React.FC<Step4DetailedOutlineProps> = ({
                 disabled={isWorking}
                 onClick={handleRefine}
               >
-                {isWorking ? <Loader2 size={13} style={{ animation: 'spin 1s linear infinite' }} /> : <RefreshCw size={13} />}
+                {isWorking ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />}
                 回炉重造
               </button>
             </div>
@@ -635,10 +644,6 @@ export const Step4DetailedOutline: React.FC<Step4DetailedOutlineProps> = ({
         onConfirm={confirmOverwrite}
         onCancel={() => setShowConfirm(false)}
       />
-
-      {isWorking && (
-        <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
-      )}
     </div>
   );
 };

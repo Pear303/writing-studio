@@ -5,14 +5,17 @@ import difflib
 import gzip
 import io
 import json
+import logging
 import os
 import re
 import subprocess
 import time
 import urllib.request
+import zlib
 from html.parser import HTMLParser
 from pathlib import Path
 from typing import Any, Optional
+from urllib.parse import urlparse
 
 from langchain_core.tools import tool
 from langchain_core.callbacks import BaseCallbackHandler
@@ -21,18 +24,26 @@ from langchain_core.prompts import ChatPromptTemplate
 
 from .subagent_parallel import ParallelAgentExecutor
 
+_log = logging.getLogger(__name__)
+
 # ── 全局状态（由 LCAgent 初始化时注入）──
 _workspace: Path | None = None          # 工作区根目录
 _skills_loader: Any = None              # 技能加载器实例
 _todo_store: Any = None                 # Todo 存储实例
 
-# ── 子代理 SSE 事件透传（由 api.routes.chat.set_agent 注入）──
-_chat_state_ref: tuple | None = None    # (_execution_state, _state_lock)
+# ── 子代理派遣调用链（防递归：记录当前嵌套派遣的子代理类型）──
+_subagent_dispatch_stack: list[str] = []
+
+# ── 子代理 SSE 事件透传（由 api.routes.chat 每次请求注入）──
+_chat_state_ref: tuple | None = None    # (state_dict, state_lock)，按请求独立
 
 _IGNORE_DIRS = {
     ".git", "node_modules", "__pycache__", ".venv", "venv",
     "dist", "build", ".tox", ".mypy_cache", ".pytest_cache",
 }
+
+# web_fetch 读取上限：2MB（防 SSRF 无限读 / 解压炸弹）
+MAX_FETCH_BYTES = 2 * 1024 * 1024
 
 
 def set_workspace(path: Path) -> None:
@@ -192,7 +203,11 @@ def _resolve(path: str) -> Path:
     p = Path(path).expanduser()
     if not p.is_absolute() and _workspace:
         p = _workspace / p
-    return p.resolve()
+    resolved = p.resolve()
+    # 越界防护：工作区内的工具禁止访问工作区之外的路径（绝对路径的显式授权场景当前不开放）
+    if _workspace and not resolved.is_relative_to(_workspace.resolve()):
+        raise ValueError(f"路径越界：{path} 超出工作区 {_workspace}")
+    return resolved
 
 
 # ── 内部帮助函数 ──────────────────────────────────────────────────
@@ -542,10 +557,16 @@ def run_command(command: str) -> str:
     Args:
         command: 要执行的 shell 命令字符串
     """
-    result = subprocess.run(
-        command, shell=True, capture_output=True,
-        encoding="utf-8", errors="replace",
-    )
+    # 注意：shell=True 存在命令注入风险（功能依赖保留），
+    # 通过 timeout=120 防止命令挂起阻塞 Agent 流程
+    try:
+        result = subprocess.run(
+            command, shell=True, capture_output=True,
+            encoding="utf-8", errors="replace",
+            timeout=120,
+        )
+    except subprocess.TimeoutExpired:
+        return "[FAIL] 命令执行超时（120 秒），已终止。"
     return result.stdout or result.stderr
 
 
@@ -560,6 +581,10 @@ def _fetch(url: str, extract_mode: str = "text", max_chars: int = 8000) -> str:
         "AppleWebKit/537.36 (KHTML, like Gecko) "
         "Chrome/125.0.0.0 Safari/537.36"
     )
+    # SSRF 防护：仅允许 http/https scheme
+    parsed = urlparse(url)
+    if parsed.scheme not in ("http", "https"):
+        return f"Error: 仅支持 http/https 协议的 URL: {url}"
     req = urllib.request.Request(
         url,
         headers={
@@ -570,22 +595,29 @@ def _fetch(url: str, extract_mode: str = "text", max_chars: int = 8000) -> str:
     )
     try:
         with urllib.request.urlopen(req, timeout=15) as resp:
-            raw_bytes = resp.read()
+            # 限制读取量：最多读 MAX_BYTES+1 字节以检测超长
+            raw_bytes = resp.read(MAX_FETCH_BYTES + 1)
     except Exception as e:
         return f"Error fetching {url}: {e}"
+    if len(raw_bytes) > MAX_FETCH_BYTES:
+        return f"Error: 响应体超过 {MAX_FETCH_BYTES // (1024 * 1024)}MB 上限，已中止读取"
 
     # 解压 gzip/deflate
     content_encoding = resp.headers.get("Content-Encoding", "")
     if content_encoding == "gzip":
         try:
             raw_bytes = gzip.decompress(raw_bytes)
-        except Exception:
-            pass
+        except Exception as exc:
+            _log.warning("gzip 解压失败 (%s): %s", url, exc)
     elif content_encoding == "deflate":
         try:
-            raw_bytes = gzip.decompress(raw_bytes)
-        except Exception:
-            pass
+            # deflate 是原始 DEFLATE 流，需用负 wbits 解压
+            raw_bytes = zlib.decompressobj(-zlib.MAX_WBITS).decompress(raw_bytes)
+        except Exception as exc:
+            _log.warning("deflate 解压失败 (%s): %s", url, exc)
+    # 解压后的字节同样做大小校验，防止解压炸弹
+    if len(raw_bytes) > MAX_FETCH_BYTES:
+        return f"Error: 解压后数据超过 {MAX_FETCH_BYTES // (1024 * 1024)}MB 上限，已中止"
 
     # 检测字符编码：优先从 Content-Type 头获取
     charset = "utf-8"
@@ -940,6 +972,14 @@ def dispatch_subagent(agent_type: str, task: str) -> str:
         _log.error("[dispatch_subagent] unknown subagent '%s'. Available: %s", agent_type, available)
         return f"Error: unknown subagent '{agent_type}'. Available: {available}"
 
+    # 防递归：禁止派遣与当前子代理同类型的子代理；限制嵌套层级
+    if _subagent_dispatch_stack and agent_type == _subagent_dispatch_stack[-1]:
+        _log.error("[dispatch_subagent] 禁止递归派遣同类型子代理 '%s'", agent_type)
+        return f"Error: 禁止递归派遣同类型子代理 '{agent_type}'"
+    if len(_subagent_dispatch_stack) >= 3:
+        _log.error("[dispatch_subagent] 子代理派遣嵌套层级过深（%d 层），已禁止", len(_subagent_dispatch_stack))
+        return "Error: 子代理派遣嵌套层级过深，已禁止（最多嵌套 3 层）"
+
     tools = [
         _SUBAGENT_TOOL_MAP[name]
         for name in spec.tool_names
@@ -976,6 +1016,7 @@ def dispatch_subagent(agent_type: str, task: str) -> str:
     if _chat_state_ref is not None:
         callbacks.append(_SubagentEventForwarder(agent_type))
 
+    _subagent_dispatch_stack.append(agent_type)
     start_time = _time.monotonic()
     try:
         result = executor.invoke({
@@ -991,6 +1032,8 @@ def dispatch_subagent(agent_type: str, task: str) -> str:
         _log.exception("[dispatch_subagent] '%s' 异常, 耗时 %.1fs: %s", agent_type, elapsed, exc)
         print(f"[子代理异常 · {agent_type}]: {exc} (耗时 {elapsed:.1f}s)")
         return f"Error: subagent '{agent_type}' raised: {exc}"
+    finally:
+        _subagent_dispatch_stack.pop()
 
     return final
 

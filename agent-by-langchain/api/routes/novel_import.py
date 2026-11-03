@@ -171,7 +171,9 @@ def _parse_llm_response(raw: str) -> dict:
 
 
 @router.post("/analyze", response_model=AnalyzeResult)
-async def analyze_novel_structure(request: AnalyzeRequest):
+def analyze_novel_structure(request: AnalyzeRequest):
+    """分析小说结构（同步 def：FastAPI 自动放入线程池执行，
+    避免 async 路由内同步 llm.invoke 阻塞事件循环）。"""
     sample_len = len(request.text_sample)
     text_len = request.text_length or sample_len
 

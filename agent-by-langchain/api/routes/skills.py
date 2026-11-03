@@ -12,12 +12,18 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from agent.skills import SkillsLoader
 
+# 模块级缓存：SkillsLoader 每次请求重建开销大（扫描磁盘 + 解析 SKILL.md）
+_skills_loader_cache: SkillsLoader | None = None
+
 
 @router.get("")
 async def get_skills():
     """获取所有可用技能列表"""
+    global _skills_loader_cache
     skills_dir = PROJECT_ROOT / "skills"
-    loader = SkillsLoader(skills_dir)
+    if _skills_loader_cache is None:
+        _skills_loader_cache = SkillsLoader(skills_dir)
+    loader = _skills_loader_cache
 
     skills_list = []
     for name, skill_data in loader.skills.items():

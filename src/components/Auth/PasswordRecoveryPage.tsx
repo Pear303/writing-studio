@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { getUserByEmail, updateUser, hashPassword, getUserSettings } from '../../db';
 import type { SMTPConfig } from '../../db';
+import { decryptSecret } from '../../auth/encryption';
 
 type RecoveryStage = 'input' | 'verify' | 'reset';
 
@@ -44,7 +45,7 @@ export const PasswordRecoveryPage = ({ onSuccess }: { onSuccess: () => void }) =
               port: smtpConfig.port,
               secure: smtpConfig.secure,
               username: smtpConfig.username,
-              password: smtpConfig.password,
+              password: await decryptSecret(smtpConfig.password),
               from_email: smtpConfig.fromEmail,
             },
             toEmail: email,

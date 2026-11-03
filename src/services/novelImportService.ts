@@ -62,7 +62,7 @@ export async function selectNovelFile(): Promise<{ path: string; name: string } 
 
   if (!selected) return null;
 
-  const path = typeof selected === 'string' ? selected : selected;
+  const path = selected as string;
   const name = path.split(/[\\/]/).pop() || 'unknown';
   return { path, name };
 }
@@ -303,6 +303,8 @@ function splitByRegex(fullText: string, analysis: NovelStructureAnalysis): Split
 
   if (volumeMatches.length > 0 && analysis.has_volume_structure) {
     const isNested = analysis.volume_chapter_relation === 'nested';
+    // 记录已归卷的 chapterMatches 下标，避免用标题反查在标题重复时误判
+    const assignedChapterIndices = new Set<number>();
 
     for (let vi = 0; vi < volumeMatches.length; vi++) {
       const volMatch = volumeMatches[vi];
@@ -313,7 +315,8 @@ function splitByRegex(fullText: string, analysis: NovelStructureAnalysis): Split
       const volChapters: SplitChapter[] = [];
 
       if (isNested) {
-        for (const chMatch of chapterMatches) {
+        for (let ci = 0; ci < chapterMatches.length; ci++) {
+          const chMatch = chapterMatches[ci];
           if (chMatch.index >= volMatch.index && chMatch.index < volEnd) {
             const chStart = chMatch.index + chMatch.match.length;
             let chEnd = fullText.length;
@@ -334,10 +337,12 @@ function splitByRegex(fullText: string, analysis: NovelStructureAnalysis): Split
               volumeTitle: volTitle,
               order: volChapters.length,
             });
+            assignedChapterIndices.add(ci);
           }
         }
       } else {
-        for (const chMatch of chapterMatches) {
+        for (let ci = 0; ci < chapterMatches.length; ci++) {
+          const chMatch = chapterMatches[ci];
           if (chMatch.index >= volMatch.index && chMatch.index < volEnd) {
             const chStart = chMatch.index + chMatch.match.length;
             let chEnd = fullText.length;
@@ -356,20 +361,13 @@ function splitByRegex(fullText: string, analysis: NovelStructureAnalysis): Split
               volumeTitle: volTitle,
               order: volChapters.length,
             });
+            assignedChapterIndices.add(ci);
           }
         }
       }
 
       volumes.push({ title: volTitle, chapters: volChapters });
       totalChapters += volChapters.length;
-    }
-
-    const assignedChapterIndices = new Set<number>();
-    for (const vol of volumes) {
-      for (const ch of vol.chapters) {
-        const idx = chapterMatches.findIndex(m => m.title === ch.title);
-        if (idx >= 0) assignedChapterIndices.add(idx);
-      }
     }
 
     for (let i = 0; i < chapterMatches.length; i++) {
@@ -504,86 +502,89 @@ export async function importSplitResult(
     updatedAt: now,
   };
 
-  await db.books.add(book);
-
   let totalWords = 0;
   let chapterOrder = 0;
   const volumeIdMap = new Map<string, string>();
 
-  for (const vol of splitResult.volumes) {
-    const volumeId = generateId();
-    volumeIdMap.set(vol.title, volumeId);
+  // book/volume/chapter 写入包在同一事务中，保证原子性
+  await db.transaction('rw', [db.books, db.volumes, db.chapters], async () => {
+    await db.books.add(book);
 
-    const volume: Volume = {
-      id: volumeId,
-      bookId: book.id,
-      parentId: null,
-      name: vol.title,
-      order: splitResult.volumes.indexOf(vol),
-    };
+    for (const vol of splitResult.volumes) {
+      const volumeId = generateId();
+      volumeIdMap.set(vol.title, volumeId);
 
-    await db.volumes.add(volume);
-
-    for (const ch of vol.chapters) {
-      const contentHtml = plainTextToHtml(ch.content);
-      const wordCount = countWords(ch.content);
-
-      const chapter: Chapter = {
-        id: generateId(),
-        volumeId,
-        bookId: book.id,
-        title: ch.title,
-        content: contentHtml,
-        wordCount,
-        order: chapterOrder++,
-        createdAt: now,
-        updatedAt: now,
-      };
-
-      await db.chapters.add(chapter);
-      totalWords += wordCount;
-    }
-  }
-
-  if (splitResult.unassignedChapters.length > 0) {
-    let defaultVolumeId: string | null = null;
-
-    if (splitResult.volumes.length === 0 && splitResult.unassignedChapters.length > 1) {
-      defaultVolumeId = generateId();
-      const defaultVolume: Volume = {
-        id: defaultVolumeId,
+      const volume: Volume = {
+        id: volumeId,
         bookId: book.id,
         parentId: null,
-        name: '正文',
-        order: splitResult.volumes.length,
-      };
-      await db.volumes.add(defaultVolume);
-    }
-
-    for (const ch of splitResult.unassignedChapters) {
-      const contentHtml = plainTextToHtml(ch.content);
-      const wordCount = countWords(ch.content);
-
-      const chapter: Chapter = {
-        id: generateId(),
-        volumeId: defaultVolumeId,
-        bookId: book.id,
-        title: ch.title,
-        content: contentHtml,
-        wordCount,
-        order: chapterOrder++,
-        createdAt: now,
-        updatedAt: now,
+        name: vol.title,
+        order: splitResult.volumes.indexOf(vol),
       };
 
-      await db.chapters.add(chapter);
-      totalWords += wordCount;
-    }
-  }
+      await db.volumes.add(volume);
 
-  await db.books.update(book.id, {
-    totalWords,
-    updatedAt: Date.now(),
+      for (const ch of vol.chapters) {
+        const contentHtml = plainTextToHtml(ch.content);
+        const wordCount = countWords(ch.content);
+
+        const chapter: Chapter = {
+          id: generateId(),
+          volumeId,
+          bookId: book.id,
+          title: ch.title,
+          content: contentHtml,
+          wordCount,
+          order: chapterOrder++,
+          createdAt: now,
+          updatedAt: now,
+        };
+
+        await db.chapters.add(chapter);
+        totalWords += wordCount;
+      }
+    }
+
+    if (splitResult.unassignedChapters.length > 0) {
+      let defaultVolumeId: string | null = null;
+
+      if (splitResult.volumes.length === 0 && splitResult.unassignedChapters.length > 1) {
+        defaultVolumeId = generateId();
+        const defaultVolume: Volume = {
+          id: defaultVolumeId,
+          bookId: book.id,
+          parentId: null,
+          name: '正文',
+          order: splitResult.volumes.length,
+        };
+        await db.volumes.add(defaultVolume);
+      }
+
+      for (const ch of splitResult.unassignedChapters) {
+        const contentHtml = plainTextToHtml(ch.content);
+        const wordCount = countWords(ch.content);
+
+        const chapter: Chapter = {
+          id: generateId(),
+          volumeId: defaultVolumeId,
+          bookId: book.id,
+          title: ch.title,
+          content: contentHtml,
+          wordCount,
+          order: chapterOrder++,
+          createdAt: now,
+          updatedAt: now,
+        };
+
+        await db.chapters.add(chapter);
+        totalWords += wordCount;
+      }
+    }
+
+    await db.books.update(book.id, {
+      totalWords,
+      updatedAt: Date.now(),
+    });
   });
 
   const volumeCount = splitResult.volumes.length + (splitResult.unassignedChapters.length > 0 && splitResult.volumes.length === 0 ? 1 : 0);

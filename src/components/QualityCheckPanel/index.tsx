@@ -68,11 +68,7 @@ ${checklistContent}
 ${focusLine}
 
 【输出格式要求】
-<<<<<<< HEAD
-请严格按照以下JSON格式返回（不要包含代码块标记，只返回纯JSON）：
-=======
 请严格按照以下JSON格式返回（不要包含markdown代码块标记，只返回纯JSON）：
->>>>>>> a3c3812c35f7ea215c38605f0651c42cca74529c
 {
   "overallScore": 65,
   "dimensions": [
@@ -180,7 +176,11 @@ export const QualityCheckPanel: React.FC<QualityCheckPanelProps> = ({
   reviewPassed,
   onSkipReviewBlock,
 }) => {
-  const storageKey = bookId ? `qa_checked_${bookId}` : null;
+  // 按设置持久化规范使用 qualityCheck_ 前缀；当前以章节为单位记忆质检状态
+  // （未选择章节时退回以书为单位），scores 使用 "${storageKey}_scores" 键
+  const storageKey = currentChapter?.id
+    ? `qualityCheck_${currentChapter.id}`
+    : (bookId ? `qualityCheck_${bookId}` : null);
 
   const [checkedItems, setCheckedItems] = useState<Set<string>>(() => {
     if (!storageKey) return new Set();
@@ -206,6 +206,7 @@ export const QualityCheckPanel: React.FC<QualityCheckPanelProps> = ({
   const [isSaving, setIsSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
   const [showResultModal, setShowResultModal] = useState(false);
+  const [skipConfirmed, setSkipConfirmed] = useState(false);
 
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [aiResult, setAiResult] = useState<AIQualityResult | null>(null);
@@ -227,7 +228,7 @@ export const QualityCheckPanel: React.FC<QualityCheckPanelProps> = ({
       setCheckedItems(new Set());
       setScores({});
     }
-  }, [bookId]);
+  }, [bookId, currentChapter?.id]);
 
   const persistChecked = useCallback((items: Set<string>) => {
     if (!storageKey) return;
@@ -428,8 +429,8 @@ ${rawContent}
 
 请按照系统提示词中的质量检查清单，对上述章节进行全面评估，并严格按照JSON格式返回结果。`;
 
-      const provider = LlmProviderFactory.createProvider(config);
-      const apiKey = decodeApiKey(config.apiKey);
+      const provider = await LlmProviderFactory.createProvider(config);
+      const apiKey = await decodeApiKey(config.apiKey);
 
       if (!provider.validateConfig(apiKey, config.apiUrl)) {
         throw new Error('LLM 配置验证失败，请检查 API Key 和 API URL');
@@ -533,17 +534,17 @@ ${rawContent}
   /** 获取颜色类名 */
   const getScoreColor = (score: number, max: number) => {
     const pct = (score / max) * 100;
-    if (pct >= 80) return { text: 'text-green-500', bg: 'var(--color-success, #22c55e)' };
-    if (pct >= 60) return { text: 'text-yellow-500', bg: 'var(--color-warning, #eab308)' };
-    return { text: 'text-red-500', bg: 'var(--color-danger, #ef4444)' };
+    if (pct >= 80) return { text: 'text-vscode-success', bg: 'var(--color-success, #22c55e)' };
+    if (pct >= 60) return { text: 'text-vscode-warning', bg: 'var(--color-warning, #eab308)' };
+    return { text: 'text-vscode-danger', bg: 'var(--color-danger, #ef4444)' };
   };
 
   /** 获取总评等级 */
   const getVerdict = (score: number) => {
-    if (score >= 70) return { text: '优秀', color: 'text-green-400' };
-    if (score >= 60) return { text: '可交付', color: 'text-green-500' };
-    if (score >= 40) return { text: '需改进', color: 'text-yellow-500' };
-    return { text: '需重写', color: 'text-red-500' };
+    if (score >= 70) return { text: '优秀', color: 'text-vscode-success' };
+    if (score >= 60) return { text: '可交付', color: 'text-vscode-success' };
+    if (score >= 40) return { text: '需改进', color: 'text-vscode-warning' };
+    return { text: '需重写', color: 'text-vscode-danger' };
   };
 
   // ── 未选书时 ──
@@ -560,7 +561,6 @@ ${rawContent}
 
   const blockingIssues = reviewIssues?.filter(i => i.blocking) || [];
   const hasBlockingIssues = blockingIssues.length > 0;
-  const [skipConfirmed, setSkipConfirmed] = useState(false);
 
   return (
     <div className="flex flex-col h-full bg-vscode-sidebar">
@@ -709,11 +709,11 @@ ${rawContent}
         {Object.keys(scores).length > 0 && (
           <div className="text-xs text-vscode-text">
             <span className="opacity-60">当前评分：</span>
-            <span className={totalScore >= 60 ? 'text-green-500' : totalScore >= 40 ? 'text-yellow-500' : 'text-red-500'}>
+            <span className={totalScore >= 60 ? 'text-vscode-success' : totalScore >= 40 ? 'text-vscode-warning' : 'text-vscode-danger'}>
               {totalScore}/80
             </span>
-            {totalScore >= 60 && <span className="text-green-500 ml-1">✓ 可交付</span>}
-            {totalScore >= 70 && <span className="text-green-400 ml-1">✓ 优秀</span>}
+            {totalScore >= 60 && <span className="text-vscode-success ml-1">✓ 可交付</span>}
+            {totalScore >= 70 && <span className="text-vscode-success ml-1">✓ 优秀</span>}
           </div>
         )}
       </div>
@@ -732,7 +732,7 @@ ${rawContent}
                   className="flex items-center gap-2 flex-1 text-left bg-transparent border-none outline-none cursor-pointer"
                 >
                   {isExpanded ? <ChevronDown size={14} className="flex-shrink-0" /> : <ChevronRight size={14} className="flex-shrink-0" />}
-                  <span className={`text-sm font-medium ${sectionDone ? 'text-green-500' : 'text-vscode-text'}`}>
+                  <span className={`text-sm font-medium ${sectionDone ? 'text-vscode-success' : 'text-vscode-text'}`}>
                     {section.title}
                   </span>
                   <span className="text-xs text-vscode-text opacity-60">
@@ -745,7 +745,7 @@ ${rawContent}
                   title={section.items.every(i => checkedItems.has(i.id)) ? '取消全选' : '全选'}
                 >
                   {section.items.every(i => checkedItems.has(i.id))
-                    ? <CheckSquare size={14} className="text-green-500" />
+                    ? <CheckSquare size={14} className="text-vscode-success" />
                     : <Square size={14} />
                   }
                 </button>
@@ -762,11 +762,11 @@ ${rawContent}
                           className="w-full flex items-start gap-2 px-6 py-1.5 hover:bg-vscode-border/20 transition-colors text-left"
                         >
                           {isChecked ? (
-                            <CheckCircle size={14} className="text-green-500 flex-shrink-0 mt-0.5" />
+                            <CheckCircle size={14} className="text-vscode-success flex-shrink-0 mt-0.5" />
                           ) : (
                             <Circle size={14} className="text-vscode-text opacity-40 flex-shrink-0 mt-0.5" />
                           )}
-                          <span className={`text-xs ${isChecked ? 'text-green-500 line-through opacity-70' : 'text-vscode-text'}`}>
+                          <span className={`text-xs ${isChecked ? 'text-vscode-success line-through opacity-70' : 'text-vscode-text'}`}>
                             {item.text}
                           </span>
                         </button>
@@ -791,7 +791,7 @@ ${rawContent}
 
         <div className="p-3 border-t border-vscode-border">
           <div className="flex items-center gap-1 mb-2">
-            <Star size={14} className="text-yellow-500" />
+            <Star size={14} className="text-vscode-warning" />
             <span className="text-sm font-semibold text-vscode-text">手动评分</span>
           </div>
           <div className="space-y-3">
@@ -827,7 +827,7 @@ ${rawContent}
           </div>
           <div className="flex items-center justify-between mt-2 pt-2 border-t border-vscode-border">
             <span className="text-xs font-semibold text-vscode-text">总分 /80</span>
-            <span className={`text-sm font-bold ${totalScore >= 60 ? 'text-green-500' : totalScore >= 40 ? 'text-yellow-500' : 'text-red-500'}`}>
+            <span className={`text-sm font-bold ${totalScore >= 60 ? 'text-vscode-success' : totalScore >= 40 ? 'text-vscode-warning' : 'text-vscode-danger'}`}>
               {totalScore}
             </span>
           </div>
@@ -838,7 +838,7 @@ ${rawContent}
         <button
           onClick={handleAIQualityCheck}
           disabled={isAnalyzing || !currentChapter}
-          className="w-full py-2 bg-gradient-to-r from-purple-400 to-violet-400 hover:from-purple-500 hover:to-violet-500 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded flex items-center justify-center gap-2 text-sm transition-all"
+          className="w-full py-2 bg-vscode-active hover:opacity-80 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded flex items-center justify-center gap-2 text-sm transition-all"
         >
           {isAnalyzing ? (
             <>
@@ -856,9 +856,9 @@ ${rawContent}
         {isAnalyzing && (
           <div className="flex items-center justify-center gap-2 py-1">
             <div className="flex gap-1">
-              <div className="w-1.5 h-1.5 rounded-full bg-purple-400 animate-bounce" style={{ animationDelay: '0ms' }} />
-              <div className="w-1.5 h-1.5 rounded-full bg-purple-400 animate-bounce" style={{ animationDelay: '150ms' }} />
-              <div className="w-1.5 h-1.5 rounded-full bg-purple-400 animate-bounce" style={{ animationDelay: '300ms' }} />
+              <div className="w-1.5 h-1.5 rounded-full bg-vscode-active animate-bounce" style={{ animationDelay: '0ms' }} />
+              <div className="w-1.5 h-1.5 rounded-full bg-vscode-active animate-bounce" style={{ animationDelay: '150ms' }} />
+              <div className="w-1.5 h-1.5 rounded-full bg-vscode-active animate-bounce" style={{ animationDelay: '300ms' }} />
             </div>
             <span className="text-xs text-vscode-text opacity-60">
               正在将章节内容提交至 AI 进行深度分析，预计需要 10-30 秒...
@@ -867,7 +867,7 @@ ${rawContent}
         )}
 
         {analysisError && (
-          <div className="p-2 bg-red-500/10 border border-red-500/30 rounded text-xs text-red-500 leading-relaxed whitespace-pre-wrap">
+          <div className="p-2 bg-vscode-danger/10 border border-vscode-danger/30 rounded text-xs text-vscode-danger leading-relaxed whitespace-pre-wrap">
             {analysisError}
           </div>
         )}
@@ -882,7 +882,7 @@ ${rawContent}
           {isSaving ? '保存中...' : '保存手动质检'}
         </button>
         {saveMessage && (
-          <p className={`text-xs mt-1 text-center ${saveMessage.includes('失败') ? 'text-red-500' : 'text-green-500'}`}>
+          <p className={`text-xs mt-1 text-center ${saveMessage.includes('失败') ? 'text-vscode-danger' : 'text-vscode-success'}`}>
             {saveMessage}
           </p>
         )}
@@ -906,7 +906,7 @@ ${rawContent}
                   <div key={dim.id} className="pb-3 border-b border-vscode-border last:border-b-0">
                     <div className="flex items-center justify-between mb-1">
                       <span className="text-sm font-medium text-vscode-text">{dim.label}</span>
-                      <span className={`text-sm font-bold ${pct >= 80 ? 'text-green-500' : pct >= 60 ? 'text-yellow-500' : 'text-red-500'}`}>
+                      <span className={`text-sm font-bold ${pct >= 80 ? 'text-vscode-success' : pct >= 60 ? 'text-vscode-warning' : 'text-vscode-danger'}`}>
                         {s} / {dim.maxScore}
                       </span>
                     </div>
@@ -931,13 +931,13 @@ ${rawContent}
 
               <div className="pt-2 border-t border-vscode-border flex items-center justify-between">
                 <span className="text-base font-semibold text-vscode-text">
-                  总分 <span className={totalScore >= 60 ? 'text-green-500' : totalScore >= 40 ? 'text-yellow-500' : 'text-red-500'}>{totalScore}</span> / 80
+                  总分 <span className={totalScore >= 60 ? 'text-vscode-success' : totalScore >= 40 ? 'text-vscode-warning' : 'text-vscode-danger'}>{totalScore}</span> / 80
                 </span>
                 <span className="text-xs">
-                  {totalScore >= 70 && <span className="text-green-400">优秀</span>}
-                  {totalScore >= 60 && totalScore < 70 && <span className="text-green-500">可交付</span>}
-                  {totalScore >= 40 && totalScore < 60 && <span className="text-yellow-500">需改进</span>}
-                  {totalScore < 40 && <span className="text-red-500">需重写</span>}
+                  {totalScore >= 70 && <span className="text-vscode-success">优秀</span>}
+                  {totalScore >= 60 && totalScore < 70 && <span className="text-vscode-success">可交付</span>}
+                  {totalScore >= 40 && totalScore < 60 && <span className="text-vscode-warning">需改进</span>}
+                  {totalScore < 40 && <span className="text-vscode-danger">需重写</span>}
                 </span>
               </div>
             </div>
@@ -954,7 +954,7 @@ ${rawContent}
             <div className="sticky top-0 z-10 p-6 pb-4 border-b border-vscode-border bg-vscode-sidebar">
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2">
-                  <Bot size={18} className="text-purple-500" />
+                  <Bot size={18} className="text-vscode-active" />
                   <h2 className="text-lg font-semibold text-vscode-text">AI 智能质检报告</h2>
                 </div>
                 <button onClick={() => setShowAIResultModal(false)} className="icon-btn text-lg">✕</button>
@@ -993,7 +993,7 @@ ${rawContent}
             <div className="p-6 pt-4 space-y-5">
               <div>
                 <h3 className="text-sm font-semibold text-vscode-text mb-3 flex items-center gap-1.5">
-                  <Star size={14} className="text-yellow-500" />
+                  <Star size={14} className="text-vscode-warning" />
                   各维度评分
                 </h3>
                 <div className="space-y-3">
@@ -1032,14 +1032,14 @@ ${rawContent}
 
               {aiResult.strengths.length > 0 && (
                 <div>
-                  <h3 className="text-sm font-semibold text-green-500 mb-2 flex items-center gap-1.5">
-                    <Sparkles size={14} className="text-green-500" />
+                  <h3 className="text-sm font-semibold text-vscode-success mb-2 flex items-center gap-1.5">
+                    <Sparkles size={14} className="text-vscode-success" />
                     主要优点
                   </h3>
                   <ul className="space-y-1.5">
                     {aiResult.strengths.map((s, i) => (
                       <li key={i} className="flex items-start gap-2 text-xs text-vscode-text leading-relaxed">
-                        <span className="text-green-500 mt-0.5 flex-shrink-0">•</span>
+                        <span className="text-vscode-success mt-0.5 flex-shrink-0">•</span>
                         <span>{s}</span>
                       </li>
                     ))}
@@ -1049,14 +1049,14 @@ ${rawContent}
 
               {aiResult.improvements.length > 0 && (
                 <div>
-                  <h3 className="text-sm font-semibold text-yellow-500 mb-2 flex items-center gap-1.5">
-                    <Wrench size={14} className="text-yellow-500" />
+                  <h3 className="text-sm font-semibold text-vscode-warning mb-2 flex items-center gap-1.5">
+                    <Wrench size={14} className="text-vscode-warning" />
                     需要改进
                   </h3>
                   <ul className="space-y-1.5">
                     {aiResult.improvements.map((imp, i) => (
                       <li key={i} className="flex items-start gap-2 text-xs text-vscode-text leading-relaxed">
-                        <span className="text-yellow-500 mt-0.5 flex-shrink-0">•</span>
+                        <span className="text-vscode-warning mt-0.5 flex-shrink-0">•</span>
                         <span>{imp}</span>
                       </li>
                     ))}

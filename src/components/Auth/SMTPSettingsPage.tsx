@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useUser } from '../../auth/UserContext';
 import { saveUserSettings, getUserSettings, type SMTPConfig } from '../../db';
+import { encryptSecret, decryptSecret } from '../../auth/encryption';
 
 const COMMON_SMTP = {
   'qq': { host: 'smtp.qq.com', port: 465, secure: true },
@@ -23,6 +24,36 @@ export const SMTPSettingsPage = ({ onClose }: { onClose: () => void }) => {
   const [isSaving, setIsSaving] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+
+  // 加载已保存的 SMTP 配置并回显（密码解密显示；解密失败提示重新输入）
+  useEffect(() => {
+    let cancelled = false;
+    const loadSettings = async () => {
+      if (!user) return;
+      try {
+        const settings = await getUserSettings(user.id);
+        if (settings?.smtpConfig && !cancelled) {
+          const cfg = settings.smtpConfig;
+          setEmail(cfg.fromEmail || '');
+          setHost(cfg.host || '');
+          setPort(cfg.port || 465);
+          setSecure(cfg.secure ?? true);
+          setUsername(cfg.username || '');
+          const decrypted = await decryptSecret(cfg.password || '');
+          if (!cancelled) {
+            setPassword(decrypted);
+            if (cfg.password && !decrypted) {
+              setError('已保存的 SMTP 密码解密失败（密钥变更或数据损坏），请重新输入密码');
+            }
+          }
+        }
+      } catch {
+        // 加载失败静默处理，保持表单为空
+      }
+    };
+    loadSettings();
+    return () => { cancelled = true; };
+  }, [user]);
 
   const handleProviderChange = (p: string) => {
     setProvider(p);
@@ -62,7 +93,7 @@ export const SMTPSettingsPage = ({ onClose }: { onClose: () => void }) => {
         port,
         secure,
         username,
-        password,
+        password: await encryptSecret(password),
         fromEmail: email,
       };
 

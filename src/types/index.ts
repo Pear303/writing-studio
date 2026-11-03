@@ -570,6 +570,10 @@ export interface LocalStorageSettings {
   lineHeight?: string;
   sidebarWidth?: number;
   rightPanelWidth?: number;
+  writingGoalDate?: string;
+  todayWordCount?: string;
+  lastWordCount?: string;
+  expandedVolumes?: Record<string, string[]>;
 }
 
 export interface FullExportData {

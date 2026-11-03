@@ -7,6 +7,7 @@
 - 技能列表和摘要
 """
 from __future__ import annotations
+import logging
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -16,6 +17,8 @@ from .skills import SkillsLoader
 
 if TYPE_CHECKING:
     from .memory import MemoryStore
+
+_logger = logging.getLogger(__name__)
 
 
 class ContextBuilder:
@@ -66,7 +69,9 @@ class ContextBuilder:
         try:
             template = self._env.get_template(template_name)
             return template.render(**kwargs)
-        except Exception:
+        except Exception as e:
+            # 模板渲染失败不应中断主流程，但需记录日志便于排查
+            _logger.warning("模板渲染失败 template_name=%s: %s", template_name, e)
             return ""
 
     def build_system_prompt(self) -> str:

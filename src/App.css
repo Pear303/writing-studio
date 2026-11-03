@@ -8,6 +8,9 @@
   --color-vscode-border: #454545;
   --color-vscode-text: #cccccc;
   --color-vscode-active: #007acc;
+  --color-vscode-success: #22c55e;
+  --color-vscode-warning: #eab308;
+  --color-vscode-danger: #ef4444;
   
   /* 自定义尺寸 */
   --width-activitybar: 48px;
@@ -56,6 +59,9 @@
   --color-danger: #ef4444;
   --color-danger-light: rgba(239, 68, 68, 0.2);
   --color-danger-medium: rgba(239, 68, 68, 0.3);
+  --color-vscode-success: #22c55e;
+  --color-vscode-warning: #eab308;
+  --color-vscode-danger: #ef4444;
   --scrollbar-track: #ffffff;
   --scrollbar-thumb: #c1c1c1;
   --scrollbar-thumb-hover: #a8a8a8;
@@ -153,6 +159,9 @@
   --color-danger: #ef4444;
   --color-danger-light: rgba(239, 68, 68, 0.2);
   --color-danger-medium: rgba(239, 68, 68, 0.3);
+  --color-vscode-success: #22c55e;
+  --color-vscode-warning: #eab308;
+  --color-vscode-danger: #ef4444;
   
   /* Toast 组件颜色 */
   --color-toast-success: #22c55e;
@@ -247,6 +256,9 @@
   --color-danger: #dc2626;
   --color-danger-light: rgba(220, 38, 38, 0.2);
   --color-danger-medium: rgba(220, 38, 38, 0.3);
+  --color-vscode-success: #16a34a;
+  --color-vscode-warning: #ca8a04;
+  --color-vscode-danger: #dc2626;
   
   /* Toast 组件颜色 */
   --color-toast-success: #16a34a;

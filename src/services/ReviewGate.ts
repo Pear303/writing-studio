@@ -90,6 +90,13 @@ export class ReviewGate {
 
     const passed = blockingIssues.length === 0 && score >= fullContract.thresholds.minScore;
 
+    // 自动持久化新发现的反模式（当前 review() 尚未接入 UI，先落库供后续审查复用）
+    if (newAntiPatterns.length > 0) {
+      await this.saveAntiPatterns(newAntiPatterns).catch(err => {
+        console.warn('[ReviewGate] 保存反模式失败:', err);
+      });
+    }
+
     const result: ReviewGateResult = {
       issues,
       blockingIssues,
@@ -255,18 +262,25 @@ export class ReviewGate {
 
     const validSeverities: ReviewSeverity[] = ['critical', 'high', 'medium', 'low'];
     const validCategories: ReviewCategory[] = ['continuity', 'setting', 'character', 'timeline', 'ai_flavor', 'logic', 'pacing', 'other'];
+    // 与 DEFAULT_CONTRACT.blockingRules 语义保持一致：
+    // critical 连贯性/角色、high 设定等才阻断，其余 severity 组合不阻断
+    const blockingCategories: ReviewCategory[] = ['continuity', 'character', 'setting'];
 
     return parsed.issues
       .filter(i => i.severity && i.category && i.description)
-      .map(i => ({
-        severity: validSeverities.includes(i.severity as ReviewSeverity) ? (i.severity as ReviewSeverity) : 'medium',
-        category: validCategories.includes(i.category as ReviewCategory) ? (i.category as ReviewCategory) : 'other',
-        location: i.location || '',
-        description: i.description,
-        evidence: i.evidence || '',
-        fixHint: i.fixHint || '',
-        blocking: i.severity === 'critical' || i.severity === 'high',
-      }));
+      .map(i => {
+        const severity = validSeverities.includes(i.severity as ReviewSeverity) ? (i.severity as ReviewSeverity) : 'medium';
+        const category = validCategories.includes(i.category as ReviewCategory) ? (i.category as ReviewCategory) : 'other';
+        return {
+          severity,
+          category,
+          location: i.location || '',
+          description: i.description,
+          evidence: i.evidence || '',
+          fixHint: i.fixHint || '',
+          blocking: (severity === 'critical' || severity === 'high') && blockingCategories.includes(category),
+        };
+      });
   }
 
   private calculateScore(issues: ReviewIssue[]): number {

@@ -92,7 +92,7 @@ function formatTime(ts) {
 
 async function loadSessions() {
   try {
-    const res = await fetch('/api/history')
+    const res = await fetch('/api/history', { headers: authHeaders() })
     const data = await res.json()
     sessions.value = data.sessions || []
   } catch (e) {
@@ -166,7 +166,7 @@ async function saveTitle(sessionId) {
   try {
     await fetch(`/api/history/${sessionId}`, {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
+      headers: authHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify({ title: editTitle.value.trim() }),
     })
     await loadSessions()

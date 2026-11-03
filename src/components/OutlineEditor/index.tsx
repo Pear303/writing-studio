@@ -137,10 +137,10 @@ export const OutlineEditor = forwardRef<OutlineEditorRef, OutlineEditorProps>(
             <span
               className={`text-xs ${
                 saveStatus === 'saved'
-                  ? 'text-green-500'
+                  ? 'text-vscode-success'
                   : saveStatus === 'saving'
-                    ? 'text-yellow-500'
-                    : 'text-red-500'
+                    ? 'text-vscode-warning'
+                    : 'text-vscode-danger'
               }`}
             >
               {saveStatus === 'saved'

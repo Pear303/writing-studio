@@ -139,11 +139,11 @@ export const StatusBar = ({
         {/* ========== 功能7: 写作目标进度 ========== */}
         {todayWordCount !== undefined && dailyTarget && (
           <div className="flex items-center space-x-1" title={`今日目标: ${dailyTarget}字`} style={{ color: 'inherit', opacity: 0.75 }}>
-            <Target size={12} className={todayWordCount >= dailyTarget ? 'text-green-400' : 'text-yellow-400'} />
+            <Target size={12} className={todayWordCount >= dailyTarget ? 'text-vscode-success' : 'text-vscode-warning'} />
             <span>{todayWordCount.toLocaleString()}/{dailyTarget.toLocaleString()}</span>
-            <div className="w-20 h-1.5 bg-black/10 rounded-full overflow-hidden">
+            <div className="w-20 h-1.5 bg-vscode-active/10 rounded-full overflow-hidden">
               <div 
-                className={`h-full transition-all duration-300 ${todayWordCount >= dailyTarget ? 'bg-green-500' : 'bg-blue-400'}`}
+                className={`h-full transition-all duration-300 ${todayWordCount >= dailyTarget ? 'bg-vscode-success' : 'bg-vscode-active'}`}
                 style={{ width: `${Math.min(100, (todayWordCount / dailyTarget) * 100)}%` }}
               />
             </div>
@@ -233,7 +233,7 @@ export const StatusBar = ({
             {todayWordCount !== undefined && dailyTarget && (
               <div className="flex justify-between pt-2 border-t border-vscode-border">
                 <span style={{ color: 'var(--color-vscode-text, #9ca3af)', opacity: 0.6 }}>今日字数：</span>
-                <span className={`text-vscode-text ${todayWordCount >= dailyTarget ? 'text-green-400' : ''}`}>
+                <span className={`text-vscode-text ${todayWordCount >= dailyTarget ? 'text-vscode-success' : ''}`}>
                   {todayWordCount.toLocaleString()}/{dailyTarget.toLocaleString()}
                 </span>
               </div>

@@ -20,7 +20,7 @@ const tagButtonStyle = (
     ? 'var(--color-vscode-active-medium, rgba(143, 188, 143, 0.3))'
     : 'transparent',
   color: selected
-    ? '#000000'
+    ? 'white'
     : 'var(--color-vscode-text)',
   cursor: 'pointer',
   transition: 'all 0.15s ease',

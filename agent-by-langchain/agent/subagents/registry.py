@@ -145,7 +145,7 @@ _BUILTIN_SPECS: dict[str, dict] = {
         "tool_names": (
             "read_books", "read_chapters", "read_outline",
             "read_materials", "search_knowledge",
-            "dispatch_subagent",
+            # 注意：不含 dispatch_subagent —— 禁止子代理递归派遣
             "start_pipeline", "update_pipeline_progress", "pipeline_self_check",
         ),
         "max_turns": 30,
@@ -186,6 +186,21 @@ _DEFAULT_PROMPT = (
 )
 
 
+# 当前生效的注册表实例（供 vibe_settings 保存后热重载）
+_active_registry: "SubagentRegistry | None" = None
+
+
+def set_active_registry(registry: "SubagentRegistry | None") -> None:
+    """记录当前生效的子代理注册表实例。"""
+    global _active_registry
+    _active_registry = registry
+
+
+def get_active_registry() -> "SubagentRegistry | None":
+    """获取当前生效的子代理注册表实例。"""
+    return _active_registry
+
+
 class SubagentRegistry:
     """子代理注册表。
     
@@ -207,6 +222,8 @@ class SubagentRegistry:
         self._skills_loader = skills_loader
         self._specs: dict[str, SubagentSpec] = {}
         self._load_all()
+        # 记录为当前生效实例，供 vibe_settings 保存后热重载
+        set_active_registry(self)
 
     def _load_all(self) -> None:
         """加载所有内置子代理规格。

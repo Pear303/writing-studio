@@ -392,7 +392,7 @@ export const BookCardList = ({ books, onBookSelect, onRefresh, onStartDeconstruc
 
       {/* 编辑弹窗 */}
       {editModal.open && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+        <div className="modal-overlay">
           <div 
             ref={modalRef} 
             className="bg-vscode-sidebar border border-vscode-border w-[480px] max-h-[80vh] overflow-y-auto"
@@ -491,7 +491,7 @@ export const BookCardList = ({ books, onBookSelect, onRefresh, onStartDeconstruc
 
       {/* 删除确认弹窗 */}
       {deleteConfirmStep.bookId && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+        <div className="modal-overlay">
           <div 
             className="bg-vscode-sidebar border border-vscode-border w-[360px]"
             style={{ borderRadius: 0, boxShadow: 'none' }}

@@ -42,15 +42,6 @@ export const createUserFolders = async (userId: string): Promise<UserDataStructu
   return { userId, folders };
 };
 
-export const switchUserFolder = async(userId: string): Promise<void> => { 
-    localStorage.setItem('currentUserId', userId);
-}
-
-// 获取当前用户ID
-export const getCurrentUserId = (): string | null => {
-  return localStorage.getItem('currentUserId');
-}
-
 export const deleteUserFolders = async (userId: string): Promise<void> => {
   const basePath = await getUserDataPath(userId);
   const folderExists = await exists(basePath);

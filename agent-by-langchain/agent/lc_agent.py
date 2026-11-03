@@ -409,7 +409,7 @@ class LCAgent:
 
         while True:
             try:
-                user_input = input("You🫅 : ")
+                user_input = input("You: ")
             except (EOFError, KeyboardInterrupt):
                 print("\n再见！")
                 break
@@ -456,8 +456,11 @@ class LCAgent:
             else:
                 self.memory_store.append_history("assistant", reply)
             
-            # 检查是否需要压缩历史
-            self._maybe_compact()
+            # 检查是否需要压缩历史（失败不应中断 REPL 循环）
+            try:
+                self._maybe_compact()
+            except Exception as exc:
+                print(f"[warning] 历史压缩失败: {exc}", file=sys.stderr)
 
     def _maybe_compact(self) -> None:
         """根据 Token 使用情况判断是否需要压缩历史。

@@ -115,7 +115,7 @@
 <script setup>
 import { ref, nextTick, onMounted, onUnmounted, computed, watch } from 'vue'
 import { marked } from 'marked'
-import { todos, updateTodos, loadedHistoryMessages, loadHistoryMessages, currentSessionId, switchSession } from '../stores/execution.js'
+import { todos, updateTodos, loadedHistoryMessages, loadHistoryMessages, currentSessionId, switchSession, authHeaders } from '../stores/execution.js'
 
 const messages = ref([])
 const inputMessage = ref('')
@@ -188,7 +188,7 @@ async function scrollToBottom() {
 
 async function fetchTodo() {
   try {
-    const res = await fetch('/api/todo')
+    const res = await fetch('/api/todo', { headers: authHeaders() })
     const data = await res.json()
     updateTodos(data.todos || [])
   } catch (e) {
@@ -198,7 +198,7 @@ async function fetchTodo() {
 
 async function fetchTokenStats() {
   try {
-    const res = await fetch('/api/tokens')
+    const res = await fetch('/api/tokens', { headers: authHeaders() })
     const data = await res.json()
     tokenStats.value = data.session_total
   } catch (e) {
@@ -246,7 +246,7 @@ function generateSummary(events) {
 // ── Vibe 写作风格参考 ──
 async function loadVibeSettings() {
   try {
-    const res = await fetch('/api/vibe-settings')
+    const res = await fetch('/api/vibe-settings', { headers: authHeaders() })
     const data = await res.json()
     vibePrompts.value = data.custom_prompts || []
     vibeActiveNames.value = data.active_prompt_names || []
@@ -257,7 +257,7 @@ async function loadVibeSettings() {
 
 async function saveVibeSettingsWith(overrides) {
   try {
-    const res = await fetch('/api/vibe-settings')
+    const res = await fetch('/api/vibe-settings', { headers: authHeaders() })
     const current = await res.json()
     const merged = {
       excluded_steps: current.excluded_steps || [],
@@ -268,7 +268,7 @@ async function saveVibeSettingsWith(overrides) {
     }
     await fetch('/api/vibe-settings', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: authHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify(merged),
     })
   } catch (e) {
@@ -342,7 +342,7 @@ async function sendMessage() {
   try {
     const response = await fetch('/api/chat', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: authHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify({ message: msg, session_id: currentSessionId.value }),
     })
 
@@ -421,7 +421,7 @@ async function sendMessage() {
     if (!hasReceivedDone) {
       addActivity('⏳', '同步回复中...')
       try {
-        const stateRes = await fetch('/api/chat/state')
+        const stateRes = await fetch('/api/chat/state', { headers: authHeaders() })
         const stateData = await stateRes.json()
         if (stateData.reply) {
           let summary = ''
@@ -443,7 +443,7 @@ async function sendMessage() {
         try {
           const sid = currentSessionId.value
           if (sid) {
-            const histRes = await fetch(`/api/history/${sid}`)
+            const histRes = await fetch(`/api/history/${sid}`, { headers: authHeaders() })
             const histData = await histRes.json()
             const turns = histData.turns || []
             const lastAssistant = [...turns].reverse().find(t => t.role === 'assistant')

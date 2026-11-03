@@ -138,7 +138,7 @@ export class BookDeconstructor {
   private async runPhase1(
     result: BookDeconstructionResult,
     chapters: Array<{ index: number; title: string; content: string }>,
-    llmCall: (prompt: string) => Promise<string>,
+    llmCall: (prompt: string, signal?: AbortSignal) => Promise<string>,
     onProgress?: DeconstructionProgressCallback,
   ): Promise<BookDeconstructionResult> {
     result.status = 'skeleton';
@@ -168,7 +168,7 @@ export class BookDeconstructor {
   private async runPhase2(
     result: BookDeconstructionResult,
     chapters: Array<{ index: number; title: string; content: string }>,
-    llmCall: (prompt: string) => Promise<string>,
+    llmCall: (prompt: string, signal?: AbortSignal) => Promise<string>,
     onProgress?: DeconstructionProgressCallback,
   ): Promise<BookDeconstructionResult> {
     result.status = 'extracting';
@@ -211,6 +211,28 @@ export class BookDeconstructor {
           metadata: { chapterIndex: chapter.index, error: (err as Error).message },
         });
 
+        // 单章失败不阻断：写占位 commit（透传前一章 entityIndex），保证提交链连续
+        try {
+          await this.factExtractor.commitState(result.id, chapter.index, {
+            chapterIndex: chapter.index,
+            entities: [],
+            stateChanges: [],
+            events: [],
+            timeline: [],
+            hooks: [],
+            summary: `（提取失败：${(err as Error).message}）`,
+            extractedAt: Date.now(),
+            isFailed: true,
+          });
+        } catch (commitErr) {
+          debugLogger.log({
+            source: 'service',
+            category: 'deconstruction',
+            direction: `BookDeconstructor.runPhase2 ch:${chapter.index} commit placeholder ERROR`,
+            metadata: { chapterIndex: chapter.index, error: (commitErr as Error).message },
+          });
+        }
+
         // 单章失败不阻断，用空 facts 填充
         result.chapterFacts.push({
           chapterIndex: chapter.index,
@@ -241,7 +263,7 @@ export class BookDeconstructor {
 
   private async runPhase3(
     result: BookDeconstructionResult,
-    llmCall: (prompt: string) => Promise<string>,
+    llmCall: (prompt: string, signal?: AbortSignal) => Promise<string>,
     onProgress?: DeconstructionProgressCallback,
   ): Promise<BookDeconstructionResult> {
     if (!result.skeleton) throw new Error('缺少骨架数据，无法进行跨章分析');

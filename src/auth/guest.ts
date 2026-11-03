@@ -24,9 +24,11 @@ export const isGuest = (): boolean => {
 
 export const updateGuestActivity = (): void => {
   const guestId = getGuestId();
+  // 保留已有的 createdAt，避免每次刷新覆盖创建时间
+  const existing = getGuestData();
   const data: GuestData = {
     id: guestId,
-    createdAt: Date.now(),
+    createdAt: existing?.createdAt ?? Date.now(),
     lastActiveAt: Date.now(),
   };
   localStorage.setItem(GUEST_DATA_KEY, JSON.stringify(data));

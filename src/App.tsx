@@ -166,7 +166,7 @@ function App() {
   
   // 触发大纲树全量重载，同时清空增量更新缓存（避免 loadData 后残留旧条目覆盖新数据）
   const triggerOutlineRefresh = useCallback(() => {
-    triggerOutlineRefresh();
+    setOutlineRefreshTrigger(prev => prev + 1);
     setChapterWordCountUpdates({});
   }, []);
   // 新增状态
@@ -184,7 +184,14 @@ function App() {
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        return { ...parsed, isRunning: false }; // 恢复时不自动启动
+        // 持久化时已排除 timeLeft，恢复时按 mode/duration 推算（不自动启动）
+        const workMin = parsed.workDuration ?? 25;
+        const breakMin = parsed.breakDuration ?? 5;
+        return {
+          ...parsed,
+          timeLeft: parsed.mode === 'work' ? workMin * 60 : breakMin * 60,
+          isRunning: false,
+        };
       } catch {
         // 解析失败用默认值
       }
@@ -217,10 +224,12 @@ function App() {
   const rightDragStartXRef = useRef(0);
   const rightStartWidthRef = useRef(0);
   const rightIsResizingRef = useRef(false);
+  const rightPanelWidthRef = useRef(rightPanelWidth);
 
   const handleRightPanelDragStart = (e: React.MouseEvent) => {
     rightDragStartXRef.current = e.clientX;
     rightStartWidthRef.current = rightPanelWidth;
+    rightPanelWidthRef.current = rightPanelWidth;
     rightIsResizingRef.current = true;
     setIsRightResizing(true);
     document.body.style.cursor = 'col-resize';
@@ -235,6 +244,7 @@ function App() {
 
     newWidth = Math.max(200, Math.min(800, newWidth));
     setRightPanelWidth(newWidth);
+    rightPanelWidthRef.current = newWidth;
   };
 
   const handleRightPanelDragEnd = () => {
@@ -242,7 +252,7 @@ function App() {
     setIsRightResizing(false);
     document.body.style.cursor = '';
     document.body.style.userSelect = '';
-    localStorage.setItem('rightPanelWidth', String(rightPanelWidth));
+    localStorage.setItem('rightPanelWidth', String(rightPanelWidthRef.current));
   };
 
   useEffect(() => {
@@ -458,9 +468,15 @@ function App() {
     }));
   };
 
-  // 番茄钟状态持久化
+  // 番茄钟状态持久化：timeLeft 每秒变化，不写入 localStorage（避免每秒写盘），
+  // 仅稳定字段变更时才写入；恢复时 timeLeft 由 mode/duration 推算
+  const lastPomodoroPersistRef = useRef<string>('');
   useEffect(() => {
-    localStorage.setItem('pomodoroState', JSON.stringify(pomodoro));
+    const { timeLeft: _timeLeft, ...stableState } = pomodoro;
+    const serialized = JSON.stringify(stableState);
+    if (serialized === lastPomodoroPersistRef.current) return;
+    lastPomodoroPersistRef.current = serialized;
+    localStorage.setItem('pomodoroState', serialized);
   }, [pomodoro]);
 
   const formatTime = (seconds: number) => {
@@ -477,50 +493,9 @@ function App() {
     }
   };
 
-  // 根据主题获取颜色类并更新CSS变量
+  // 根据主题更新 CSS 变量（颜色定义见 App.css 的 [data-theme] 选择器）
   const getThemeClasses = () => {
-    let colors;
-    switch (theme) {
-      case 'light':
-        colors = {
-          bg: '#ffffff',
-          sidebar: '#f5f5f5',
-          activitybar: '#e8e8e8',
-          border: '#e0e0e0',
-          text: '#000000',
-          active: '#007acc',
-        };
-        break;
-      case 'eye-care':
-        colors = {
-          bg: '#f5f5dc',
-          sidebar: '#e8e8d0',
-          activitybar: '#d8d8c0',
-          border: '#d0d0b8',
-          text: '#222222',
-          active: '#8fbc8f',
-        };
-        break;
-      default: // dark
-        colors = {
-          bg: '#1e1e1e',
-          sidebar: '#252526',
-          activitybar: '#333333',
-          border: '#454545',
-          text: '#e2e2e2',
-          active: '#007acc',
-        };
-    }
-
     document.documentElement.setAttribute('data-theme', theme);
-
-    return {
-      bg: 'bg-vscode-bg',
-      sidebar: 'bg-vscode-sidebar',
-      text: 'text-vscode-text',
-      border: 'border-vscode-border',
-      active: 'bg-vscode-active',
-    };
   };
 
   useLayoutEffect(() => {
@@ -535,10 +510,12 @@ function App() {
   const dragStartXRef = useRef(0);
   const startWidthRef = useRef(0);
   const isResizingRef = useRef(false);
+  const sidebarWidthRef = useRef(sidebarWidth);
   
   const handleSidebarDragStart = (e: React.MouseEvent) => {
     dragStartXRef.current = e.clientX;
     startWidthRef.current = sidebarWidth;
+    sidebarWidthRef.current = sidebarWidth;
     isResizingRef.current = true;
     setIsResizing(true);
     document.body.style.cursor = 'col-resize';
@@ -558,11 +535,13 @@ function App() {
     if (newWidth < SIDEBAR_MIN_WIDTH) {
       setIsSidebarVisible(false);
       setSidebarWidth(SIDEBAR_DEFAULT_WIDTH);
+      sidebarWidthRef.current = SIDEBAR_DEFAULT_WIDTH;
     } else {
       if (!isSidebarVisible) {
         setIsSidebarVisible(true);
       }
       setSidebarWidth(newWidth);
+      sidebarWidthRef.current = newWidth;
     }
   };
 
@@ -571,7 +550,7 @@ function App() {
     setIsResizing(false);
     document.body.style.cursor = '';
     document.body.style.userSelect = '';
-    localStorage.setItem('sidebarWidth', String(sidebarWidth));
+    localStorage.setItem('sidebarWidth', String(sidebarWidthRef.current));
   };
 
   useEffect(() => {
@@ -608,7 +587,7 @@ function App() {
         clearTimeout(autoSaveTimerRef.current);
       }
     };
-  }, [currentChapter, saveStatus, editorContent]);
+  }, [currentChapter, saveStatus, editorContent, autoSaveInterval]);
 
   // Agent 数据桥接：当前书籍变更时自动导出 + 启动 pending 轮询
   useEffect(() => {
@@ -793,7 +772,7 @@ function App() {
       showToast('请先在 AI 助手面板中设置默认 LLM 模型', 'warning');
       return;
     }
-    const apiKey = decodeApiKey(config.apiKey);
+    const apiKey = await decodeApiKey(config.apiKey);
 
     const chapterContents = chapters
       .map(c => `## ${c.title}\n${c.content.replace(/<[^>]*>/g, '')}`)
@@ -886,7 +865,7 @@ ${chapterContents}
     if (!defaultConfig) {
       throw new Error('请先配置 LLM（在 AI 助手中设置）');
     }
-    const apiKey = decodeApiKey(defaultConfig.apiKey);
+    const apiKey = await decodeApiKey(defaultConfig.apiKey);
     const prompts = new Map<string, string>();
     const modules = import.meta.glob('./references/*.md', { query: '?raw', eager: true, import: 'default' }) as Record<string, string>;
     for (const [path, content] of Object.entries(modules)) {
@@ -1523,7 +1502,8 @@ ${chapterContents}
           }
 
           // 通过 prop 通知 BookOutlineTree 更新对应章节的字数显示，而非触发整棵树重载
-          setChapterWordCountUpdates(prev => ({ ...prev, [currentChapter.id]: newWordCount }));
+          // 只保留当前章节的更新，避免对象无限增长
+          setChapterWordCountUpdates({ [currentChapter.id]: newWordCount });
           console.log('[字数更新] 📢 通知大纲树更新字数显示');
         } catch (error) {
           console.error('[字数更新] ❌ 数据库更新失败:', error);
@@ -1726,10 +1706,17 @@ ${chapterContents}
 
   const handleNavigateToChapter = async (chapterId: string) => {
     if (!currentBook) return;
+    await autoSave();
+    setCurrentOutlineVolume(null);
+    setCurrentOutlineChapter(null);
+    setPipelinePreview(null);
     const chapter = await db.chapters.get(chapterId);
     if (!chapter) return;
     setCurrentChapter(chapter);
+    setEditorContent(chapter.content || '');
+    setWordCount(chapter.wordCount || 0);
     lastBookUpdatedWordCountRef.current = chapter.wordCount || 0;
+    setSaveStatus('saved');
   };
 
   const handleBookReplaceAll = async (
@@ -2662,7 +2649,7 @@ ${chapterContents}
 
       {/* 导入选项弹窗 */}
       {showImportModal && importPreview && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+        <div className="modal-overlay">
           <div className="bg-vscode-sidebar border border-vscode-border p-6 min-w-[400px] max-w-[500px]">
             <h3 className="text-lg font-semibold text-vscode-text mb-4">导入数据</h3>
             <div className="text-sm text-vscode-text opacity-70 mb-6">
@@ -2678,13 +2665,13 @@ ${chapterContents}
             <div className="flex space-x-3">
               <button
                 onClick={() => confirmImport(true)}
-                className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded"
+                className="flex-1 px-4 py-2 bg-vscode-active text-white rounded hover:opacity-80"
               >
                 合并导入
               </button>
               <button
                 onClick={() => confirmImport(false)}
-                className="flex-1 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded"
+                className="flex-1 px-4 py-2 bg-vscode-danger text-white rounded hover:opacity-80"
               >
                 覆盖导入
               </button>

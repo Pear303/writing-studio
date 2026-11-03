@@ -26,10 +26,11 @@ export function usePipeline() {
     error: null,
   });
 
-  const eventSourceRef = useRef<EventSource | null>(null);
   const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const PIPELINE_START_TIMEOUT_MS = 5 * 60 * 1000;
+  // 轮询超过该时长仍无状态变化则停止并清空，避免无限轮询
+  const POLL_STALE_TIMEOUT_MS = 5 * 60 * 1000;
 
   // 保存 Vibe Writing 历史记录到 IndexedDB
   const saveHistory = useCallback(async (pipeline: PipelineAutoState) => {
@@ -252,14 +253,20 @@ export function usePipeline() {
             result: (evt.result as string) || '',
           };
         }
-        const updated = {
+        const isFailed = (evt.status as string) === 'failed';
+        const updated: PipelineAutoState = {
           ...prev.pipeline,
           steps,
+          status: isFailed ? 'failed' : prev.pipeline.status,
           updatedAt: Date.now(),
         };
-        // 如果步骤失败，保存历史记录
-        if ((evt.status as string) === 'failed') {
-          saveHistory({ ...updated, status: 'failed' });
+        // 步骤失败：更新整体状态、保存历史记录并停止轮询
+        if (isFailed) {
+          saveHistory(updated);
+          if (pollTimerRef.current) {
+            clearInterval(pollTimerRef.current);
+            pollTimerRef.current = null;
+          }
         }
         return {
           ...prev,
@@ -294,7 +301,8 @@ export function usePipeline() {
       const data = await res.json();
 
       if (data.status === 'idle' || data.status === 'unavailable') {
-        setState(prev => (prev.pipeline?.status === 'running' ? prev : { ...prev, pipeline: null }));
+        // 后端无活跃 pipeline，无条件收敛本地状态，避免保留 running 导致无限轮询
+        setState(prev => ({ ...prev, pipeline: null }));
         return;
       }
 
@@ -376,7 +384,19 @@ export function usePipeline() {
 
   useEffect(() => {
     if (state.pipeline?.status === 'running') {
-      pollTimerRef.current = setInterval(fetchStatus, 3000);
+      const pollStartedAt = Date.now();
+      pollTimerRef.current = setInterval(() => {
+        // 持续轮询超过上限仍无状态变化则停止并清空，避免无限轮询
+        if (Date.now() - pollStartedAt > POLL_STALE_TIMEOUT_MS) {
+          if (pollTimerRef.current) {
+            clearInterval(pollTimerRef.current);
+            pollTimerRef.current = null;
+          }
+          setState(prev => ({ ...prev, pipeline: null }));
+          return;
+        }
+        fetchStatus();
+      }, 3000);
     }
     return () => {
       if (pollTimerRef.current) {
@@ -387,9 +407,6 @@ export function usePipeline() {
 
   useEffect(() => {
     return () => {
-      if (eventSourceRef.current) {
-        eventSourceRef.current.close();
-      }
       if (pollTimerRef.current) {
         clearInterval(pollTimerRef.current);
       }
